@@ -1,5 +1,5 @@
 // Service Worker：外壳缓存优先；pack.json 网络优先（内容一 push 手机刷新就更新）
-const CACHE = 'zenus-shell-v3';
+const CACHE = 'zenus-shell-v4';
 const SHELL = [
   './',
   './index.html',

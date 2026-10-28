@@ -226,6 +226,11 @@ function renderReview() {
       body += `<div class="sub" style="color:${correct ? 'var(--ok)' : 'var(--bad)'}">
         ${correct ? '✓ 答对了' : '✗ 再想想'}</div>`;
     }
+    if (c.example) {
+      body += `<div class="eg">${speech ? speakable(c.example) : esc(c.example)}
+        ${speech ? `<button class="spk" data-full="${esc(c.example)}" aria-label="朗读例句">🔊</button>` : ''}</div>`;
+      if (c.exampleCN) body += `<div class="egcn">${esc(c.exampleCN)}</div>`;
+    }
     if (c.explain) body += `<div class="explain">${esc(c.explain)}</div>`;
     body += `<div class="row" style="width:100%;margin-top:4px">
       <button class="btn ghost" id="askAI">问 AI 讲讲这道</button>
