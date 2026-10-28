@@ -4,215 +4,188 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#0f1115">
-<title>要点试验 · A Christmas Carol</title>
+<title>要点试验 v2</title>
 <style>
 :root{--bg:#0f1115;--card:#181b22;--line:#262b36;--text:#e8eaf0;--dim:#8b93a5;
 --acc:#5b8cff;--ok:#38b48b;--bad:#e2585c;--safe:env(safe-area-inset-bottom,0px)}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-body{margin:0;background:var(--bg);color:var(--text);font:16px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;padding-bottom:calc(24px + var(--safe))}
+body{margin:0;background:var(--bg);color:var(--text);font:16px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;padding-bottom:calc(30px + var(--safe))}
 header{padding:calc(14px + env(safe-area-inset-top,0px)) 16px 10px;border-bottom:1px solid var(--line)}
-h1{font-size:16px;margin:0 0 4px}
-.src{font-size:12px;color:var(--dim);line-height:1.5}
-main{padding:14px 14px 0}
-.unit{background:var(--card);border:1px solid var(--line);border-radius:14px;margin-bottom:12px;overflow:hidden}
-.head{padding:14px 15px;display:flex;gap:10px;align-items:flex-start}
-.num{flex:0 0 26px;height:26px;border-radius:8px;background:#243049;color:var(--acc);
-display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600}
-.point{font-size:16px;font-weight:600;line-height:1.45}
-.kw{margin-top:8px;display:flex;flex-wrap:wrap;gap:6px}
-.kw span{font-size:11px;color:var(--dim);border:1px solid var(--line);border-radius:999px;padding:2px 8px}
-.body{border-top:1px solid var(--line);padding:14px 15px;display:none}
-.body.open{display:block}
-h3{font-size:12px;color:var(--dim);margin:0 0 8px;letter-spacing:.5px;font-weight:600}
-.q{font-size:15px;margin:0 0 10px;line-height:1.5}
-.opt{display:block;width:100%;text-align:left;background:#20242d;border:1px solid var(--line);
-color:var(--text);border-radius:10px;padding:10px 12px;font-size:14px;margin-bottom:8px;line-height:1.4}
-.opt.right{border-color:var(--ok);background:#12301f}
-.opt.wrong{border-color:var(--bad);background:#341417}
-.fb{font-size:13px;color:var(--dim);margin:2px 0 0;line-height:1.6}
-.rw{background:#141821;border:1px solid var(--line);border-radius:10px;padding:12px;margin-top:6px}
-.rw p{margin:0 0 8px;font-size:15px;line-height:1.65}
-.rw .cn{font-size:13px;color:var(--dim);margin:0}
-.rw .mark{color:var(--acc);border-bottom:1px dashed rgba(91,140,255,.5)}
-.tip{font-size:12px;color:var(--dim);padding:4px 4px 18px;line-height:1.7}
-.badge{font-size:11px;padding:1px 7px;border-radius:999px;border:1px solid var(--line);color:var(--dim);margin-left:auto}
+h1{font-size:16px;margin:0 0 6px}
+.src{font-size:12px;color:var(--dim);line-height:1.55}
+.kind{display:inline-flex;align-items:center;gap:6px;font-size:12px;padding:3px 10px;border-radius:999px;
+background:#1d2740;color:var(--acc);border:1px solid #2a3a5c;margin-top:8px}
+main{padding:12px 14px 0}
+h2{font-size:12px;color:var(--dim);letter-spacing:.6px;margin:18px 2px 8px;font-weight:600}
+.it{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin-bottom:9px}
+.w{font-size:17px;font-weight:600}
+.ph{font-size:12px;color:var(--dim);margin-left:8px;font-weight:400}
+.cn{font-size:14px;color:var(--ok);margin-top:4px}
+.ex{font-size:14px;color:var(--text);margin-top:8px;line-height:1.55;border-left:2px solid var(--line);padding-left:10px}
+.ex i{color:var(--acc);font-style:normal;border-bottom:1px dashed rgba(91,140,255,.5)}
+.excn{font-size:13px;color:var(--dim);margin-top:3px;padding-left:10px}
+.use{font-size:12px;color:var(--dim);margin-top:7px}
+code{background:#20242d;border:1px solid var(--line);border-radius:4px;padding:1px 5px;font-size:12px;color:var(--acc)}
+.tip{font-size:12px;color:var(--dim);padding:16px 4px;line-height:1.75}
+.tag{font-size:10px;color:var(--dim);border:1px solid var(--line);border-radius:999px;padding:1px 6px;margin-left:6px;vertical-align:middle}
 </style>
 </head>
 <body>
 <header>
-  <h1>要点 → 题 → 换语境重写</h1>
-  <div class="src">材料：A Christmas Carol（4,000 词级分级读物，Paul Nation / Gerry Meister，免费合法）· 第 1 章节选 4,200 字符<br>
-  这是试验样品：要点由 AI 提炼，题和重写段落由 AI 生成。</div>
+  <h1>AI 先判类型，再决定提什么</h1>
+  <div class="src">材料：A Christmas Carol（4,000 词级分级读物，免费合法）第 1 章节选 4,200 字符</div>
+  <div class="kind">🤖 AI 判定：<b>语言类</b> — 记叙文本、文学描写、无公式/步骤 → 提生词与固定搭配</div>
 </header>
 <main id="app"></main>
-<div class="tip" style="padding:14px">
-  试验目的：只验一件事——<b>AI 抓的要点像不像你想学的重点</b>。<br>
-  如果要点抓错了，后面的题和重写都是在错的东西上加倍。
+<div class="tip">
+  <b>两种模式的区别</b><br>
+  语言类：只要「不常见的词 + 固定搭配」，每条给原文例句，不分析写作手法。<br>
+  技术类：提「规则 / 公式 / 步骤」，每条配一道应用题或改错题。<br><br>
+  下面先给语言类（本篇材料），再附 3 条技术类示例（Markdown）看差别。
 </div>
-
 <script>
-const UNITS = [
-  {
-    point: "开头反复强调「Marley 死了」，是故意的铺垫，不是啰嗦。",
-    keywords: ["as dead as a door-nail", "no doubt whatever", "distinctly understood"],
-    quiz: {
-      q: "叙述者为什么要把「Marley 死了」说上好几遍？",
-      options: [
-        "为了凑字数，维多利亚时代流行这种写法",
-        "先把这个事实钉死，后面鬼魂出现才有冲击力",
-        "他记不清 Marley 到底死没死",
-        "为了强调 Marley 是本书的主角"
-      ],
-      answer: 1,
-      explain: "反复确认=建立不可动摇的事实。事实越硬，后面鬼魂出现的反转越狠。这是叙事策略，不是废话。"
-    },
-    rewrite: {
-      en: "The old man was gone — there was no doubt whatever about that. The hospital record was signed, the family had cried, the neighbours had watched the coffin go by. He was as dead as a door-nail. And yet, on the very night of the funeral, his chair in the office was still warm.",
-      cn: "老人走了——这件事毫无疑问。医院记录签了字，家人哭过，邻居看着棺木经过。他死得透透的。然而就在葬礼当晚，他办公室的那把椅子还是温的。",
-      note: "同一条叙事策略，换到现代场景：先确认死亡，再让「椅子还温着」制造反差。"
-    }
-  },
-  {
-    point: "Scrooge 和 Marley 是合伙人，但这份「关系」只到生意为止。",
-    keywords: ["partners", "sole administrator", "sole mourner", "man of business"],
-    quiz: {
-      q: "「sole friend, and sole mourner」这两个 sole，作者的用意是什么？",
-      options: [
-        "说明 Scrooge 人缘极好，大家都来送葬",
-        "说明 Scrooge 是唯一到场的人，反衬他孤僻",
-        "说明 Marley 没有别的亲人",
-        "说明葬礼办得很隆重"
-      ],
-      answer: 1,
-      explain: "sole=唯一的。既是唯一的朋友又是唯一的送葬人，等于说：除了他，没有别人。生意上的合伙人，人情上的孤家寡人。"
-    },
-    rewrite: {
-      en: "They had been partners for thirty years. When the older man died, the younger one signed every paper, arranged the funeral, and stood alone at the grave. By two o'clock that afternoon he was back at his desk, closing a deal.",
-      cn: "他们合伙了三十年。老人去世时，年轻的那个签了每一份文件、安排了葬礼、独自站在墓前。当天下午两点，他已经回到办公桌前谈成了一笔生意。",
-      note: "把「合伙人+唯一送葬人+葬礼当天就做生意」三件事压进一段，正是原著的写法。"
-    }
-  },
-  {
-    point: "写 Scrooge 的「冷」，用的是一串挤压感的动词，不是形容词堆砌。",
-    keywords: ["squeezing", "grasping", "scraping", "clutching", "grindstone"],
-    quiz: {
-      q: "squeezing / grasping / scraping / clutching 这组词共同的画面感是？",
-      options: [
-        "轻快、灵活",
-        "死死抓住、往自己这边刮",
-        "优雅、体面",
-        "迟缓、笨重"
-      ],
-      answer: 1,
-      explain: "四个词都是「抓紧、刮取」的动作，全是手部发力往自己这边收——这就是吝啬的画面。比直接写「他很贪」有力得多。"
-    },
-    rewrite: {
-      en: "He squeezed every coin until it squeaked. He grasped at discounts, scraped the last cent off a bill, and clutched his wallet like a man drowning. Nobody ever saw him give anything away — not a coin, not a smile.",
-      cn: "他把每一枚硬币都攥到吱吱响。他死抓折扣，把账单刮到最后一分，像快要淹死的人那样攥着钱包。没人见过他给出去过什么——不是一分钱，也不是一个笑。",
-      note: "同一组动作词，换到现代商业场景，仍然成立。"
-    }
-  },
-  {
-    point: "「冷」是 Scrooge 本人，不是天气——作者把内外颠倒了。",
-    keywords: ["external heat and cold", "no warmth could warm", "bitterer than he"],
-    quiz: {
-      q: "「No warmth could warm, no wintry weather chill him」是什么意思？",
-      options: [
-        "他很耐寒，冬夏都不怕",
-        "外界的冷暖对他不起作用，因为他自己就是冷的源头",
-        "他住的地方没有暖气",
-        "他生病了，感觉不到温度"
-      ],
-      answer: 1,
-      explain: "这句把因果关系倒过来：不是天气影响他，是他比天气更冷（下一句 no wind was bitterer than he）。这种「内外颠倒」是狄更斯写性格的常用手法。"
-    },
-    rewrite: {
-      en: "The heating in his office broke one winter, and nobody noticed. He was colder than the radiators had ever been. Summer came, and the room stayed at his temperature — a temperature that had nothing to do with the season.",
-      cn: "有一年冬天他办公室的暖气坏了，没人察觉。他比暖气曾经达到的温度还冷。夏天来了，那间屋子还是维持着他的温度——一个跟季节无关的温度。",
-      note: "把「他比天气更冷」这个颠倒，换成现代办公室的版本。"
-    }
-  },
-  {
-    point: "作者不直接说「人人讨厌他」，而是让整条街替他说话。",
-    keywords: ["beggars", "inquire the way", "blind men's dogs", "keep its distance"],
-    quiz: {
-      q: "连「盲人的狗」都躲着他，这个细节的作用是？",
-      options: [
-        "说明伦敦的狗很多",
-        "把厌恶推到荒诞的程度：连看不见他的动物都避开他",
-        "说明 Scrooge 怕狗",
-        "为了增加幽默感"
-      ],
-      answer: 1,
-      explain: "盲人的狗看不见他的脸，却会把他往门洞里拽——等于说「厌恶不需要理由，也不需要眼睛」。这是把抽象的社会排斥写成具体画面。"
-    },
-    rewrite: {
-      en: "No beggar ever asked him for change. No child ever asked him the time. Delivery drivers learned to leave parcels at the door and not ring. Even the guide dog at the corner would pull its owner into a doorway when he walked past.",
-      cn: "没有乞丐向他要过零钱，没有孩子问过他时间。快递员学会了把包裹放在门口不按铃。连街角那只导盲犬，在他经过时都会把主人往门洞里拽。",
-      note: "同一套「旁人反应」写法，换成现代城市。"
-    }
-  },
-  {
-    point: "圣诞夜的寒冷天气，是人物性格的外化，不是背景板。",
-    keywords: ["counting-house", "bleak", "biting", "foggy", "flaring"],
-    quiz: {
-      q: "「三点天就黑了，烛光像棕色空气上的红污渍」这类描写，主要起什么作用？",
-      options: [
-        "交代具体时间和地点",
-        "让环境的阴冷与 Scrooge 的冷酷互相印证",
-        "为了展示作者的文采",
-        "暗示即将下雪"
-      ],
-      answer: 1,
-      explain: "环境描写在这里是「共振」：外面越冷越暗，屋里那个人越显得冷。后面鬼魂登场时，同样的天气写法会转成恐怖气氛——同一套笔法两用。"
-    },
-    rewrite: {
-      en: "It was three in the afternoon and already dark. Fog pressed against the windows; candles in the neighbouring offices burned like red smears on brown air. Inside, one small fire, one cold man, one shivering clerk.",
-      cn: "下午三点，天已经黑了。雾贴着窗户；隔壁办公室的烛光像棕色空气上的红污渍。屋里：一小炉火、一个冷冰冰的人、一个发抖的办事员。",
-      note: "保留原句的三个意象（三点就黑、红污渍、一小炉火），只把句子压缩。"
-    }
-  }
+const LANG = {
+  words: [
+    { w: "door-nail", ph: "/ˈdɔː neɪl/", cn: "门钉（用于比喻「死透了」）",
+      ex: "Old Marley was as <i>dead as a door-nail</i>.",
+      excn: "老马利死得透透的。", use: "as dead as a door-nail = 死得不能再死，英语固定比喻，只说 dead 不用这个。" },
+    { w: "inclined", ph: "/ɪnˈklaɪnd/", cn: "倾向于……的",
+      ex: "I might have been <i>inclined</i>, myself, to regard a coffin-nail as the most dead piece of iron.",
+      excn: "我自己倒可能倾向于认为，棺材钉才是铁器里最「死」的那种。",
+      use: "be inclined to do sth = 倾向于做某事，比 want to 委婉，书面常用。" },
+    { w: "emphatically", ph: "/ɪmˈfætɪkli/", cn: "强调地、断然地",
+      ex: "You will permit me to repeat, <i>emphatically</i>, that Marley was as dead as a door-nail.",
+      excn: "请允许我强调地再说一遍：马利死得透透的。", use: "口语里几乎不用，书面用来加强语气，等于「我再说一遍」。" },
+    { w: "administrator", ph: "/ədˈmɪnɪstreɪtə/", cn: "（遗产）管理人；行政人员",
+      ex: "Scrooge was his sole <i>administrator</i>, his sole residuary beneficiary.",
+      excn: "斯克鲁奇是他唯一的遗产管理人、唯一的剩余遗产受益人。",
+      use: "这里不是「管理员」，是法律义：负责处理死者遗产的人。同句的 beneficiary=受益人。" },
+    { w: "be cut up", ph: "/kʌt ʌp/", cn: "（因某事）难过、心碎",
+      ex: "Even Scrooge was not so dreadfully <i>cut up</i> by the sad event.",
+      excn: "连斯克鲁奇也没有因为这件悲伤的事难过到什么地步。",
+      use: "英式口语，be cut up about sth。反讽用法常见：not so cut up = 其实并不难过。" },
+    { w: "grindstone", ph: "/ˈɡraɪndstəʊn/", cn: "磨石",
+      ex: "Oh! But he was hard at the <i>grindstone</i>, Scrooge!",
+      excn: "哦！可斯克鲁奇真是死命磨着磨石啊！",
+      use: "keep your nose to the grindstone = 埋头苦干。这里暗指他埋头于赚钱。" },
+    { w: "grasping", ph: "/ˈɡrɑːspɪŋ/", cn: "贪婪的、抓取不放的",
+      ex: "a squeezing, <i>grasping</i>, scraping, clutching, greedy, old sinner!",
+      excn: "一个又挤又抓、又刮又攥的贪婪老罪人！", use: "形容人贪财，比 greedy 更有画面感；grasp 本义是「抓住」。" },
+    { w: "clutching", ph: "/ˈklʌtʃɪŋ/", cn: "死死攥住的",
+      ex: "a squeezing, grasping, scraping, <i>clutching</i>, greedy, old sinner!",
+      excn: "……又刮又攥的贪婪老罪人！", use: "clutch = 因害怕或不愿失去而紧抓，和 grasp（主动抓取）有别。" },
+    { w: "self-contained", ph: "/ˌself kənˈteɪnd/", cn: "不外露的；自给自足的",
+      ex: "Hard and sharp, secret, and <i>self-contained</i>, and solitary.",
+      excn: "又硬又尖，寡言，不外露，独来独往。", use: "形容人不与人来往；也可指设备「自带全套、不需外接」。" },
+    { w: "solitary", ph: "/ˈsɒlətri/", cn: "独居的、孤零零的",
+      ex: "Hard and sharp, secret, and self-contained, and <i>solitary</i>.",
+      excn: "……不外露，独来独往。", use: "比 alone 更书面、更强调「长期孤立」；solitary confinement=单独监禁。" },
+    { w: "grating", ph: "/ˈɡreɪtɪŋ/", cn: "（声音）刺耳的",
+      ex: "…and spoke out in his <i>grating</i> voice.",
+      excn: "……用他那刺耳的嗓音说了出来。", use: "专形容声音难听，像金属摩擦；也可形容言行「让人不舒服」。" },
+    { w: "bleak", ph: "/bliːk/", cn: "阴冷的；前景黯淡的",
+      ex: "It was cold, <i>bleak</i>, biting weather.",
+      excn: "天气又冷又阴沉又刺骨。", use: "天气用法+抽象用法（a bleak future 黯淡的前景）。" },
+    { w: "biting", ph: "/ˈbaɪtɪŋ/", cn: "刺骨的",
+      ex: "It was cold, bleak, <i>biting</i> weather.",
+      excn: "天气又冷又阴沉又刺骨。", use: "专配 wind/weather；biting cold=刺骨的冷。" },
+    { w: "flaring", ph: "/ˈfleərɪŋ/", cn: "（火光）摇曳的、明灭的",
+      ex: "…candles were <i>flaring</i> in the windows of the neighbouring offices.",
+      excn: "……隔壁办公室的烛光在窗子里摇曳。", use: "flare 本义「突然烧旺／火光一闪」，这里写烛火不稳。" },
+    { w: "wag", ph: "/wæɡ/", cn: "（尾巴）摇",
+      ex: "…would <i>wag</i> their tails as though they said…",
+      excn: "……摇着尾巴，仿佛在说……", use: "狗摇尾巴用 wag；人摇头 wag one's head（表示不同意）。" },
+    { w: "tug", ph: "/tʌɡ/", cn: "用力拽",
+      ex: "…would <i>tug</i> their owners into doorways or courtyards.",
+      excn: "……会把主人往门洞或院子里拽。", use: "tug = 短促有力地拉；pull 是通称。" },
+    { w: "pavement", ph: "/ˈpeɪvmənt/", cn: "人行道（英式）",
+      ex: "…stamping their feet upon the <i>pavement</i> stones to warm them.",
+      excn: "……在人行道石板上跺脚取暖。", use: "英式 pavement = 美式 sidewalk；美式 pavement 指路面。" }
+  ],
+  collocs: [
+    { w: "be good for anything", cn: "（信用）什么都靠得住",
+      ex: "Scrooge's name was <i>good for anything</i> he chose to put his hand to.",
+      excn: "斯克鲁奇只要肯署名，签什么都有信用。", use: "商业语境：a name good for any amount = 这个名字值多少钱都认。" },
+    { w: "have little influence on", cn: "对……几乎没影响",
+      ex: "External heat and cold had <i>little influence on</i> Scrooge.",
+      excn: "外界的冷热对斯克鲁奇几乎没影响。", use: "influence on/over sb/sth；程度词 little/some/great 可换。" },
+    { w: "boast of the advantage over", cn: "在……上占优势（只有这一点）",
+      ex: "…could <i>boast of the advantage over</i> him in only one respect.",
+      excn: "……只在一点上能说比他强。", use: "boast of = 自夸有；常带反讽语气，如本句。" },
+    { w: "keep its distance", cn: "保持距离",
+      ex: "…warning all human sympathy to <i>keep its distance</i>.",
+      excn: "……警告一切人间的同情离他远点。", use: "keep one's distance from sb = 与人保持距离；此处拟人用法。" },
+    { w: "take over everything", cn: "把一切都接手过来",
+      ex: "…on the very day of the funeral, he <i>took over everything</i> which was an undoubted bargain.",
+      excn: "……就在葬礼当天，他把一切划算的生意都接手了。", use: "take over = 接管；后面接 which 从句是反讽：一律要「买得值」。" },
+    { w: "be hard at the grindstone", cn: "埋头苦干（多指为钱）",
+      ex: "But he was <i>hard at the grindstone</i>, Scrooge!",
+      excn: "可他真是死命埋头苦干啊，斯克鲁奇！", use: "常用形是 keep your nose to the grindstone。" },
+    { w: "go coughing up and down", cn: "（人）咳着走来走去",
+      ex: "…he could hear the people in the courtyard outside, go <i>coughing up and down</i>.",
+      excn: "……他听得见外面院子里的人一边咳一边来回走。", use: "go + 现在分词 = 不停地做；up and down = 来回。" },
+    { w: "once upon a time", cn: "从前；这里反讽「偏偏在」",
+      ex: "<i>Once upon a time</i> — of all the good days in the year, on Christmas Eve — old Scrooge sat busy.",
+      excn: "从前——一年里最好的日子，圣诞夜——老斯克鲁奇正忙着。", use: "童话开头语；此处反用，制造落差。" }
+  ]
+};
+
+const TECH = [
+  { point: "标题只用一种层级写法，不跳级", rule: "`#` 一级 → `##` 二级 → `###` 三级；从 `#` 直接跳到 `###` 会让目录错乱",
+    q: "下面哪个是正确的层级写法？", options: ["# 总纲  →  ### 小节", "# 总纲  →  ## 小节", "## 总纲  →  # 小节"], answer: 1,
+    explain: "必须逐级：一级下面接二级。跳级在多数渲染器里仍能显示，但目录结构和锚点会错。" },
+  { point: "代码块必须标语言，否则没有高亮", rule: "行内代码用单个反引号 `x`；多行用三个反引号并在后面写语言名（```python）",
+    q: "想让 Python 代码块高亮，正确的写法是？", options: ["```", "```python", "```py-highlight"], answer: 1,
+    explain: "语言名紧跟三个反引号。不写语言名=纯文本块，没有高亮也没有语法检查。" },
+  { point: "表格第二行决定对齐，不能省", rule: "表头下面必须有 `|---|` 分隔行，冒号控制对齐：`:--` 左、`--:` 右、`:-:` 居中",
+    q: "哪一行能让表头下面这一列右对齐？", options: ["|---|", "|--:|", "|:--|"], answer: 1,
+    explain: "冒号在右边 = 右对齐。没有分隔行，整张表不会被识别成表格。" }
 ];
 
 const app = document.getElementById('app');
-app.innerHTML = UNITS.map((u, i) => `
-  <section class="unit">
-    <div class="head">
-      <div class="num">${i + 1}</div>
-      <div style="flex:1">
-        <div class="point">${u.point}</div>
-        <div class="kw">${u.keywords.map((k) => `<span>${k}</span>`).join('')}</div>
-      </div>
-    </div>
-    <div class="body" id="b${i}">
-      <h3>考这一条</h3>
-      <p class="q">${u.quiz.q}</p>
-      ${u.quiz.options.map((o, j) => `<button class="opt" data-u="${i}" data-j="${j}">${o}</button>`).join('')}
-      <p class="fb" id="f${i}"></p>
-      <h3 style="margin-top:16px">换语境重写</h3>
-      <div class="rw">
-        <p>${u.rewrite.en}</p>
-        <p class="cn">${u.rewrite.cn}</p>
-        <p class="cn" style="margin-top:8px">▸ ${u.rewrite.note}</p>
-      </div>
-    </div>
-  </section>
-`).join('');
+app.innerHTML = `
+  <h2>生词（${LANG.words.length}）— 只挑不常见的</h2>
+  ${LANG.words.map((x) => `
+    <div class="it">
+      <div class="w">${x.w}<span class="ph">${x.ph}</span></div>
+      <div class="cn">${x.cn}</div>
+      <div class="ex">${x.ex}</div>
+      <div class="excn">${x.excn}</div>
+      <div class="use">▸ ${x.use}</div>
+    </div>`).join('')}
 
-app.querySelectorAll('.head').forEach((h, i) => {
-  h.onclick = () => document.getElementById('b' + i).classList.toggle('open');
-});
-app.querySelectorAll('.opt').forEach((btn) => {
-  btn.onclick = () => {
-    const i = +btn.dataset.u, j = +btn.dataset.j;
-    const u = UNITS[i];
-    const box = document.getElementById('b' + i);
-    box.querySelectorAll('.opt').forEach((b, k) => {
-      b.classList.remove('right', 'wrong');
-      if (k === u.quiz.answer) b.classList.add('right');
-      if (k === j && j !== u.quiz.answer) b.classList.add('wrong');
+  <h2>固定搭配（${LANG.collocs.length}）— 认识了单个词也猜不对的那种</h2>
+  ${LANG.collocs.map((x) => `
+    <div class="it">
+      <div class="w">${x.w}</div>
+      <div class="cn">${x.cn}</div>
+      <div class="ex">${x.ex}</div>
+      <div class="excn">${x.excn}</div>
+      <div class="use">▸ ${x.use}</div>
+    </div>`).join('')}
+
+  <h2>如果材料是技术类，同一条链会输出这个 <span class="tag">示例：Markdown</span></h2>
+  ${TECH.map((t, i) => `
+    <div class="it">
+      <div class="w">${t.point}</div>
+      <div class="use" style="margin-top:6px">规则：${t.rule.replace(/`([^`]+)`/g, '<code>$1</code>')}</div>
+      <div class="q" style="font-size:14px;margin-top:10px">${t.q}</div>
+      ${t.options.map((o, j) => `<button class="opt" data-i="${i}" data-j="${j}"
+        style="display:block;width:100%;text-align:left;background:#20242d;border:1px solid var(--line);
+        color:var(--text);border-radius:10px;padding:9px 12px;font-size:14px;margin-top:7px">${o}</button>`).join('')}
+      <div class="use" id="fb${i}"></div>
+    </div>`).join('')}
+`;
+
+app.querySelectorAll('.opt').forEach((b) => {
+  b.onclick = () => {
+    const i = +b.dataset.i, j = +b.dataset.j, t = TECH[i];
+    const box = b.closest('.it');
+    box.querySelectorAll('.opt').forEach((el, k) => {
+      el.style.borderColor = k === t.answer ? 'var(--ok)' : (k === j ? 'var(--bad)' : 'var(--line)');
+      el.style.background = k === t.answer ? '#12301f' : (k === j ? '#341417' : '#20242d');
     });
-    document.getElementById('f' + i).textContent = u.quiz.explain;
+    document.getElementById('fb' + i).textContent = t.explain;
   };
 });
 </script>
