@@ -256,7 +256,7 @@ function renderReview() {
   box.onclick = (ev) => {
     if (ev.target.closest('button')) return;
     const w = ev.target.closest('.tapw');
-    if (w) {
+    if (w && state.revealed) {        // 翻面后才点词朗读
       ev.stopPropagation();
       speak(w.dataset.w, lang);
       return;

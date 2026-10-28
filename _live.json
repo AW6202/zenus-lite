@@ -1,0 +1,2029 @@
+{
+  "version": "2026-10-28.2",
+  "name": "学习机 · 内容包",
+  "meta": {
+    "note": "内容包由电脑端生成，手机端只读。改内容 = 改 content.py 后重跑 build_pack.py。",
+    "sources": [
+      "英语实物词/核心词/搭配：自撰，释义与例句未经教材转抄",
+      "精读卡：Paul Nation / Gerry Meister 4,000 词级分级读物《A Christmas Carol》（wgtn.ac.nz，页面明示 out of copyright，可免费分发）",
+      "日语五十音：公版假名表",
+      "数学：初中分数与负数基础题，自撰"
+    ]
+  },
+  "courses": [
+    {
+      "id": "en-fish",
+      "title": "英语 · 鱼虾贝",
+      "kind": "vocab",
+      "lang": "en-US",
+      "topic": "英语 · 日常实物词",
+      "cards": [
+        {
+          "id": "en-fish-salmon",
+          "front": "salmon",
+          "back": "三文鱼",
+          "example": "We had grilled salmon for dinner.",
+          "exampleCN": "我们晚饭吃了烤三文鱼。",
+          "level": "A2",
+          "hint": "/ˈsæmən/"
+        },
+        {
+          "id": "en-fish-tuna",
+          "front": "tuna",
+          "back": "金枪鱼",
+          "example": "I'll make a tuna sandwich.",
+          "exampleCN": "我做个金枪鱼三明治。",
+          "level": "A2",
+          "hint": "/ˈtuːnə/"
+        },
+        {
+          "id": "en-fish-cod",
+          "front": "cod",
+          "back": "鳕鱼",
+          "example": "Cod is often used in fish and chips.",
+          "exampleCN": "炸鱼薯条常用鳕鱼。",
+          "level": "B1",
+          "hint": "/kɒd/"
+        },
+        {
+          "id": "en-fish-trout",
+          "front": "trout",
+          "back": "鳟鱼",
+          "example": "He caught a trout in the river.",
+          "exampleCN": "他在河里钓到一条鳟鱼。",
+          "level": "B1",
+          "hint": "/traʊt/"
+        },
+        {
+          "id": "en-fish-mackerel",
+          "front": "mackerel",
+          "back": "鲭鱼",
+          "example": "Mackerel is cheap and full of oil.",
+          "exampleCN": "鲭鱼便宜又油脂丰富。",
+          "level": "B2",
+          "hint": "/ˈmækrəl/"
+        },
+        {
+          "id": "en-fish-sardine",
+          "front": "sardine",
+          "back": "沙丁鱼",
+          "example": "She opened a can of sardines.",
+          "exampleCN": "她开了一罐沙丁鱼。",
+          "level": "B1",
+          "hint": "/sɑːˈdiːn/"
+        },
+        {
+          "id": "en-fish-herring",
+          "front": "herring",
+          "back": "鲱鱼",
+          "example": "Pickled herring is popular in northern Europe.",
+          "exampleCN": "腌鲱鱼在北欧很受欢迎。",
+          "level": "B2",
+          "hint": "/ˈherɪŋ/"
+        },
+        {
+          "id": "en-fish-halibut",
+          "front": "halibut",
+          "back": "大比目鱼",
+          "example": "Halibut fillets are thick and meaty.",
+          "exampleCN": "大比目鱼柳厚实有嚼劲。",
+          "level": "C1",
+          "hint": "/ˈhælɪbət/"
+        },
+        {
+          "id": "en-fish-sea-bass",
+          "front": "sea bass",
+          "back": "鲈鱼",
+          "example": "The sea bass was perfectly cooked.",
+          "exampleCN": "这条鲈鱼火候刚好。",
+          "level": "B1",
+          "hint": "/ˌsiː ˈbæs/"
+        },
+        {
+          "id": "en-fish-tilapia",
+          "front": "tilapia",
+          "back": "罗非鱼",
+          "example": "Tilapia is farmed in many countries.",
+          "exampleCN": "很多国家养殖罗非鱼。",
+          "level": "B2",
+          "hint": "/tɪˈlɑːpiə/"
+        },
+        {
+          "id": "en-fish-eel",
+          "front": "eel",
+          "back": "鳗鱼",
+          "example": "Grilled eel is a summer dish in Japan.",
+          "exampleCN": "烤鳗鱼是日本夏天的菜。",
+          "level": "B1",
+          "hint": "/iːl/"
+        },
+        {
+          "id": "en-fish-shrimp",
+          "front": "shrimp",
+          "back": "虾",
+          "example": "Peel the shrimp before cooking.",
+          "exampleCN": "下锅前把虾剥壳。",
+          "level": "A2",
+          "hint": "/ʃrɪmp/"
+        },
+        {
+          "id": "en-fish-prawn",
+          "front": "prawn",
+          "back": "大虾",
+          "example": "Prawns are bigger than shrimp.",
+          "exampleCN": "大虾比小虾大。",
+          "level": "B1",
+          "hint": "/prɔːn/"
+        },
+        {
+          "id": "en-fish-crab",
+          "front": "crab",
+          "back": "蟹",
+          "example": "We cracked open the crab legs.",
+          "exampleCN": "我们掰开了蟹腿。",
+          "level": "A2",
+          "hint": "/kræb/"
+        },
+        {
+          "id": "en-fish-lobster",
+          "front": "lobster",
+          "back": "龙虾",
+          "example": "Lobster is expensive here.",
+          "exampleCN": "这儿龙虾很贵。",
+          "level": "B1",
+          "hint": "/ˈlɒbstə/"
+        },
+        {
+          "id": "en-fish-oyster",
+          "front": "oyster",
+          "back": "牡蛎、生蚝",
+          "example": "He doesn't like raw oysters.",
+          "exampleCN": "他不喜欢生蚝。",
+          "level": "B1",
+          "hint": "/ˈɔɪstə/"
+        },
+        {
+          "id": "en-fish-mussel",
+          "front": "mussel",
+          "back": "贻贝",
+          "example": "Mussels are cooked with white wine.",
+          "exampleCN": "贻贝用白葡萄酒煮。",
+          "level": "B2",
+          "hint": "/ˈmʌsl/"
+        },
+        {
+          "id": "en-fish-scallop",
+          "front": "scallop",
+          "back": "扇贝",
+          "example": "Pan-fried scallops need high heat.",
+          "exampleCN": "煎扇贝要用大火。",
+          "level": "B2",
+          "hint": "/ˈskɒləp/"
+        },
+        {
+          "id": "en-fish-squid",
+          "front": "squid",
+          "back": "鱿鱼",
+          "example": "Fried squid rings are a pub snack.",
+          "exampleCN": "炸鱿鱼圈是酒吧小吃。",
+          "level": "B1",
+          "hint": "/skwɪd/"
+        },
+        {
+          "id": "en-fish-octopus",
+          "front": "octopus",
+          "back": "章鱼",
+          "example": "The octopus was tender, not chewy.",
+          "exampleCN": "这章鱼很嫩，不韧。",
+          "level": "B1",
+          "hint": "/ˈɒktəpəs/"
+        }
+      ]
+    },
+    {
+      "id": "en-veg",
+      "title": "英语 · 蔬菜",
+      "kind": "vocab",
+      "lang": "en-US",
+      "topic": "英语 · 日常实物词",
+      "cards": [
+        {
+          "id": "en-veg-broccoli",
+          "front": "broccoli",
+          "back": "西兰花",
+          "example": "Steam the broccoli for three minutes.",
+          "exampleCN": "西兰花蒸三分钟。",
+          "level": "A2",
+          "hint": "/ˈbrɒkəli/"
+        },
+        {
+          "id": "en-veg-cauliflower",
+          "front": "cauliflower",
+          "back": "花菜",
+          "example": "Cut the cauliflower into small pieces.",
+          "exampleCN": "把花菜切成小块。",
+          "level": "B1",
+          "hint": "/ˈkɒliflaʊə/"
+        },
+        {
+          "id": "en-veg-spinach",
+          "front": "spinach",
+          "back": "菠菜",
+          "example": "Spinach shrinks a lot when cooked.",
+          "exampleCN": "菠菜一煮就缩很多。",
+          "level": "A2",
+          "hint": "/ˈspɪnɪtʃ/"
+        },
+        {
+          "id": "en-veg-lettuce",
+          "front": "lettuce",
+          "back": "生菜",
+          "example": "Wash the lettuce under cold water.",
+          "exampleCN": "用冷水洗生菜。",
+          "level": "A2",
+          "hint": "/ˈletɪs/"
+        },
+        {
+          "id": "en-veg-cabbage",
+          "front": "cabbage",
+          "back": "卷心菜",
+          "example": "Cabbage keeps well in the fridge.",
+          "exampleCN": "卷心菜在冰箱里能放很久。",
+          "level": "A2",
+          "hint": "/ˈkæbɪdʒ/"
+        },
+        {
+          "id": "en-veg-kale",
+          "front": "kale",
+          "back": "羽衣甘蓝",
+          "example": "Kale is tougher than spinach.",
+          "exampleCN": "羽衣甘蓝比菠菜老。",
+          "level": "B2",
+          "hint": "/keɪl/"
+        },
+        {
+          "id": "en-veg-celery",
+          "front": "celery",
+          "back": "芹菜",
+          "example": "Chop the celery into thin strips.",
+          "exampleCN": "把芹菜切成细条。",
+          "level": "A2",
+          "hint": "/ˈseləri/"
+        },
+        {
+          "id": "en-veg-cucumber",
+          "front": "cucumber",
+          "back": "黄瓜",
+          "example": "Slice the cucumber for the salad.",
+          "exampleCN": "切点黄瓜做沙拉。",
+          "level": "A2",
+          "hint": "/ˈkjuːkʌmbə/"
+        },
+        {
+          "id": "en-veg-zucchini",
+          "front": "zucchini",
+          "back": "西葫芦（美式）",
+          "example": "Zucchini is called courgette in the UK.",
+          "exampleCN": "西葫芦在英式英语里叫 courgette。",
+          "level": "B1",
+          "hint": "/zuˈkiːni/"
+        },
+        {
+          "id": "en-veg-eggplant",
+          "front": "eggplant",
+          "back": "茄子（美式）",
+          "example": "Eggplant soaks up a lot of oil.",
+          "exampleCN": "茄子很吸油。",
+          "level": "B1",
+          "hint": "/ˈeɡplɑːnt/"
+        },
+        {
+          "id": "en-veg-bell-pepper",
+          "front": "bell pepper",
+          "back": "甜椒、柿子椒",
+          "example": "Roast the bell pepper until the skin blisters.",
+          "exampleCN": "把甜椒烤到皮起泡。",
+          "level": "B1",
+          "hint": "/bel ˈpepə/"
+        },
+        {
+          "id": "en-veg-chili-pepper",
+          "front": "chili pepper",
+          "back": "辣椒",
+          "example": "This chili pepper is really hot.",
+          "exampleCN": "这个辣椒特别辣。",
+          "level": "B1",
+          "hint": "/ˈtʃɪli ˈpepə/"
+        },
+        {
+          "id": "en-veg-onion",
+          "front": "onion",
+          "back": "洋葱",
+          "example": "Fry the onion until golden.",
+          "exampleCN": "把洋葱炒到金黄。",
+          "level": "A2",
+          "hint": "/ˈʌnjən/"
+        },
+        {
+          "id": "en-veg-garlic",
+          "front": "garlic",
+          "back": "大蒜",
+          "example": "Crush the garlic with the flat of a knife.",
+          "exampleCN": "用刀面把蒜拍碎。",
+          "level": "A2",
+          "hint": "/ˈɡɑːlɪk/"
+        },
+        {
+          "id": "en-veg-ginger",
+          "front": "ginger",
+          "back": "姜",
+          "example": "Grate some ginger into the soup.",
+          "exampleCN": "擦点姜末进汤里。",
+          "level": "B1",
+          "hint": "/ˈdʒɪndʒə/"
+        },
+        {
+          "id": "en-veg-potato",
+          "front": "potato",
+          "back": "土豆",
+          "example": "Boil the potatoes for twenty minutes.",
+          "exampleCN": "土豆煮二十分钟。",
+          "level": "A2",
+          "hint": "/pəˈteɪtəʊ/"
+        },
+        {
+          "id": "en-veg-sweet-potato",
+          "front": "sweet potato",
+          "back": "红薯",
+          "example": "Sweet potato is sweet even without sugar.",
+          "exampleCN": "红薯不加糖也甜。",
+          "level": "B1",
+          "hint": "/ˌswiːt pəˈteɪtəʊ/"
+        },
+        {
+          "id": "en-veg-carrot",
+          "front": "carrot",
+          "back": "胡萝卜",
+          "example": "Peel the carrots before slicing.",
+          "exampleCN": "切之前先把胡萝卜削皮。",
+          "level": "A2",
+          "hint": "/ˈkærət/"
+        },
+        {
+          "id": "en-veg-radish",
+          "front": "radish",
+          "back": "萝卜（小红萝卜）",
+          "example": "Radishes have a sharp, peppery taste.",
+          "exampleCN": "小萝卜味道辛辣。",
+          "level": "B2",
+          "hint": "/ˈrædɪʃ/"
+        },
+        {
+          "id": "en-veg-turnip",
+          "front": "turnip",
+          "back": "芜菁、大头菜",
+          "example": "Turnip is common in northern soups.",
+          "exampleCN": "芜菁在北方的汤里很常见。",
+          "level": "C1",
+          "hint": "/ˈtɜːnɪp/"
+        },
+        {
+          "id": "en-veg-pumpkin",
+          "front": "pumpkin",
+          "back": "南瓜",
+          "example": "Pumpkin soup is popular in autumn.",
+          "exampleCN": "南瓜汤在秋天很受欢迎。",
+          "level": "A2",
+          "hint": "/ˈpʌmpkɪn/"
+        },
+        {
+          "id": "en-veg-mushroom",
+          "front": "mushroom",
+          "back": "蘑菇",
+          "example": "Don't wash mushrooms, just wipe them.",
+          "exampleCN": "蘑菇别洗，擦一擦就行。",
+          "level": "A2",
+          "hint": "/ˈmʌʃrʊm/"
+        },
+        {
+          "id": "en-veg-asparagus",
+          "front": "asparagus",
+          "back": "芦笋",
+          "example": "Asparagus cooks in two minutes.",
+          "exampleCN": "芦笋两分钟就熟。",
+          "level": "B1",
+          "hint": "/əˈspærəɡəs/"
+        },
+        {
+          "id": "en-veg-green-beans",
+          "front": "green beans",
+          "back": "四季豆",
+          "example": "Blanch the green beans, then stir-fry.",
+          "exampleCN": "四季豆先焯水再炒。",
+          "level": "B1",
+          "hint": "/ˌɡriːn ˈbiːnz/"
+        },
+        {
+          "id": "en-veg-peas",
+          "front": "peas",
+          "back": "豌豆",
+          "example": "Add the peas at the very end.",
+          "exampleCN": "最后再加豌豆。",
+          "level": "A2",
+          "hint": "/piːz/"
+        },
+        {
+          "id": "en-veg-corn",
+          "front": "corn",
+          "back": "玉米（美式）",
+          "example": "Corn on the cob is a summer treat.",
+          "exampleCN": "整根煮玉米是夏天的享受。",
+          "level": "A2",
+          "hint": "/kɔːn/"
+        },
+        {
+          "id": "en-veg-beet",
+          "front": "beet",
+          "back": "甜菜根（美式）",
+          "example": "Beets turn everything pink.",
+          "exampleCN": "甜菜根会把所有东西染成粉红。",
+          "level": "B2",
+          "hint": "/biːt/"
+        }
+      ]
+    },
+    {
+      "id": "en-kitchen",
+      "title": "英语 · 厨具",
+      "kind": "vocab",
+      "lang": "en-US",
+      "topic": "英语 · 日常实物词",
+      "cards": [
+        {
+          "id": "en-kitchen-whisk",
+          "front": "whisk",
+          "back": "打蛋器",
+          "example": "Use a whisk to beat the eggs.",
+          "exampleCN": "用打蛋器打蛋。",
+          "level": "B1",
+          "hint": "/wɪsk/"
+        },
+        {
+          "id": "en-kitchen-spatula",
+          "front": "spatula",
+          "back": "锅铲、抹刀",
+          "example": "Flip the pancake with a spatula.",
+          "exampleCN": "用锅铲翻煎饼。",
+          "level": "B1",
+          "hint": "/ˈspætʃələ/"
+        },
+        {
+          "id": "en-kitchen-ladle",
+          "front": "ladle",
+          "back": "汤勺",
+          "example": "Serve the soup with a ladle.",
+          "exampleCN": "用汤勺盛汤。",
+          "level": "B2",
+          "hint": "/ˈleɪdl/"
+        },
+        {
+          "id": "en-kitchen-colander",
+          "front": "colander",
+          "back": "滤水篮",
+          "example": "Drain the pasta in a colander.",
+          "exampleCN": "用滤水篮沥干意面。",
+          "level": "B2",
+          "hint": "/ˈkʌləndə/"
+        },
+        {
+          "id": "en-kitchen-grater",
+          "front": "grater",
+          "back": "擦丝器",
+          "example": "Use the fine side of the grater.",
+          "exampleCN": "用擦丝器细的那一面。",
+          "level": "B1",
+          "hint": "/ˈɡreɪtə/"
+        },
+        {
+          "id": "en-kitchen-peeler",
+          "front": "peeler",
+          "back": "削皮刀",
+          "example": "A peeler is faster than a knife for carrots.",
+          "exampleCN": "削胡萝卜，削皮刀比刀快。",
+          "level": "B1",
+          "hint": "/ˈpiːlə/"
+        },
+        {
+          "id": "en-kitchen-tongs",
+          "front": "tongs",
+          "back": "夹子（复数）",
+          "example": "Turn the meat with tongs.",
+          "exampleCN": "用夹子翻肉。",
+          "level": "B1",
+          "hint": "/tɒŋz/"
+        },
+        {
+          "id": "en-kitchen-cutting-board",
+          "front": "cutting board",
+          "back": "砧板",
+          "example": "Never cut raw meat on a wooden board.",
+          "exampleCN": "别在木砧板上切生肉。",
+          "level": "A2",
+          "hint": "/ˈkʌtɪŋ bɔːd/"
+        },
+        {
+          "id": "en-kitchen-saucepan",
+          "front": "saucepan",
+          "back": "深平底锅",
+          "example": "Heat the milk in a small saucepan.",
+          "exampleCN": "在小锅里热牛奶。",
+          "level": "B1",
+          "hint": "/ˈsɔːspən/"
+        },
+        {
+          "id": "en-kitchen-frying-pan",
+          "front": "frying pan",
+          "back": "煎锅",
+          "example": "Heat the oil in a frying pan.",
+          "exampleCN": "在煎锅里热油。",
+          "level": "A2",
+          "hint": "/ˈfraɪɪŋ pæn/"
+        },
+        {
+          "id": "en-kitchen-kettle",
+          "front": "kettle",
+          "back": "水壶",
+          "example": "Put the kettle on for tea.",
+          "exampleCN": "烧壶水泡茶。",
+          "level": "A2",
+          "hint": "/ˈketl/"
+        },
+        {
+          "id": "en-kitchen-blender",
+          "front": "blender",
+          "back": "搅拌机",
+          "example": "Blend the fruit in a blender.",
+          "exampleCN": "把水果放进搅拌机里打。",
+          "level": "B1",
+          "hint": "/ˈblendə/"
+        },
+        {
+          "id": "en-kitchen-measuring-cup",
+          "front": "measuring cup",
+          "back": "量杯",
+          "example": "Use a measuring cup, not a mug.",
+          "exampleCN": "用量杯，别用杯子估。",
+          "level": "B1",
+          "hint": "/ˈmeʒərɪŋ kʌp/"
+        },
+        {
+          "id": "en-kitchen-strainer",
+          "front": "strainer",
+          "back": "滤网、漏勺",
+          "example": "Pour the tea through a strainer.",
+          "exampleCN": "用滤网滤茶。",
+          "level": "B1",
+          "hint": "/ˈstreɪnə/"
+        },
+        {
+          "id": "en-kitchen-oven-mitt",
+          "front": "oven mitt",
+          "back": "隔热手套",
+          "example": "Use an oven mitt, the tray is hot.",
+          "exampleCN": "用隔热手套，托盘很烫。",
+          "level": "B1",
+          "hint": "/ˈʌvn mɪt/"
+        }
+      ]
+    },
+    {
+      "id": "en-tools",
+      "title": "英语 · 工具",
+      "kind": "vocab",
+      "lang": "en-US",
+      "topic": "英语 · 日常实物词",
+      "cards": [
+        {
+          "id": "en-tools-hammer",
+          "front": "hammer",
+          "back": "锤子",
+          "example": "Tap the nail in with a hammer.",
+          "exampleCN": "用锤子把钉子敲进去。",
+          "level": "A2",
+          "hint": "/ˈhæmə/"
+        },
+        {
+          "id": "en-tools-screwdriver",
+          "front": "screwdriver",
+          "back": "螺丝刀",
+          "example": "A Phillips screwdriver fits this screw.",
+          "exampleCN": "这是十字螺丝，用十字螺丝刀。",
+          "level": "A2",
+          "hint": "/ˈskruːdraɪvə/"
+        },
+        {
+          "id": "en-tools-pliers",
+          "front": "pliers",
+          "back": "钳子（复数）",
+          "example": "Grip the wire with pliers.",
+          "exampleCN": "用钳子夹住电线。",
+          "level": "B1",
+          "hint": "/ˈplaɪəz/"
+        },
+        {
+          "id": "en-tools-wrench",
+          "front": "wrench",
+          "back": "扳手",
+          "example": "Tighten the nut with a wrench.",
+          "exampleCN": "用扳手拧紧螺母。",
+          "level": "B1",
+          "hint": "/rentʃ/"
+        },
+        {
+          "id": "en-tools-drill",
+          "front": "drill",
+          "back": "电钻",
+          "example": "Drill a hole before you insert the screw.",
+          "exampleCN": "上螺丝前先打孔。",
+          "level": "B1",
+          "hint": "/drɪl/"
+        },
+        {
+          "id": "en-tools-saw",
+          "front": "saw",
+          "back": "锯子",
+          "example": "This saw is too dull to cut wood.",
+          "exampleCN": "这锯子太钝，锯不动木头。",
+          "level": "A2",
+          "hint": "/sɔː/"
+        },
+        {
+          "id": "en-tools-tape-measure",
+          "front": "tape measure",
+          "back": "卷尺",
+          "example": "Measure the wall with a tape measure.",
+          "exampleCN": "用卷尺量一下墙。",
+          "level": "B1",
+          "hint": "/ˈteɪp meʒə/"
+        },
+        {
+          "id": "en-tools-level",
+          "front": "level",
+          "back": "水平尺",
+          "example": "Check if the shelf is straight with a level.",
+          "exampleCN": "用水平尺看看架子平不平。",
+          "level": "B2",
+          "hint": "/ˈlevl/"
+        },
+        {
+          "id": "en-tools-nail",
+          "front": "nail",
+          "back": "钉子",
+          "example": "The nail bent when I hit it.",
+          "exampleCN": "我一敲钉子就弯了。",
+          "level": "A2",
+          "hint": "/neɪl/"
+        },
+        {
+          "id": "en-tools-screw",
+          "front": "screw",
+          "back": "螺丝",
+          "example": "One screw is missing from the bracket.",
+          "exampleCN": "支架上少了一颗螺丝。",
+          "level": "A2",
+          "hint": "/skruː/"
+        },
+        {
+          "id": "en-tools-bolt",
+          "front": "bolt",
+          "back": "螺栓",
+          "example": "The bolt came loose on the bike.",
+          "exampleCN": "自行车上的螺栓松了。",
+          "level": "B1",
+          "hint": "/bəʊlt/"
+        },
+        {
+          "id": "en-tools-nut",
+          "front": "nut",
+          "back": "螺母",
+          "example": "Hold the nut while I turn the bolt.",
+          "exampleCN": "我拧螺栓的时候你按住螺母。",
+          "level": "B1",
+          "hint": "/nʌt/"
+        },
+        {
+          "id": "en-tools-washer",
+          "front": "washer",
+          "back": "垫圈",
+          "example": "Put a washer under the nut.",
+          "exampleCN": "螺母下面加个垫圈。",
+          "level": "B2",
+          "hint": "/ˈwɒʃə/"
+        },
+        {
+          "id": "en-tools-sandpaper",
+          "front": "sandpaper",
+          "back": "砂纸",
+          "example": "Sand the edge smooth with fine sandpaper.",
+          "exampleCN": "用细砂纸把边缘磨平。",
+          "level": "B1",
+          "hint": "/ˈsændpeɪpə/"
+        },
+        {
+          "id": "en-tools-ladder",
+          "front": "ladder",
+          "back": "梯子",
+          "example": "Don't stand on the top step of the ladder.",
+          "exampleCN": "别站在梯子最上面一格。",
+          "level": "A2",
+          "hint": "/ˈlædə/"
+        }
+      ]
+    },
+    {
+      "id": "en-b1",
+      "title": "英语 · 核心词 B1",
+      "kind": "vocab",
+      "lang": "en-US",
+      "topic": "英语 · 核心词汇",
+      "cards": [
+        {
+          "id": "en-b1-achieve",
+          "front": "achieve",
+          "back": "实现、达到（目标）",
+          "example": "She finally achieved her goal.",
+          "exampleCN": "她终于实现了目标。",
+          "level": "B1",
+          "hint": "/əˈtʃiːv/"
+        },
+        {
+          "id": "en-b1-afford",
+          "front": "afford",
+          "back": "负担得起",
+          "example": "We can't afford a new car this year.",
+          "exampleCN": "今年我们买不起新车。",
+          "level": "B1",
+          "hint": "/əˈfɔːd/"
+        },
+        {
+          "id": "en-b1-appreciate",
+          "front": "appreciate",
+          "back": "感激、欣赏",
+          "example": "I really appreciate your help.",
+          "exampleCN": "非常感谢你的帮助。",
+          "level": "B1",
+          "hint": "/əˈpriːʃieɪt/"
+        },
+        {
+          "id": "en-b1-avoid",
+          "front": "avoid",
+          "back": "避免",
+          "example": "Try to avoid heavy meals at night.",
+          "exampleCN": "晚上尽量别吃太撑。",
+          "level": "B1",
+          "hint": "/əˈvɔɪd/"
+        },
+        {
+          "id": "en-b1-complain",
+          "front": "complain",
+          "back": "抱怨、投诉",
+          "example": "He complained about the noise.",
+          "exampleCN": "他抱怨太吵。",
+          "level": "B1",
+          "hint": "/kəmˈpleɪn/"
+        },
+        {
+          "id": "en-b1-convenient",
+          "front": "convenient",
+          "back": "方便的",
+          "example": "Let's meet at a convenient time.",
+          "exampleCN": "我们约个方便的时间。",
+          "level": "B1",
+          "hint": "/kənˈviːniənt/"
+        },
+        {
+          "id": "en-b1-describe",
+          "front": "describe",
+          "back": "描述",
+          "example": "Can you describe what happened?",
+          "exampleCN": "你能描述一下发生了什么吗？",
+          "level": "B1",
+          "hint": "/dɪˈskraɪb/"
+        },
+        {
+          "id": "en-b1-develop",
+          "front": "develop",
+          "back": "发展、培养",
+          "example": "Reading develops your vocabulary.",
+          "exampleCN": "阅读能积累词汇。",
+          "level": "B1",
+          "hint": "/dɪˈveləp/"
+        },
+        {
+          "id": "en-b1-encourage",
+          "front": "encourage",
+          "back": "鼓励",
+          "example": "My teacher encouraged me to speak up.",
+          "exampleCN": "老师鼓励我多开口。",
+          "level": "B1",
+          "hint": "/ɪnˈkʌrɪdʒ/"
+        },
+        {
+          "id": "en-b1-improve",
+          "front": "improve",
+          "back": "改进、提高",
+          "example": "My English improved a lot this year.",
+          "exampleCN": "今年我的英语进步很多。",
+          "level": "B1",
+          "hint": "/ɪmˈpruːv/"
+        },
+        {
+          "id": "en-b1-manage",
+          "front": "manage",
+          "back": "设法做到、管理",
+          "example": "I managed to finish before noon.",
+          "exampleCN": "我设法在中午前做完了。",
+          "level": "B1",
+          "hint": "/ˈmænɪdʒ/"
+        },
+        {
+          "id": "en-b1-notice",
+          "front": "notice",
+          "back": "注意到",
+          "example": "Did you notice anything strange?",
+          "exampleCN": "你注意到有什么不对劲吗？",
+          "level": "B1",
+          "hint": "/ˈnəʊtɪs/"
+        },
+        {
+          "id": "en-b1-prefer",
+          "front": "prefer",
+          "back": "更喜欢",
+          "example": "I prefer tea to coffee.",
+          "exampleCN": "比起咖啡我更喜欢茶。",
+          "level": "B1",
+          "hint": "/prɪˈfɜː/"
+        },
+        {
+          "id": "en-b1-prepare",
+          "front": "prepare",
+          "back": "准备",
+          "example": "We prepared dinner together.",
+          "exampleCN": "我们一起准备了晚饭。",
+          "level": "B1",
+          "hint": "/prɪˈpeə/"
+        },
+        {
+          "id": "en-b1-realize",
+          "front": "realize",
+          "back": "意识到",
+          "example": "I didn't realize it was so late.",
+          "exampleCN": "我没意识到这么晚了。",
+          "level": "B1",
+          "hint": "/ˈriːəlaɪz/"
+        },
+        {
+          "id": "en-b1-recommend",
+          "front": "recommend",
+          "back": "推荐",
+          "example": "Can you recommend a good restaurant?",
+          "exampleCN": "能推荐一家好餐厅吗？",
+          "level": "B1",
+          "hint": "/ˌrekəˈmend/"
+        },
+        {
+          "id": "en-b1-remind",
+          "front": "remind",
+          "back": "提醒",
+          "example": "Remind me to call him tomorrow.",
+          "exampleCN": "提醒我明天给他打电话。",
+          "level": "B1",
+          "hint": "/rɪˈmaɪnd/"
+        },
+        {
+          "id": "en-b1-suggest",
+          "front": "suggest",
+          "back": "建议",
+          "example": "I suggest we leave early.",
+          "exampleCN": "我建议我们早点走。",
+          "level": "B1",
+          "hint": "/səˈdʒest/"
+        },
+        {
+          "id": "en-b1-refuse",
+          "front": "refuse",
+          "back": "拒绝",
+          "example": "He refused to answer the question.",
+          "exampleCN": "他拒绝回答这个问题。",
+          "level": "B1",
+          "hint": "/rɪˈfjuːz/"
+        },
+        {
+          "id": "en-b1-apologize",
+          "front": "apologize",
+          "back": "道歉",
+          "example": "She apologized for being late.",
+          "exampleCN": "她为迟到道歉。",
+          "level": "B1",
+          "hint": "/əˈpɒlədʒaɪz/"
+        }
+      ]
+    },
+    {
+      "id": "en-b2",
+      "title": "英语 · 核心词 B2",
+      "kind": "vocab",
+      "lang": "en-US",
+      "topic": "英语 · 核心词汇",
+      "cards": [
+        {
+          "id": "en-b2-adequate",
+          "front": "adequate",
+          "back": "足够的、合格的",
+          "example": "The lighting is barely adequate for reading.",
+          "exampleCN": "这个灯光勉强够看书。",
+          "level": "B1",
+          "hint": "/ˈædɪkwət/"
+        },
+        {
+          "id": "en-b2-anticipate",
+          "front": "anticipate",
+          "back": "预料、预期",
+          "example": "We didn't anticipate so many problems.",
+          "exampleCN": "我们没料到会有这么多问题。",
+          "level": "B1",
+          "hint": "/ænˈtɪsɪpeɪt/"
+        },
+        {
+          "id": "en-b2-assess",
+          "front": "assess",
+          "back": "评估",
+          "example": "It's too early to assess the damage.",
+          "exampleCN": "现在评估损失还太早。",
+          "level": "B1",
+          "hint": "/əˈses/"
+        },
+        {
+          "id": "en-b2-assume",
+          "front": "assume",
+          "back": "假定、想当然",
+          "example": "Don't assume everyone agrees with you.",
+          "exampleCN": "别想当然认为大家都同意你。",
+          "level": "B1",
+          "hint": "/əˈsjuːm/"
+        },
+        {
+          "id": "en-b2-benefit",
+          "front": "benefit",
+          "back": "有益于、好处",
+          "example": "Regular exercise benefits your sleep.",
+          "exampleCN": "规律运动对睡眠有好处。",
+          "level": "B1",
+          "hint": "/ˈbenɪfɪt/"
+        },
+        {
+          "id": "en-b2-capable",
+          "front": "capable",
+          "back": "有能力的",
+          "example": "She is capable of handling it alone.",
+          "exampleCN": "她有能力独立处理。",
+          "level": "B1",
+          "hint": "/ˈkeɪpəbl/"
+        },
+        {
+          "id": "en-b2-complex",
+          "front": "complex",
+          "back": "复杂的",
+          "example": "The issue is more complex than it looks.",
+          "exampleCN": "这事比看起来复杂。",
+          "level": "B1",
+          "hint": "/ˈkɒmpleks/"
+        },
+        {
+          "id": "en-b2-confirm",
+          "front": "confirm",
+          "back": "确认",
+          "example": "Please confirm the time by Friday.",
+          "exampleCN": "请在周五前确认时间。",
+          "level": "B1",
+          "hint": "/kənˈfɜːm/"
+        },
+        {
+          "id": "en-b2-contribute",
+          "front": "contribute",
+          "back": "促成、贡献",
+          "example": "Poor sleep contributes to weight gain.",
+          "exampleCN": "睡眠不足会导致体重增加。",
+          "level": "B1",
+          "hint": "/kənˈtrɪbjuːt/"
+        },
+        {
+          "id": "en-b2-convince",
+          "front": "convince",
+          "back": "说服",
+          "example": "He convinced me to try again.",
+          "exampleCN": "他说服我再试一次。",
+          "level": "B1",
+          "hint": "/kənˈvɪns/"
+        },
+        {
+          "id": "en-b2-decline",
+          "front": "decline",
+          "back": "下降；婉拒",
+          "example": "Sales declined sharply last quarter.",
+          "exampleCN": "上季度销量大幅下滑。",
+          "level": "B1",
+          "hint": "/dɪˈklaɪn/"
+        },
+        {
+          "id": "en-b2-demonstrate",
+          "front": "demonstrate",
+          "back": "演示、证明",
+          "example": "Let me demonstrate how it works.",
+          "exampleCN": "我来演示一下怎么用。",
+          "level": "B1",
+          "hint": "/ˈdemənstreɪt/"
+        },
+        {
+          "id": "en-b2-distinguish",
+          "front": "distinguish",
+          "back": "区分",
+          "example": "It's hard to distinguish the two brands.",
+          "exampleCN": "这两个牌子很难区分。",
+          "level": "B1",
+          "hint": "/dɪˈstɪŋɡwɪʃ/"
+        },
+        {
+          "id": "en-b2-eliminate",
+          "front": "eliminate",
+          "back": "消除、排除",
+          "example": "We eliminated the extra steps.",
+          "exampleCN": "我们把多余的步骤去掉了。",
+          "level": "B1",
+          "hint": "/ɪˈlɪmɪneɪt/"
+        },
+        {
+          "id": "en-b2-emphasize",
+          "front": "emphasize",
+          "back": "强调",
+          "example": "He emphasized the deadline twice.",
+          "exampleCN": "他两次强调了截止日期。",
+          "level": "B1",
+          "hint": "/ˈemfəsaɪz/"
+        },
+        {
+          "id": "en-b2-enhance",
+          "front": "enhance",
+          "back": "提升、增强",
+          "example": "The update enhances battery life.",
+          "exampleCN": "这次更新提升了续航。",
+          "level": "B1",
+          "hint": "/ɪnˈhɑːns/"
+        },
+        {
+          "id": "en-b2-ensure",
+          "front": "ensure",
+          "back": "确保",
+          "example": "Please ensure the door is locked.",
+          "exampleCN": "请确保门已锁好。",
+          "level": "B1",
+          "hint": "/ɪnˈʃʊə/"
+        },
+        {
+          "id": "en-b2-establish",
+          "front": "establish",
+          "back": "建立、确立",
+          "example": "They established a clear rule.",
+          "exampleCN": "他们确立了一条明确的规则。",
+          "level": "B1",
+          "hint": "/ɪˈstæblɪʃ/"
+        },
+        {
+          "id": "en-b2-significant",
+          "front": "significant",
+          "back": "显著的、重要的",
+          "example": "There was a significant drop in cost.",
+          "exampleCN": "成本明显下降。",
+          "level": "B1",
+          "hint": "/sɪɡˈnɪfɪkənt/"
+        },
+        {
+          "id": "en-b2-struggle",
+          "front": "struggle",
+          "back": "挣扎、费力",
+          "example": "I struggle with long meetings.",
+          "exampleCN": "我开长会特别吃力。",
+          "level": "B1",
+          "hint": "/ˈstrʌɡl/"
+        }
+      ]
+    },
+    {
+      "id": "en-c1",
+      "title": "英语 · 核心词 C1",
+      "kind": "vocab",
+      "lang": "en-US",
+      "topic": "英语 · 核心词汇",
+      "cards": [
+        {
+          "id": "en-c1-ambiguous",
+          "front": "ambiguous",
+          "back": "含糊的、有歧义的",
+          "example": "The contract wording is ambiguous.",
+          "exampleCN": "合同措辞有歧义。",
+          "level": "B1",
+          "hint": "/æmˈbɪɡjuəs/"
+        },
+        {
+          "id": "en-c1-articulate",
+          "front": "articulate",
+          "back": "表达清楚的",
+          "example": "She gave an articulate explanation.",
+          "exampleCN": "她的解释很清楚。",
+          "level": "B1",
+          "hint": "/ɑːˈtɪkjulət/"
+        },
+        {
+          "id": "en-c1-coherent",
+          "front": "coherent",
+          "back": "连贯的",
+          "example": "Your argument needs to be more coherent.",
+          "exampleCN": "你的论证需要更连贯。",
+          "level": "B1",
+          "hint": "/kəʊˈhɪərənt/"
+        },
+        {
+          "id": "en-c1-comprehensive",
+          "front": "comprehensive",
+          "back": "全面的",
+          "example": "We need a comprehensive review.",
+          "exampleCN": "我们需要一次全面复查。",
+          "level": "B1",
+          "hint": "/ˌkɒmprɪˈhensɪv/"
+        },
+        {
+          "id": "en-c1-conducive",
+          "front": "conducive",
+          "back": "有助于……的",
+          "example": "A quiet room is conducive to study.",
+          "exampleCN": "安静的房间有助于学习。",
+          "level": "B1",
+          "hint": "/kənˈdjuːsɪv/"
+        },
+        {
+          "id": "en-c1-deteriorate",
+          "front": "deteriorate",
+          "back": "恶化",
+          "example": "His health deteriorated quickly.",
+          "exampleCN": "他的健康迅速恶化。",
+          "level": "B1",
+          "hint": "/dɪˈtɪəriəreɪt/"
+        },
+        {
+          "id": "en-c1-deviate",
+          "front": "deviate",
+          "back": "偏离",
+          "example": "Don't deviate from the agreed plan.",
+          "exampleCN": "不要偏离商定的方案。",
+          "level": "B1",
+          "hint": "/ˈdiːvieɪt/"
+        },
+        {
+          "id": "en-c1-elicit",
+          "front": "elicit",
+          "back": "引出（回应、信息）",
+          "example": "Her question elicited a long silence.",
+          "exampleCN": "她的问题引来一阵长久的沉默。",
+          "level": "B1",
+          "hint": "/iˈlɪsɪt/"
+        },
+        {
+          "id": "en-c1-encompass",
+          "front": "encompass",
+          "back": "包含、涵盖",
+          "example": "The report encompasses three regions.",
+          "exampleCN": "报告涵盖三个地区。",
+          "level": "B1",
+          "hint": "/ɪnˈkʌmpəs/"
+        },
+        {
+          "id": "en-c1-entail",
+          "front": "entail",
+          "back": "需要、意味着",
+          "example": "The job entails a lot of travel.",
+          "exampleCN": "这份工作需要大量出差。",
+          "level": "B1",
+          "hint": "/ɪnˈteɪl/"
+        },
+        {
+          "id": "en-c1-exacerbate",
+          "front": "exacerbate",
+          "back": "使恶化、加剧",
+          "example": "Delays only exacerbated the problem.",
+          "exampleCN": "拖延只会让问题更严重。",
+          "level": "B1",
+          "hint": "/ɪɡˈzæsəbeɪt/"
+        },
+        {
+          "id": "en-c1-feasible",
+          "front": "feasible",
+          "back": "可行的",
+          "example": "Is that timeline feasible?",
+          "exampleCN": "这个时间表可行吗？",
+          "level": "B1",
+          "hint": "/ˈfiːzəbl/"
+        },
+        {
+          "id": "en-c1-foster",
+          "front": "foster",
+          "back": "培养、促进",
+          "example": "Small habits foster long-term progress.",
+          "exampleCN": "小习惯带来长期进步。",
+          "level": "B1",
+          "hint": "/ˈfɒstə/"
+        },
+        {
+          "id": "en-c1-hinder",
+          "front": "hinder",
+          "back": "阻碍",
+          "example": "Noise hinders concentration.",
+          "exampleCN": "噪音妨碍专注。",
+          "level": "B1",
+          "hint": "/ˈhɪndə/"
+        },
+        {
+          "id": "en-c1-implicit",
+          "front": "implicit",
+          "back": "含蓄的、隐含的",
+          "example": "There was an implicit warning in his tone.",
+          "exampleCN": "他的语气里带着隐含的警告。",
+          "level": "B1",
+          "hint": "/ɪmˈplɪsɪt/"
+        },
+        {
+          "id": "en-c1-inevitable",
+          "front": "inevitable",
+          "back": "不可避免的",
+          "example": "Some mistakes are inevitable.",
+          "exampleCN": "有些错误不可避免。",
+          "level": "B1",
+          "hint": "/ɪnˈevɪtəbl/"
+        },
+        {
+          "id": "en-c1-mitigate",
+          "front": "mitigate",
+          "back": "减轻、缓解",
+          "example": "We took steps to mitigate the risk.",
+          "exampleCN": "我们采取措施降低风险。",
+          "level": "B1",
+          "hint": "/ˈmɪtɪɡeɪt/"
+        },
+        {
+          "id": "en-c1-plausible",
+          "front": "plausible",
+          "back": "说得通的、貌似合理的",
+          "example": "That's a plausible explanation.",
+          "exampleCN": "这个解释说得通。",
+          "level": "B1",
+          "hint": "/ˈplɔːzəbl/"
+        },
+        {
+          "id": "en-c1-reluctant",
+          "front": "reluctant",
+          "back": "不情愿的",
+          "example": "He was reluctant to admit the mistake.",
+          "exampleCN": "他不太愿意承认错误。",
+          "level": "B1",
+          "hint": "/rɪˈlʌktənt/"
+        },
+        {
+          "id": "en-c1-subtle",
+          "front": "subtle",
+          "back": "微妙的、不易察觉的",
+          "example": "There's a subtle difference between the two.",
+          "exampleCN": "两者之间有细微差别。",
+          "level": "B1",
+          "hint": "/ˈsʌtl/"
+        }
+      ]
+    },
+    {
+      "id": "en-colloc",
+      "title": "英语 · 高频搭配",
+      "kind": "vocab",
+      "lang": "en-US",
+      "topic": "英语 · 口语",
+      "cards": [
+        {
+          "id": "en-colloc-run-out-of",
+          "front": "run out of",
+          "back": "用完、耗尽",
+          "example": "We've run out of milk.",
+          "exampleCN": "牛奶用完了。",
+          "level": "B1"
+        },
+        {
+          "id": "en-colloc-put-off",
+          "front": "put off",
+          "back": "推迟",
+          "example": "Don't put off the dentist again.",
+          "exampleCN": "别再拖去看牙了。",
+          "level": "B1"
+        },
+        {
+          "id": "en-colloc-come-up-with",
+          "front": "come up with",
+          "back": "想出（主意）",
+          "example": "She came up with a smart fix.",
+          "exampleCN": "她想出一个聪明的办法。",
+          "level": "B1"
+        },
+        {
+          "id": "en-colloc-look-forward-to",
+          "front": "look forward to",
+          "back": "期待（后接名词/动名词）",
+          "example": "I look forward to hearing from you.",
+          "exampleCN": "期待你的回复。",
+          "level": "B1"
+        },
+        {
+          "id": "en-colloc-get-used-to",
+          "front": "get used to",
+          "back": "习惯于（后接名词/动名词）",
+          "example": "You'll get used to the noise.",
+          "exampleCN": "你会习惯这个噪音的。",
+          "level": "B1"
+        },
+        {
+          "id": "en-colloc-make-sense",
+          "front": "make sense",
+          "back": "讲得通、有道理",
+          "example": "That doesn't make sense to me.",
+          "exampleCN": "这在我看来说不通。",
+          "level": "B1"
+        },
+        {
+          "id": "en-colloc-take-turns",
+          "front": "take turns",
+          "back": "轮流",
+          "example": "We take turns cooking dinner.",
+          "exampleCN": "我们轮流做晚饭。",
+          "level": "B1"
+        },
+        {
+          "id": "en-colloc-be-in-charge-of",
+          "front": "be in charge of",
+          "back": "负责",
+          "example": "She's in charge of the schedule.",
+          "exampleCN": "她负责排期。",
+          "level": "B1"
+        },
+        {
+          "id": "en-colloc-on-purpose",
+          "front": "on purpose",
+          "back": "故意",
+          "example": "He did it on purpose.",
+          "exampleCN": "他是故意的。",
+          "level": "B1"
+        },
+        {
+          "id": "en-colloc-by-chance",
+          "front": "by chance",
+          "back": "偶然",
+          "example": "We met by chance at the airport.",
+          "exampleCN": "我们在机场偶然遇到。",
+          "level": "B1"
+        },
+        {
+          "id": "en-colloc-as-far-as-i-know",
+          "front": "as far as I know",
+          "back": "据我所知",
+          "example": "As far as I know, it's still open.",
+          "exampleCN": "据我所知，那家还开着。",
+          "level": "B2"
+        },
+        {
+          "id": "en-colloc-it-depends",
+          "front": "it depends",
+          "back": "看情况",
+          "example": "It depends on the weather.",
+          "exampleCN": "得看天气。",
+          "level": "B1"
+        },
+        {
+          "id": "en-colloc-i-d-rather",
+          "front": "I'd rather",
+          "back": "我宁愿",
+          "example": "I'd rather stay home tonight.",
+          "exampleCN": "今晚我宁愿待在家。",
+          "level": "B1"
+        },
+        {
+          "id": "en-colloc-no-wonder",
+          "front": "no wonder",
+          "back": "难怪",
+          "example": "No wonder you're tired.",
+          "exampleCN": "难怪你累了。",
+          "level": "B1"
+        },
+        {
+          "id": "en-colloc-figure-out",
+          "front": "figure out",
+          "back": "弄明白、想出",
+          "example": "I can't figure out this app.",
+          "exampleCN": "我搞不懂这个应用。",
+          "level": "B1"
+        },
+        {
+          "id": "en-colloc-end-up",
+          "front": "end up",
+          "back": "最终变成、最后",
+          "example": "We ended up walking home.",
+          "exampleCN": "我们最后走回了家。",
+          "level": "B1"
+        },
+        {
+          "id": "en-colloc-turn-out",
+          "front": "turn out",
+          "back": "结果是、原来是",
+          "example": "The meeting turned out to be short.",
+          "exampleCN": "会议结果很短。",
+          "level": "B2"
+        },
+        {
+          "id": "en-colloc-keep-up-with",
+          "front": "keep up with",
+          "back": "跟上",
+          "example": "I can't keep up with the news.",
+          "exampleCN": "我跟不上新闻的节奏。",
+          "level": "B2"
+        },
+        {
+          "id": "en-colloc-catch-up",
+          "front": "catch up",
+          "back": "赶上、叙旧",
+          "example": "Let's catch up next week.",
+          "exampleCN": "下周我们聚聚聊聊。",
+          "level": "B1"
+        },
+        {
+          "id": "en-colloc-run-into",
+          "front": "run into",
+          "back": "偶遇；遇到（问题）",
+          "example": "I ran into an old friend downtown.",
+          "exampleCN": "我在市中心偶遇一位老朋友。",
+          "level": "B1"
+        }
+      ]
+    },
+    {
+      "id": "en-acc",
+      "title": "英语 · 精读《圣诞颂歌》",
+      "kind": "vocab",
+      "lang": "en-US",
+      "topic": "英语 · 精读",
+      "cards": [
+        {
+          "id": "en-acc-spectre",
+          "front": "spectre",
+          "back": "幽灵、鬼魂",
+          "example": "But the spectre sat down on the opposite side of the fireplace, as if he were quite used to it.",
+          "exampleCN": "但那幽灵在壁炉对面坐了下来，仿佛早已习惯。",
+          "level": "B2",
+          "hint": "/ˈspektə/"
+        },
+        {
+          "id": "en-acc-ghostly",
+          "front": "ghostly",
+          "back": "幽灵般的、惨白的",
+          "example": "It looked at Scrooge as Marley used to look: with ghostly spectacles turned up on its ghostly forehead.",
+          "exampleCN": "它看斯克鲁奇的眼神就像马利生前那样：一副幽灵般的眼镜架在幽灵般的额头上。",
+          "level": "B2",
+          "hint": "/ˈɡəʊstli/"
+        },
+        {
+          "id": "en-acc-scarcely",
+          "front": "scarcely",
+          "back": "几乎不",
+          "example": "It swung so softly to start with that it scarcely made a sound.",
+          "exampleCN": "它起初摆得很轻，几乎没发出声音。",
+          "level": "B2",
+          "hint": "/ˈskeəsli/"
+        },
+        {
+          "id": "en-acc-solemn",
+          "front": "solemn",
+          "back": "庄严肃穆的",
+          "example": "The Phantom slowly, solemnly, silently, approached.",
+          "exampleCN": "那幽灵缓慢、庄严、无声地靠近。",
+          "level": "B2",
+          "hint": "/ˈsɒləm/"
+        },
+        {
+          "id": "en-acc-mourner",
+          "front": "mourner",
+          "back": "哀悼者、送葬人（mourn=哀悼）",
+          "example": "The register of his burial was signed by the clergyman, the clerk, the funeral director, and the chief mourner.",
+          "exampleCN": "他的下葬登记由牧师、办事员、殡葬承办人和主丧人签署。",
+          "level": "B2",
+          "hint": "/ˈmɔːnə/"
+        },
+        {
+          "id": "en-acc-sorrow",
+          "front": "sorrow",
+          "back": "悲伤、忧愁",
+          "example": "While there is infection in disease and sorrow, there is nothing in the world so catching as laughter and good-humour.",
+          "exampleCN": "疾病和悲伤会传染，可世上最会传染的，是笑声和好心情。",
+          "level": "B2",
+          "hint": "/ˈsɒrəʊ/"
+        },
+        {
+          "id": "en-acc-cheerful",
+          "front": "cheerful",
+          "back": "欢快的、令人愉快的",
+          "example": "There was nothing very cheerful in the climate or the town.",
+          "exampleCN": "天气和这座城都谈不上欢快。",
+          "level": "B1",
+          "hint": "/ˈtʃɪəfl/"
+        },
+        {
+          "id": "en-acc-bleak",
+          "front": "bleak",
+          "back": "阴冷的、荒凉的",
+          "example": "The spectre joined in the sad sound, and floated out upon the bleak, dark night.",
+          "exampleCN": "那幽灵也应和着这哀声，飘进了阴冷漆黑的夜色里。",
+          "level": "B2",
+          "hint": "/bliːk/"
+        },
+        {
+          "id": "en-acc-brisk",
+          "front": "brisk",
+          "back": "轻快的、利落的",
+          "example": "Scrooge's former self came briskly in, accompanied by his fellow apprentice.",
+          "exampleCN": "当年的斯克鲁奇轻快地走了进来，身边跟着他的同伴学徒。",
+          "level": "B2",
+          "hint": "/brɪsk/"
+        },
+        {
+          "id": "en-acc-ponder",
+          "front": "ponder",
+          "back": "反复思量、沉思",
+          "example": "Pondering on what the Ghost had said, he did so now, but without lifting up his eyes.",
+          "exampleCN": "他琢磨着幽灵说过的话，此刻又这样想着，却没抬起眼睛。",
+          "level": "C1",
+          "hint": "/ˈpɒndə/"
+        },
+        {
+          "id": "en-acc-shudder",
+          "front": "shudder",
+          "back": "发抖、打寒战",
+          "example": "'Spirit!' said Scrooge, shuddering from head to foot.",
+          "exampleCN": "“幽灵！”斯克鲁奇说着，从头到脚打了个寒战。",
+          "level": "B2",
+          "hint": "/ˈʃʌdə/"
+        },
+        {
+          "id": "en-acc-tremble",
+          "front": "tremble",
+          "back": "颤抖",
+          "example": "Scrooge trembled more and more.",
+          "exampleCN": "斯克鲁奇抖得越来越厉害。",
+          "level": "B1",
+          "hint": "/ˈtrembl/"
+        },
+        {
+          "id": "en-acc-dread",
+          "front": "dread",
+          "back": "恐惧、畏惧",
+          "example": "It was with great astonishment, and with a strange dread that he could not explain, that he saw this bell begin to swing.",
+          "exampleCN": "他是带着极大的惊愕和一种说不清的畏惧，看着那口钟开始摆动的。",
+          "level": "B2",
+          "hint": "/dred/"
+        },
+        {
+          "id": "en-acc-pity",
+          "front": "pity",
+          "back": "怜悯、同情",
+          "example": "In pity for his former self, he said, 'Poor boy!' and cried again.",
+          "exampleCN": "他怜悯起当年的自己，说了句“可怜的孩子！”，又哭了起来。",
+          "level": "B1",
+          "hint": "/ˈpɪti/"
+        },
+        {
+          "id": "en-acc-generous",
+          "front": "generous",
+          "back": "慷慨的、大方的",
+          "example": "It floated on, pouring out, with a generous hand, its bright and harmless happiness on everything within its reach.",
+          "exampleCN": "它继续飘着，慷慨地把明亮无害的快乐洒向触手可及的一切。",
+          "level": "B1",
+          "hint": "/ˈdʒenərəs/"
+        },
+        {
+          "id": "en-acc-clerk",
+          "front": "clerk",
+          "back": "办事员、职员（英式读音）",
+          "example": "My clerk, with fifteen shillings a week, and a wife and family, is talking about a merry Christmas.",
+          "exampleCN": "我的办事员一周十五先令，还带着老婆孩子，却在谈什么快乐圣诞。",
+          "level": "B1",
+          "hint": "/klɑːk/"
+        },
+        {
+          "id": "en-acc-nephew",
+          "front": "nephew",
+          "back": "侄子、外甥",
+          "example": "It was the voice of Scrooge's nephew, who came upon him so quickly.",
+          "exampleCN": "那是斯克鲁奇外甥的声音——他来得太快，斯克鲁奇事先毫无察觉。",
+          "level": "B1",
+          "hint": "/ˈnefjuː/"
+        },
+        {
+          "id": "en-acc-niece",
+          "front": "niece",
+          "back": "侄女、外甥女",
+          "example": "'More shame for him, Fred!' said Scrooge's niece.",
+          "exampleCN": "“他真该羞一羞，弗雷德！”斯克鲁奇的外甥女说。",
+          "level": "B1",
+          "hint": "/niːs/"
+        },
+        {
+          "id": "en-acc-pudding",
+          "front": "pudding",
+          "back": "布丁",
+          "example": "Pies, puddings, and punch all vanished instantly.",
+          "exampleCN": "馅饼、布丁和潘趣酒，转眼全都不见了。",
+          "level": "B1",
+          "hint": "/ˈpʊdɪŋ/"
+        },
+        {
+          "id": "en-acc-holly",
+          "front": "holly",
+          "back": "冬青（圣诞节装饰）",
+          "example": "The brightness of the shops where holly shone in the lamp heat of the windows made pale faces red.",
+          "exampleCN": "橱窗里冬青在灯火中闪闪发亮，映得路人的脸由苍白转红。",
+          "level": "B2",
+          "hint": "/ˈhɒli/"
+        },
+        {
+          "id": "en-acc-chain",
+          "front": "chain",
+          "back": "锁链",
+          "example": "It was as if some person were dragging a heavy chain over the casks in the cellar.",
+          "exampleCN": "就好像有人拖着沉重的锁链，从地窖的酒桶上走过。",
+          "level": "B1",
+          "hint": "/tʃeɪn/"
+        },
+        {
+          "id": "en-acc-forge",
+          "front": "forge",
+          "back": "锻造；铸成（引申）",
+          "example": "'I wear the chain I forged in life,' replied the Ghost.",
+          "exampleCN": "“我戴着我在世时自己铸成的锁链。”幽灵答道。",
+          "level": "C1",
+          "hint": "/fɔːdʒ/"
+        },
+        {
+          "id": "en-acc-knocker",
+          "front": "knocker",
+          "back": "门环",
+          "example": "There was nothing at all particular about the knocker on the door, except that it was very large.",
+          "exampleCN": "那门上的门环毫无特别之处，除了它特别大。",
+          "level": "B2",
+          "hint": "/ˈnɒkə/"
+        },
+        {
+          "id": "en-acc-parlour",
+          "front": "parlour",
+          "back": "客厅（旧式说法）",
+          "example": "The parlour was the space behind the screen of rags.",
+          "exampleCN": "所谓客厅，就是那块破布帘后面的一块地方。",
+          "level": "C1",
+          "hint": "/ˈpɑːlə/"
+        },
+        {
+          "id": "en-acc-threshold",
+          "front": "threshold",
+          "back": "门槛；（引申）起点",
+          "example": "It seemed as if the weather sat in sad meditation on the threshold.",
+          "exampleCN": "仿佛天气正坐在门槛上黯然沉思。",
+          "level": "C1",
+          "hint": "/ˈθreʃhəʊld/"
+        },
+        {
+          "id": "en-acc-frost",
+          "front": "frost",
+          "back": "霜",
+          "example": "Frost was on his head, and on his eyebrows, and his thin chin.",
+          "exampleCN": "他头上、眉毛上、瘦削的下巴上都结了霜。",
+          "level": "B1",
+          "hint": "/frɒst/"
+        },
+        {
+          "id": "en-acc-fog",
+          "front": "fog",
+          "back": "雾",
+          "example": "The fog came pouring in at every crack and keyhole.",
+          "exampleCN": "雾从每道缝隙和钥匙孔里灌进来。",
+          "level": "B1",
+          "hint": "/fɒɡ/"
+        },
+        {
+          "id": "en-acc-shilling",
+          "front": "shilling",
+          "back": "先令（英国旧币，1/20 英镑）",
+          "example": "The clerk earned fifteen shillings a week.",
+          "exampleCN": "那办事员一周挣十五先令。",
+          "level": "B2",
+          "hint": "/ˈʃɪlɪŋ/"
+        },
+        {
+          "id": "en-acc-penny",
+          "front": "penny",
+          "back": "便士",
+          "example": "If you asked me for another penny, I'd not be so liberal.",
+          "exampleCN": "你要是再问我要一个便士，我可没这么好说话。",
+          "level": "B1",
+          "hint": "/ˈpeni/"
+        },
+        {
+          "id": "en-acc-clergyman",
+          "front": "clergyman",
+          "back": "牧师、神职人员",
+          "example": "The register of his burial was signed by the clergyman.",
+          "exampleCN": "他的下葬登记由牧师签署。",
+          "level": "B2",
+          "hint": "/ˈklɜːdʒimən/"
+        }
+      ]
+    },
+    {
+      "id": "jp-kana",
+      "title": "日语 · 五十音（前五行）",
+      "kind": "vocab",
+      "cards": [
+        {
+          "id": "jp-a",
+          "front": "あ",
+          "back": "a",
+          "hint": "啊"
+        },
+        {
+          "id": "jp-i",
+          "front": "い",
+          "back": "i",
+          "hint": "衣"
+        },
+        {
+          "id": "jp-u",
+          "front": "う",
+          "back": "u",
+          "hint": "乌（嘴唇不圆）"
+        },
+        {
+          "id": "jp-e",
+          "front": "え",
+          "back": "e",
+          "hint": "诶"
+        },
+        {
+          "id": "jp-o",
+          "front": "お",
+          "back": "o",
+          "hint": "哦"
+        },
+        {
+          "id": "jp-ka",
+          "front": "か",
+          "back": "ka"
+        },
+        {
+          "id": "jp-ki",
+          "front": "き",
+          "back": "ki"
+        },
+        {
+          "id": "jp-ku",
+          "front": "く",
+          "back": "ku"
+        },
+        {
+          "id": "jp-ke",
+          "front": "け",
+          "back": "ke"
+        },
+        {
+          "id": "jp-ko",
+          "front": "こ",
+          "back": "ko"
+        },
+        {
+          "id": "jp-sa",
+          "front": "さ",
+          "back": "sa"
+        },
+        {
+          "id": "jp-shi",
+          "front": "し",
+          "back": "shi",
+          "hint": "读「西」，不是 si"
+        },
+        {
+          "id": "jp-su",
+          "front": "す",
+          "back": "su"
+        },
+        {
+          "id": "jp-se",
+          "front": "せ",
+          "back": "se"
+        },
+        {
+          "id": "jp-so",
+          "front": "そ",
+          "back": "so"
+        },
+        {
+          "id": "jp-ta",
+          "front": "た",
+          "back": "ta"
+        },
+        {
+          "id": "jp-chi",
+          "front": "ち",
+          "back": "chi",
+          "hint": "读「七」，不是 ti"
+        },
+        {
+          "id": "jp-tsu",
+          "front": "つ",
+          "back": "tsu",
+          "hint": "读「次」，不是 tu"
+        },
+        {
+          "id": "jp-te",
+          "front": "て",
+          "back": "te"
+        },
+        {
+          "id": "jp-to",
+          "front": "と",
+          "back": "to"
+        },
+        {
+          "id": "jp-na",
+          "front": "な",
+          "back": "na"
+        },
+        {
+          "id": "jp-ni",
+          "front": "に",
+          "back": "ni"
+        },
+        {
+          "id": "jp-nu",
+          "front": "ぬ",
+          "back": "nu"
+        },
+        {
+          "id": "jp-ne",
+          "front": "ね",
+          "back": "ne"
+        },
+        {
+          "id": "jp-no",
+          "front": "の",
+          "back": "no",
+          "explain": "最常见的助词之一，相当于「的」。"
+        }
+      ],
+      "lang": "ja-JP"
+    },
+    {
+      "id": "math-frac",
+      "title": "数学 · 分数与负数",
+      "kind": "quiz",
+      "cards": [
+        {
+          "id": "m-001",
+          "front": "1/2 + 1/3 = ?",
+          "back": "5/6",
+          "options": [
+            "2/5",
+            "5/6",
+            "1/5",
+            "2/6"
+          ],
+          "explain": "通分到 6：3/6 + 2/6 = 5/6。分母不同不能直接加分子。"
+        },
+        {
+          "id": "m-002",
+          "front": "−3 + 5 = ?",
+          "back": "2",
+          "options": [
+            "−8",
+            "2",
+            "−2",
+            "8"
+          ],
+          "explain": "负数加正数，等于大数减小数，符号跟大数走：5 − 3 = 2。"
+        },
+        {
+          "id": "m-003",
+          "front": "2/3 × 3/4 = ?",
+          "back": "1/2",
+          "options": [
+            "5/7",
+            "1/2",
+            "6/7",
+            "2/4"
+          ],
+          "explain": "分子乘分子、分母乘分母：6/12 = 1/2。能约分的先约分更快。"
+        },
+        {
+          "id": "m-004",
+          "front": "2x + 5 = 13，x = ?",
+          "back": "4",
+          "options": [
+            "3",
+            "4",
+            "9",
+            "6"
+          ],
+          "explain": "两边先减 5 得 2x = 8，再除以 2 得 x = 4。"
+        },
+        {
+          "id": "m-005",
+          "front": "(−2) × (−3) = ?",
+          "back": "6",
+          "options": [
+            "−6",
+            "6",
+            "−5",
+            "5"
+          ],
+          "explain": "负负得正。两个负号相乘结果为正。"
+        },
+        {
+          "id": "m-006",
+          "front": "1/2 ÷ 1/4 = ?",
+          "back": "2",
+          "options": [
+            "1/8",
+            "2",
+            "1/2",
+            "8"
+          ],
+          "explain": "除以分数等于乘它的倒数：1/2 × 4/1 = 2。"
+        },
+        {
+          "id": "m-007",
+          "front": "−5 − (−8) = ?",
+          "back": "3",
+          "options": [
+            "−13",
+            "3",
+            "−3",
+            "13"
+          ],
+          "explain": "减负等于加正：−5 + 8 = 3。"
+        },
+        {
+          "id": "m-008",
+          "front": "0.25 化成最简分数是？",
+          "back": "1/4",
+          "options": [
+            "1/2",
+            "1/4",
+            "2/5",
+            "1/5"
+          ],
+          "explain": "0.25 = 25/100，上下同除 25 得 1/4。"
+        },
+        {
+          "id": "m-009",
+          "front": "3/4 和 5/8 哪个大？",
+          "back": "3/4",
+          "options": [
+            "3/4",
+            "5/8",
+            "一样大",
+            "无法比较"
+          ],
+          "explain": "通分：3/4 = 6/8，6/8 > 5/8。"
+        },
+        {
+          "id": "m-010",
+          "front": "−2x = 6，x = ?",
+          "back": "−3",
+          "options": [
+            "3",
+            "−3",
+            "−12",
+            "12"
+          ],
+          "explain": "两边同除以 −2，6 ÷ (−2) = −3。"
+        }
+      ],
+      "lang": "zh-CN"
+    }
+  ]
+}
