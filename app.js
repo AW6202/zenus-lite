@@ -1,13 +1,14 @@
 // 学习机 Lite — 静态 PWA：内容来自 pack.json，进度存本地，AI 直连 OpenAI 兼容接口
 'use strict';
 
-const BUILD = '2026-10-28.6';
+const BUILD = '2026-10-28.7';
 
 const LS = {
   progress: 'zenus.progress.v1',
   log: 'zenus.log.v1',
   settings: 'zenus.settings.v1',
   chat: 'zenus.chat.v1',
+  known: 'zenus.known.v1',
 };
 
 const DEFAULT_SETTINGS = {
@@ -43,6 +44,7 @@ function loadJSON(key, fallback) {
 function saveJSON(key, val) { localStorage.setItem(key, JSON.stringify(val)); }
 
 let progress = loadJSON(LS.progress, {});
+let known = loadJSON(LS.known, {});   // 已掌握词表：下次抓生词时跳过
 let reviewLog = loadJSON(LS.log, []);
 let settings = { ...DEFAULT_SETTINGS, ...loadJSON(LS.settings, {}) };
 state.chat = loadJSON(LS.chat, []);
@@ -81,12 +83,34 @@ if ('speechSynthesis' in window) {
   window.speechSynthesis.onvoiceschanged = () => { /* 触发一次加载 */ };
 }
 
+// ── 已知词表（抓生词时用来跳过）──────────────────────
+function normWord(w) {
+  return String(w || '').toLowerCase().trim().replace(/[’']/g, "'").replace(/\s+/g, ' ');
+}
+function isKnown(w) { return !!known[normWord(w)]; }
+function markKnown(w, why) {
+  if (!w) return;
+  known[normWord(w)] = { ts: Date.now(), why: why || 'manual' };
+  saveJSON(LS.known, known);
+}
+function unmarkKnown(w) {
+  const k = normWord(w);
+  if (known[k]) { delete known[k]; saveJSON(LS.known, known); }
+}
+// 判定：间隔 ≥21 天、复习 ≥3 次、最近 3 次都是「记得/简单」→ 视为已掌握
+function maybePromote(id, word, e) {
+  const last3 = reviewLog.filter((x) => x.id === id).slice(-3);
+  const solid = e.interval >= 21 && e.reps >= 3 && last3.length >= 3
+    && last3.every((x) => x.r === 'good' || x.r === 'easy');
+  if (solid) markKnown(word, 'review');
+}
+
 // ── 调度（SM-2 简化版）────────────────────────────────
 const DAY = 86400000;
 function entry(id) {
   return progress[id] || { due: 0, interval: 0, ease: 2.5, reps: 0, lapses: 0, last: 0 };
 }
-function schedule(id, rating) {
+function schedule(id, rating, word) {
   const e = { ...entry(id) };
   const now = Date.now();
   e.last = now;
@@ -113,6 +137,12 @@ function schedule(id, rating) {
   reviewLog.push({ id, r: rating, ts: now });
   if (reviewLog.length > 5000) reviewLog = reviewLog.slice(-5000);
   saveJSON(LS.log, reviewLog);
+
+  // 复习结果联动已知词表：答错就退回「不认识」，答得稳就升级
+  if (word) {
+    if (rating === 'again') unmarkKnown(word);
+    else maybePromote(id, word, e);
+  }
 }
 
 // ── 数据 ──────────────────────────────────────────────
@@ -238,6 +268,11 @@ function renderReview() {
     if (c.explain) body += `<div class="explain">${esc(c.explain)}</div>`;
     body += `<div class="row" style="width:100%;margin-top:4px">
       <button class="btn ghost" id="askAI">问 AI 讲讲这道</button>
+    </div>
+    <div class="sub" style="margin-top:6px">
+      <a href="javascript:void 0" id="toggleKnown" style="color:var(--dim)">
+        ${isKnown(c.front) ? '✓ 已在「已掌握」里，点此移除' : '标记为已掌握（以后抓生词会跳过）'}
+      </a>
     </div>`;
   }
 
@@ -278,7 +313,7 @@ function renderReview() {
   });
   view.querySelectorAll('.rates button').forEach((b) => {
     b.onclick = () => {
-      schedule(c.id, b.dataset.r);
+      schedule(c.id, b.dataset.r, c.front);
       state.queue.shift();
       state.current = null;
       state.revealed = false;
@@ -288,6 +323,13 @@ function renderReview() {
   });
   const ask = $('#askAI');
   if (ask) ask.onclick = () => askAbout(c);
+  const tk = $('#toggleKnown');
+  if (tk) tk.onclick = (ev) => {
+    ev.preventDefault(); ev.stopPropagation();
+    if (isKnown(c.front)) { unmarkKnown(c.front); toast('已移出「已掌握」'); }
+    else { markKnown(c.front, 'manual'); toast('已标记为掌握，下次抓词会跳过'); }
+    renderReview();
+  };
 
   // 显示下次复习间隔，给出反馈感
   if (state.revealed) {
@@ -308,7 +350,8 @@ function renderBrowse() {
   const now = Date.now();
   const items = allCards().map((c) => {
     const e = entry(c.id);
-    const tag = e.reps === 0 ? '未学' : e.due <= now ? '到期' : `${Math.ceil((e.due - now) / DAY)} 天后`;
+    const tag = isKnown(c.front) ? '✓ 已掌握'
+      : e.reps === 0 ? '未学' : e.due <= now ? '到期' : `${Math.ceil((e.due - now) / DAY)} 天后`;
     return `<div class="it"><span>${esc(c.front)}</span><small>${tag}</small></div>`;
   }).join('');
   view.innerHTML = `<div class="row" style="margin:6px 0 4px">
@@ -369,6 +412,10 @@ function renderSettings() {
     </div>
     <div class="row" style="margin-top:16px"><button class="btn primary" id="saveSettings">保存</button></div>
 
+    <h2>已掌握词表</h2>
+    <div class="hint">共 ${Object.keys(known).length} 条。复习稳（间隔≥21天且连续答对）会自动加入，答错自动移出；抓生词时会跳过这些。</div>
+    <div class="row" style="margin-top:8px"><button class="btn" id="clearKnown">清空词表</button></div>
+
     <h2>进度</h2>
     <div class="hint">进度只保存在这台手机上。导出后放进 git 或网盘，换手机时导入。</div>
     <div class="row" style="margin-top:8px">
@@ -400,6 +447,11 @@ function renderSettings() {
     settings.ctxMsgs = Math.max(0, Math.min(40, Number($('#s-ctx').value) || 0));
     settings.ttsRate = Math.min(1.2, Math.max(0.5, Number($('#s-rate').value) || 0.9));
     speak('This is how it sounds. Tap any word to hear it again.');
+  };
+  const ck = $('#clearKnown');
+  if (ck) ck.onclick = () => {
+    if (!Object.keys(known).length) return toast('本来就是空的');
+    known = {}; saveJSON(LS.known, known); renderSettings(); toast('已清空');
   };
   const cu = $('#checkUpdate');
   if (cu) cu.onclick = async () => {
