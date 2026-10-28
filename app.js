@@ -16,6 +16,7 @@ const DEFAULT_SETTINGS = {
   key: '',
   dailyNew: 10,
   ttsRate: 0.9,
+  ctxMsgs: 12,
   ttsVoice: '',
 };
 
@@ -322,7 +323,11 @@ function renderChat() {
   const msgs = state.chat.map((m) =>
     `<div class="msg ${m.role === 'user' ? 'me' : m.role === 'system' ? 'sys' : 'ai'}">${esc(m.content || '')}</div>`
   ).join('');
-  view.innerHTML = `<div class="chat" id="chatBox">${msgs || '<div class="empty">问点什么：这个词怎么用？这道题为什么错？</div>'}</div>
+  view.innerHTML = `<div class="meta">
+      <span>携带最近 ${settings.ctxMsgs} 条 · 共 ${state.chat.length} 条</span>
+      <span><a href="javascript:void 0" id="clearChat" style="color:var(--acc)">新对话</a></span>
+    </div>
+    <div class="chat" id="chatBox">${msgs || '<div class="empty">问点什么：这个词怎么用？这道题为什么错？</div>'}</div>
     <div class="composer">
       <textarea id="input" placeholder="输入问题…"></textarea>
       <button id="send">发送</button>
@@ -330,6 +335,15 @@ function renderChat() {
   const box = $('#chatBox');
   box.scrollTop = box.scrollHeight;
   $('#send').onclick = sendChat;
+  const cc = $('#clearChat');
+  if (cc) cc.onclick = (ev) => {
+    ev.preventDefault();
+    if (!state.chat.length) return toast('本来就是空的');
+    state.chat = [];
+    saveJSON(LS.chat, []);
+    renderChat();
+    toast('已开新对话，之前的不再带入');
+  };
   $('#input').onkeydown = (e) => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChat(); }
   };
@@ -346,6 +360,8 @@ function renderSettings() {
     <input class="t" id="s-key" type="password" value="${esc(settings.key)}" placeholder="sk-...">
     <label class="f">每天新卡上限</label>
     <input class="t" id="s-new" type="number" min="0" max="100" value="${settings.dailyNew}">
+    <label class="f">AI 对话携带上下文条数（0 = 每条独立问）</label>
+    <input class="t" id="s-ctx" type="number" min="0" max="40" value="${settings.ctxMsgs}">
     <label class="f">朗读语速（0.5 慢 – 1.2 快）</label>
     <input class="t" id="s-rate" type="number" step="0.1" min="0.5" max="1.2" value="${settings.ttsRate}">
     <div class="row" style="margin-top:10px">
@@ -371,12 +387,14 @@ function renderSettings() {
     settings.model = $('#s-model').value.trim();
     settings.key = $('#s-key').value.trim();
     settings.dailyNew = Math.max(0, Number($('#s-new').value) || 0);
+    settings.ctxMsgs = Math.max(0, Math.min(40, Number($('#s-ctx').value) || 0));
     settings.ttsRate = Math.min(1.2, Math.max(0.5, Number($('#s-rate').value) || 0.9));
     saveJSON(LS.settings, settings);
     toast('设置已保存');
   };
   const tst = $('#testSpeak');
   if (tst) tst.onclick = () => {
+    settings.ctxMsgs = Math.max(0, Math.min(40, Number($('#s-ctx').value) || 0));
     settings.ttsRate = Math.min(1.2, Math.max(0.5, Number($('#s-rate').value) || 0.9));
     speak('This is how it sounds. Tap any word to hear it again.');
   };
@@ -490,7 +508,7 @@ async function reply() {
     : '';
   const msgs = [
     { role: 'system', content: SYS + ctx },
-    ...state.chat.slice(-12).map(({ role, content }) => ({ role, content })),
+    ...state.chat.slice(-Math.max(0, Number(settings.ctxMsgs) || 0)).map(({ role, content }) => ({ role, content })),
   ];
   const bubble = document.createElement('div');
   bubble.className = 'msg ai';
