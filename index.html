@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0f1115">
+<title>学习机</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<style>
+:root{
+  --bg:#0f1115; --card:#181b22; --line:#262b36; --text:#e8eaf0; --dim:#8b93a5;
+  --acc:#5b8cff; --ok:#38b48b; --warn:#e0a13a; --bad:#e2585c;
+  --safe-b:env(safe-area-inset-bottom,0px);
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%}
+body{
+  background:var(--bg);color:var(--text);
+  font:16px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+  display:flex;flex-direction:column;height:100dvh;overflow:hidden;
+}
+header{padding:calc(8px + env(safe-area-inset-top,0px)) 14px 8px;display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--line)}
+header h1{font-size:15px;margin:0;font-weight:600;letter-spacing:.3px}
+header .sp{flex:1}
+header select{background:var(--card);color:var(--text);border:1px solid var(--line);border-radius:9px;padding:6px 8px;font-size:13px;max-width:52vw}
+main{flex:1;overflow-y:auto;overscroll-behavior:contain;padding:14px 14px 8px}
+.tabbar{display:flex;border-top:1px solid var(--line);padding-bottom:var(--safe-b);background:var(--bg)}
+.tabbar button{flex:1;background:none;border:0;color:var(--dim);padding:9px 0 10px;font-size:11px;display:flex;flex-direction:column;align-items:center;gap:3px}
+.tabbar button.on{color:var(--acc)}
+.tabbar svg{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:1.7}
+
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:20px 18px;min-height:210px;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;gap:12px}
+.front{font-size:26px;font-weight:600;line-height:1.35;word-break:break-word}
+.sub{color:var(--dim);font-size:13px}
+.back{font-size:20px;color:var(--ok);font-weight:600}
+.explain{font-size:14px;color:var(--dim);text-align:left;line-height:1.65;white-space:pre-wrap}
+.opts{display:grid;grid-template-columns:1fr 1fr;gap:8px;width:100%;margin-top:6px}
+.opts button{background:#20242d;border:1px solid var(--line);color:var(--text);border-radius:11px;padding:11px 8px;font-size:15px}
+.opts button.sel{border-color:var(--acc);background:#1d2740}
+.opts button.right{border-color:var(--ok);background:#12301f}
+.opts button.wrong{border-color:var(--bad);background:#341417}
+.rates{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:12px}
+.rates button{border:1px solid var(--line);background:#20242d;color:var(--text);border-radius:11px;padding:12px 4px;font-size:13px}
+.rates button[data-r="again"]{color:var(--bad)}
+.rates button[data-r="hard"]{color:var(--warn)}
+.rates button[data-r="good"]{color:var(--ok)}
+.rates button[data-r="easy"]{color:var(--acc)}
+.btn{background:#20242d;border:1px solid var(--line);color:var(--text);border-radius:11px;padding:11px 14px;font-size:14px;width:100%}
+.btn.primary{background:var(--acc);border-color:var(--acc);color:#fff;font-weight:600}
+.btn.ghost{background:none}
+.row{display:flex;gap:8px}
+.meta{display:flex;justify-content:space-between;color:var(--dim);font-size:12px;margin:10px 2px 6px}
+.empty{color:var(--dim);text-align:center;padding:40px 10px;font-size:14px}
+h2{font-size:13px;color:var(--dim);font-weight:600;margin:18px 2px 8px;letter-spacing:.5px}
+.list{display:flex;flex-direction:column;gap:8px}
+.list .it{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:11px 13px;font-size:14px;display:flex;justify-content:space-between;gap:10px}
+.list .it small{color:var(--dim);font-size:12px;white-space:nowrap}
+.chat{display:flex;flex-direction:column;gap:10px;padding-bottom:8px}
+.msg{max-width:86%;padding:10px 13px;border-radius:14px;font-size:15px;white-space:pre-wrap;word-break:break-word}
+.msg.me{background:var(--acc);color:#fff;align-self:flex-end}
+.msg.ai{background:var(--card);border:1px solid var(--line);align-self:flex-start}
+.msg.sys{color:var(--dim);font-size:12px;align-self:center;background:none}
+.composer{display:flex;gap:8px;padding:8px 0}
+.composer textarea{flex:1;background:var(--card);border:1px solid var(--line);color:var(--text);border-radius:11px;padding:10px;font-size:15px;resize:none;height:44px;font-family:inherit}
+.composer button{width:56px;border-radius:11px;border:1px solid var(--acc);background:var(--acc);color:#fff;font-size:14px}
+label.f{display:block;font-size:12px;color:var(--dim);margin:14px 2px 5px}
+input.t{width:100%;background:var(--card);border:1px solid var(--line);color:var(--text);border-radius:11px;padding:11px 12px;font-size:15px;font-family:inherit}
+.hint{font-size:12px;color:var(--dim);margin:6px 2px;line-height:1.6}
+.tag{display:inline-block;font-size:11px;color:var(--dim);border:1px solid var(--line);border-radius:999px;padding:2px 8px;margin:2px 4px 0 0}
+.spin{display:inline-block;width:14px;height:14px;border:2px solid rgba(255,255,255,.25);border-top-color:#fff;border-radius:50%;animation:sp .8s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+<header>
+  <h1>学习机</h1>
+  <div class="sp"></div>
+  <select id="courseSel" aria-label="选择课程"></select>
+</header>
+
+<main id="view"></main>
+
+<nav class="tabbar">
+  <button data-tab="review" class="on">
+    <svg viewBox="0 0 24 24"><path d="M4 5h16v12H4z"/><path d="M8 21h8"/><path d="M12 17v4"/></svg>复习
+  </button>
+  <button data-tab="browse">
+    <svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/></svg>浏览
+  </button>
+  <button data-tab="chat">
+    <svg viewBox="0 0 24 24"><path d="M21 12a8 8 0 0 1-8 8H7l-4 3V12a8 8 0 0 1 8-8h2a8 8 0 0 1 8 8z"/></svg>问 AI
+  </button>
+  <button data-tab="settings">
+    <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19 12a7 7 0 0 0-.1-1l2-1.5-2-3.4-2.3 1a7 7 0 0 0-1.7-1L14.6 3h-4l-.3 2.1a7 7 0 0 0-1.7 1l-2.3-1-2 3.4 2 1.5a7 7 0 0 0 0 2l-2 1.5 2 3.4 2.3-1a7 7 0 0 0 1.7 1l.3 2.1h4l.3-2.1a7 7 0 0 0 1.7-1l2.3 1 2-3.4-2-1.5c.06-.33.1-.66.1-1z"/></svg>设置
+  </button>
+</nav>
+
+<script src="app.js"></script>
+</body>
+</html>

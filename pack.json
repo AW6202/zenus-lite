@@ -1,0 +1,140 @@
+{
+  "version": "2026-10-28.1",
+  "name": "学习机 · 内容包",
+  "meta": {
+    "note": "内容包由电脑端生成，手机端只读。改内容 = 改这个文件后 push。",
+    "sources": [
+      "英语词表：NGSL / 日常实物名词，释义为自撰",
+      "日语五十音：公版假名表",
+      "数学：初中分数与负数基础题，自撰"
+    ]
+  },
+  "courses": [
+    {
+      "id": "en-things",
+      "title": "英语 · 日常实物词",
+      "kind": "vocab",
+      "cards": [
+        { "id": "en-001", "front": "salmon", "hint": "/ˈsæmən/", "back": "三文鱼", "explain": "注意 l 不发音，读作 SAH-mən。" },
+        { "id": "en-002", "front": "trout", "hint": "/traʊt/", "back": "鳟鱼" },
+        { "id": "en-003", "front": "squid", "hint": "/skwɪd/", "back": "鱿鱼" },
+        { "id": "en-004", "front": "shrimp", "hint": "/ʃrɪmp/", "back": "虾" },
+        { "id": "en-005", "front": "crab", "hint": "/kræb/", "back": "蟹" },
+        { "id": "en-006", "front": "oyster", "hint": "/ˈɔɪstər/", "back": "牡蛎、生蚝" },
+        { "id": "en-007", "front": "broccoli", "hint": "/ˈbrɑːkəli/", "back": "西兰花" },
+        { "id": "en-008", "front": "spinach", "hint": "/ˈspɪnɪtʃ/", "back": "菠菜" },
+        { "id": "en-009", "front": "eggplant", "hint": "/ˈeɡplænt/", "back": "茄子" },
+        { "id": "en-010", "front": "zucchini", "hint": "/zuˈkiːni/", "back": "西葫芦" },
+        { "id": "en-011", "front": "cucumber", "hint": "/ˈkjuːkʌmbər/", "back": "黄瓜" },
+        { "id": "en-012", "front": "cauliflower", "hint": "/ˈkɔːliflaʊər/", "back": "花菜" },
+        { "id": "en-013", "front": "celery", "hint": "/ˈseləri/", "back": "芹菜" },
+        { "id": "en-014", "front": "leek", "hint": "/liːk/", "back": "韭葱、大葱" },
+        { "id": "en-015", "front": "whisk", "hint": "/wɪsk/", "back": "打蛋器" },
+        { "id": "en-016", "front": "spatula", "hint": "/ˈspætʃələ/", "back": "锅铲" },
+        { "id": "en-017", "front": "ladle", "hint": "/ˈleɪdl/", "back": "汤勺" },
+        { "id": "en-018", "front": "colander", "hint": "/ˈkʌləndər/", "back": "滤水篮" },
+        { "id": "en-019", "front": "kettle", "hint": "/ˈketl/", "back": "水壶" },
+        { "id": "en-020", "front": "faucet", "hint": "/ˈfɔːsɪt/", "back": "水龙头" },
+        { "id": "en-021", "front": "drawer", "hint": "/drɔːr/", "back": "抽屉" },
+        { "id": "en-022", "front": "towel", "hint": "/ˈtaʊəl/", "back": "毛巾" },
+        { "id": "en-023", "front": "comb", "hint": "/koʊm/", "back": "梳子", "explain": "b 不发音，和 bomb 里的 b 一样。" },
+        { "id": "en-024", "front": "razor", "hint": "/ˈreɪzər/", "back": "剃须刀" },
+        { "id": "en-025", "front": "tweezers", "hint": "/ˈtwiːzərz/", "back": "镊子", "explain": "永远用复数形式，和 scissors 一样。" },
+        { "id": "en-026", "front": "pliers", "hint": "/ˈplaɪərz/", "back": "钳子" },
+        { "id": "en-027", "front": "screwdriver", "hint": "/ˈskruːdraɪvər/", "back": "螺丝刀" },
+        { "id": "en-028", "front": "hammer", "hint": "/ˈhæmər/", "back": "锤子" },
+        { "id": "en-029", "front": "scissors", "hint": "/ˈsɪzərz/", "back": "剪刀" },
+        { "id": "en-030", "front": "sponge", "hint": "/spʌndʒ/", "back": "海绵" }
+      ]
+    },
+    {
+      "id": "jp-kana",
+      "title": "日语 · 五十音（前五行）",
+      "kind": "vocab",
+      "cards": [
+        { "id": "jp-a", "front": "あ", "back": "a", "hint": "啊" },
+        { "id": "jp-i", "front": "い", "back": "i", "hint": "衣" },
+        { "id": "jp-u", "front": "う", "back": "u", "hint": "乌（嘴唇不圆）" },
+        { "id": "jp-e", "front": "え", "back": "e", "hint": "诶" },
+        { "id": "jp-o", "front": "お", "back": "o", "hint": "哦" },
+        { "id": "jp-ka", "front": "か", "back": "ka" },
+        { "id": "jp-ki", "front": "き", "back": "ki" },
+        { "id": "jp-ku", "front": "く", "back": "ku" },
+        { "id": "jp-ke", "front": "け", "back": "ke" },
+        { "id": "jp-ko", "front": "こ", "back": "ko" },
+        { "id": "jp-sa", "front": "さ", "back": "sa" },
+        { "id": "jp-shi", "front": "し", "back": "shi", "hint": "读「西」，不是 si" },
+        { "id": "jp-su", "front": "す", "back": "su" },
+        { "id": "jp-se", "front": "せ", "back": "se" },
+        { "id": "jp-so", "front": "そ", "back": "so" },
+        { "id": "jp-ta", "front": "た", "back": "ta" },
+        { "id": "jp-chi", "front": "ち", "back": "chi", "hint": "读「七」，不是 ti" },
+        { "id": "jp-tsu", "front": "つ", "back": "tsu", "hint": "读「次」，不是 tu" },
+        { "id": "jp-te", "front": "て", "back": "te" },
+        { "id": "jp-to", "front": "と", "back": "to" },
+        { "id": "jp-na", "front": "な", "back": "na" },
+        { "id": "jp-ni", "front": "に", "back": "ni" },
+        { "id": "jp-nu", "front": "ぬ", "back": "nu" },
+        { "id": "jp-ne", "front": "ね", "back": "ne" },
+        { "id": "jp-no", "front": "の", "back": "no", "explain": "最常见的助词之一，相当于「的」。" }
+      ]
+    },
+    {
+      "id": "math-frac",
+      "title": "数学 · 分数与负数",
+      "kind": "quiz",
+      "cards": [
+        {
+          "id": "m-001", "front": "1/2 + 1/3 = ?", "back": "5/6",
+          "options": ["2/5", "5/6", "1/5", "2/6"],
+          "explain": "通分到 6：3/6 + 2/6 = 5/6。分母不同不能直接加分子。"
+        },
+        {
+          "id": "m-002", "front": "−3 + 5 = ?", "back": "2",
+          "options": ["−8", "2", "−2", "8"],
+          "explain": "负数加正数，等于大数减小数，符号跟大数走：5 − 3 = 2。"
+        },
+        {
+          "id": "m-003", "front": "2/3 × 3/4 = ?", "back": "1/2",
+          "options": ["5/7", "1/2", "6/7", "2/4"],
+          "explain": "分子乘分子、分母乘分母：6/12 = 1/2。能约分的先约分更快。"
+        },
+        {
+          "id": "m-004", "front": "2x + 5 = 13，x = ?", "back": "4",
+          "options": ["3", "4", "9", "6"],
+          "explain": "两边先减 5 得 2x = 8，再除以 2 得 x = 4。"
+        },
+        {
+          "id": "m-005", "front": "(−2) × (−3) = ?", "back": "6",
+          "options": ["−6", "6", "−5", "5"],
+          "explain": "负负得正。两个负号相乘结果为正。"
+        },
+        {
+          "id": "m-006", "front": "1/2 ÷ 1/4 = ?", "back": "2",
+          "options": ["1/8", "2", "1/2", "8"],
+          "explain": "除以分数等于乘它的倒数：1/2 × 4/1 = 2。"
+        },
+        {
+          "id": "m-007", "front": "−5 − (−8) = ?", "back": "3",
+          "options": ["−13", "3", "−3", "13"],
+          "explain": "减负等于加正：−5 + 8 = 3。"
+        },
+        {
+          "id": "m-008", "front": "0.25 化成最简分数是？", "back": "1/4",
+          "options": ["1/2", "1/4", "2/5", "1/5"],
+          "explain": "0.25 = 25/100，上下同除 25 得 1/4。"
+        },
+        {
+          "id": "m-009", "front": "3/4 和 5/8 哪个大？", "back": "3/4",
+          "options": ["3/4", "5/8", "一样大", "无法比较"],
+          "explain": "通分：3/4 = 6/8，6/8 > 5/8。"
+        },
+        {
+          "id": "m-010", "front": "−2x = 6，x = ?", "back": "−3",
+          "options": ["3", "−3", "−12", "12"],
+          "explain": "两边同除以 −2，6 ÷ (−2) = −3。"
+        }
+      ]
+    }
+  ]
+}
