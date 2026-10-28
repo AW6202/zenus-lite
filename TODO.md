@@ -17,9 +17,10 @@
 | 1 | **喂资料 → 抓生词/要点** | 核心闭环。判类型（语言/技术）→ 抓词 → 过已掌握表 → 勾选入库。先做「粘贴文本」版 |
 | 2 | **DOCX 支持** | JSZip + `word/document.xml`，半天 |
 | 3 | **扫描版 PDF OCR** | Tesseract.js（WASM 离线） |
-| 4 | 调度换 `ts-fsrs` | 现在手写 SM-2，比 Anki 差一档 |
-| 5 | MOBI/AZW3 | 只给「请转 EPUB」提示，不硬做 |
-| 6 | APK | PWABuilder 包壳 |
+| 4 | **朗读音色选择器** | 设置页列出手机里的英语语音（选一次记住）+ 英音/美音切换 + 默认优先 Google US 女声；显示当前音色 |
+| 5 | 调度换 `ts-fsrs` | 现在手写 SM-2，比 Anki 差一档 |
+| 6 | MOBI/AZW3 | 只给「请转 EPUB」提示，不硬做 |
+| 7 | APK | PWABuilder 包壳 |
 
 ## 已知问题 / 待验证
 
