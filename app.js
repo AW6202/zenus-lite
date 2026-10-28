@@ -13,6 +13,8 @@ const DEFAULT_SETTINGS = {
   model: 'deepseek-chat',
   key: '',
   dailyNew: 10,
+  ttsRate: 0.9,
+  ttsVoice: '',
 };
 
 const state = {
@@ -41,6 +43,40 @@ let progress = loadJSON(LS.progress, {});
 let reviewLog = loadJSON(LS.log, []);
 let settings = { ...DEFAULT_SETTINGS, ...loadJSON(LS.settings, {}) };
 state.chat = loadJSON(LS.chat, []);
+
+// ── 朗读（Web Speech API，不花流量、不依赖任何服务）──────────
+function pickVoice(lang) {
+  const vs = window.speechSynthesis?.getVoices?.() || [];
+  if (!vs.length) return null;
+  if (settings.ttsVoice) {
+    const exact = vs.find((v) => v.name === settings.ttsVoice);
+    if (exact) return exact;
+  }
+  const base = lang.slice(0, 2).toLowerCase();
+  return vs.find((v) => v.lang?.toLowerCase().startsWith(base)) || null;
+}
+
+function speak(text, lang = 'en-US') {
+  if (!text) return;
+  if (!('speechSynthesis' in window)) { toast('这台设备不支持朗读'); return; }
+  window.speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance(String(text));
+  u.lang = lang;
+  u.rate = Number(settings.ttsRate) || 0.9;
+  const v = pickVoice(lang);
+  if (v) u.voice = v;
+  window.speechSynthesis.speak(u);
+}
+
+// 把一句话拆成可点的词：#每个词单独成 span，点哪个读哪个
+function speakable(text) {
+  return esc(text).replace(/([A-Za-z][A-Za-z'’\-]*)/g,
+    '<span class="tapw" data-w="$1">$1</span>');
+}
+
+if ('speechSynthesis' in window) {
+  window.speechSynthesis.onvoiceschanged = () => { /* 触发一次加载 */ };
+}
 
 // ── 调度（SM-2 简化版）────────────────────────────────
 const DAY = 86400000;
@@ -133,6 +169,12 @@ function statsBar() {
   return `<div class="meta"><span>待复习 ${n} · 未学 ${fresh}</span><span>共 ${cards.length} 张</span></div>`;
 }
 
+function courseLang() {
+  const c = course();
+  if (c?.lang) return c.lang;
+  return (c?.id || '').startsWith('jp') ? 'ja-JP' : 'en-US';
+}
+
 function renderReview() {
   if (!state.queue.length) {
     state.queue = dueQueue();
@@ -141,8 +183,11 @@ function renderReview() {
   }
   if (!state.queue.length) {
     view.innerHTML = `${statsBar()}
-      <div class="empty">今天这一课清空了 👍<br><span class="sub">换一门课，或明天再来</span></div>
+      <div class="empty">今天这一课清空了 👍<br><span class="sub">换一门课，或让 AI 出几道新题</span></div>
       <div class="row" style="margin-top:16px">
+        <button class="btn primary" id="aiQuizBtn">✨ 让 AI 出 5 道题</button>
+      </div>
+      <div class="row" style="margin-top:8px">
         <button class="btn" id="againAll">再来一遍（全部重排）</button>
       </div>`;
     $('#againAll').onclick = () => {
@@ -150,6 +195,7 @@ function renderReview() {
       saveJSON(LS.progress, progress);
       state.queue = dueQueue(); render();
     };
+    $('#aiQuizBtn').onclick = () => startAiQuiz();
     return;
   }
   if (!state.current) {
@@ -161,7 +207,10 @@ function renderReview() {
   const e = entry(c.id);
   const isQuiz = Array.isArray(c.options) && c.options.length;
 
-  let body = `<div class="front">${esc(c.front)}</div>`;
+  const lang = courseLang();
+  const speech = !lang.startsWith('zh');
+  let body = `<div class="front">${speech ? speakable(c.front) : esc(c.front)}
+    ${speech ? `<button class="spk" data-full="${esc(c.front)}" aria-label="朗读">🔊</button>` : ''}</div>`;
   if (c.hint && !state.revealed) body += `<div class="sub">${esc(c.hint)}</div>`;
 
   if (isQuiz) {
@@ -198,8 +247,16 @@ function renderReview() {
   const box = $('#cardBox');
   box.onclick = (ev) => {
     if (ev.target.closest('button')) return;
+    const w = ev.target.closest('.tapw');
+    if (w) {
+      ev.stopPropagation();
+      speak(w.dataset.w, lang);
+      return;
+    }
     if (!state.revealed && !isQuiz) { state.revealed = true; renderReview(); }
   };
+  const spk = view.querySelector('.spk');
+  if (spk) spk.onclick = (ev) => { ev.stopPropagation(); speak(spk.dataset.full, lang); };
   const rv = $('#reveal');
   if (rv) rv.onclick = () => { state.revealed = true; renderReview(); };
   view.querySelectorAll('.opts button').forEach((b) => {
@@ -245,8 +302,12 @@ function renderBrowse() {
     const tag = e.reps === 0 ? '未学' : e.due <= now ? '到期' : `${Math.ceil((e.due - now) / DAY)} 天后`;
     return `<div class="it"><span>${esc(c.front)}</span><small>${tag}</small></div>`;
   }).join('');
-  view.innerHTML = `<h2>${esc(course()?.title || '')} · ${allCards().length} 张</h2>
+  view.innerHTML = `<div class="row" style="margin:6px 0 4px">
+      <button class="btn primary" id="aiQuizBtn2">✨ 让 AI 出 5 道题</button>
+    </div>
+    <h2>${esc(course()?.title || '')} · ${allCards().length} 张</h2>
     <div class="list">${items || '<div class="empty">这门课还没有卡片</div>'}</div>`;
+  $('#aiQuizBtn2').onclick = () => startAiQuiz();
 }
 
 function renderChat() {
@@ -277,6 +338,11 @@ function renderSettings() {
     <input class="t" id="s-key" type="password" value="${esc(settings.key)}" placeholder="sk-...">
     <label class="f">每天新卡上限</label>
     <input class="t" id="s-new" type="number" min="0" max="100" value="${settings.dailyNew}">
+    <label class="f">朗读语速（0.5 慢 – 1.2 快）</label>
+    <input class="t" id="s-rate" type="number" step="0.1" min="0.5" max="1.2" value="${settings.ttsRate}">
+    <div class="row" style="margin-top:10px">
+      <button class="btn" id="testSpeak">试听一句</button>
+    </div>
     <div class="row" style="margin-top:16px"><button class="btn primary" id="saveSettings">保存</button></div>
 
     <h2>进度</h2>
@@ -296,8 +362,14 @@ function renderSettings() {
     settings.model = $('#s-model').value.trim();
     settings.key = $('#s-key').value.trim();
     settings.dailyNew = Math.max(0, Number($('#s-new').value) || 0);
+    settings.ttsRate = Math.min(1.2, Math.max(0.5, Number($('#s-rate').value) || 0.9));
     saveJSON(LS.settings, settings);
     toast('设置已保存');
+  };
+  const tst = $('#testSpeak');
+  if (tst) tst.onclick = () => {
+    settings.ttsRate = Math.min(1.2, Math.max(0.5, Number($('#s-rate').value) || 0.9));
+    speak('This is how it sounds. Tap any word to hear it again.');
   };
   $('#exportProg').onclick = () => {
     const blob = new Blob([JSON.stringify({ version: 1, progress, log: reviewLog }, null, 2)],
@@ -427,6 +499,123 @@ async function sendChat() {
   await pushChat('user', text);
 }
 
+// ── AI 出题（选择 / 填空）──────────────────────────────
+async function startAiQuiz() {
+  if (!aiReady() || state.busy) return;
+  const cards = allCards();
+  if (cards.length < 4) { toast('这门课卡片太少，先加点内容'); return; }
+  state.busy = true;
+  view.innerHTML = '<div class="empty">AI 正在出题…<div class="spin" style="margin:12px auto"></div></div>';
+  const sample = cards.slice()
+    .sort(() => Math.random() - 0.5).slice(0, 15)
+    .map((c) => `- ${c.front} = ${c.back}`).join('\n');
+  const prompt = `课程：${course().title}\n卡片：\n${sample}\n\n`
+    + '出 5 道题，覆盖这些内容：3 道单选（4 个选项，只有 1 个正确），2 道填空（答案是词或短语）。\n'
+    + '只返回 JSON，不要解释：{"questions":['
+    + '{"type":"mcq","q":"题干","options":["A","B","C","D"],"answer":"正确选项原文","explain":"一句中文解释"},'
+    + '{"type":"cloze","q":"含 ___ 的句子","answer":"答案","explain":"一句中文解释"}]}';
+  try {
+    const res = await fetch(`${settings.apiBase}/chat/completions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${settings.key}` },
+      body: JSON.stringify({
+        model: settings.model,
+        messages: [
+          { role: 'system', content: '你是出题老师，只输出 JSON。' },
+          { role: 'user', content: prompt },
+        ],
+        response_format: { type: 'json_object' },
+        temperature: 0.8,
+      }),
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const j = await res.json();
+    const data = JSON.parse(j.choices[0].message.content);
+    const qs = (data.questions || []).slice(0, 5);
+    if (!qs.length) throw new Error('模型没给出题目');
+    state.aiQuiz = { qs, idx: 0, right: 0, picked: null, revealed: false };
+    state.tab = 'review';
+    renderAiQuiz();
+  } catch (err) {
+    toast('出题失败：' + err.message);
+    state.tab = 'review'; render();
+  } finally {
+    state.busy = false;
+  }
+}
+
+function renderAiQuiz() {
+  const z = state.aiQuiz;
+  if (!z) { render(); return; }
+  if (z.idx >= z.qs.length) {
+    view.innerHTML = `<div class="empty">做完啦 🎉<br>
+      <span class="sub">答对 ${z.right} / ${z.qs.length}</span></div>
+      <div class="row" style="margin-top:16px">
+        <button class="btn primary" id="qAgain">再来一组</button>
+      </div>
+      <div class="row" style="margin-top:8px">
+        <button class="btn" id="qBack">回到复习</button>
+      </div>`;
+    $('#qAgain').onclick = () => { state.aiQuiz = null; startAiQuiz(); };
+    $('#qBack').onclick = () => { state.aiQuiz = null; state.queue = []; render(); };
+    return;
+  }
+  const q = z.qs[z.idx];
+  const head = `<div class="meta"><span>AI 出题 ${z.idx + 1} / ${z.qs.length}</span>
+    <span>答对 ${z.right}</span></div>`;
+  let body = `<div class="front" style="font-size:19px">${esc(q.q)}</div>`;
+
+  if (q.type === 'mcq' && Array.isArray(q.options)) {
+    body += `<div class="opts">${q.options.map((o, i) => {
+      let cls = '';
+      if (z.revealed) {
+        if (o === q.answer) cls = 'right';
+        else if (i === z.picked) cls = 'wrong';
+      } else if (i === z.picked) cls = 'sel';
+      return `<button data-i="${i}" class="${cls}">${esc(o)}</button>`;
+    }).join('')}</div>`;
+  } else {
+    body += `<input class="t" id="clozeIn" placeholder="填答案" ${z.revealed ? 'disabled' : ''}
+      value="${z.revealed ? esc(z.typed || '') : ''}">`;
+  }
+
+  if (z.revealed) {
+    body += `<div class="back" style="margin-top:12px">答案：${esc(q.answer)}</div>`;
+    if (q.explain) body += `<div class="explain">${esc(q.explain)}</div>`;
+  }
+
+  view.innerHTML = head + `<div class="card">${body}</div>` + (z.revealed
+    ? '<div class="row" style="margin-top:12px"><button class="btn primary" id="qNext">下一题</button></div>'
+    : q.type === 'cloze'
+      ? '<div class="row" style="margin-top:12px"><button class="btn primary" id="qSubmit">提交</button></div>'
+      : '');
+
+  view.querySelectorAll('.opts button').forEach((b) => {
+    b.onclick = () => {
+      if (z.revealed) return;
+      z.picked = Number(b.dataset.i);
+      z.revealed = true;
+      if (q.options[z.picked] === q.answer) z.right++;
+      reviewLog.push({ id: 'ai-' + Date.now(), r: q.options[z.picked] === q.answer ? 'good' : 'again', ts: Date.now() });
+      saveJSON(LS.log, reviewLog.slice(-5000));
+      renderAiQuiz();
+    };
+  });
+  const sub = $('#qSubmit');
+  if (sub) {
+    sub.onclick = () => {
+      const v = ($('#clozeIn')?.value || '').trim();
+      z.typed = v;
+      z.revealed = true;
+      const norm = (s) => String(s).toLowerCase().replace(/[^a-z0-9一-龥 ]/g, '').trim();
+      if (norm(v) === norm(q.answer)) z.right++;
+      renderAiQuiz();
+    };
+  }
+  const next = $('#qNext');
+  if (next) next.onclick = () => { z.idx++; z.picked = null; z.revealed = false; z.typed = ''; renderAiQuiz(); };
+}
+
 // ── 工具 ──────────────────────────────────────────────
 function esc(s) {
   return String(s ?? '').replace(/[&<>"']/g, (m) =>
@@ -441,6 +630,34 @@ function toast(msg) {
   document.body.appendChild(d);
   setTimeout(() => d.remove(), 2200);
 }
+
+// 选字朗读：选中任意文字 → 浮出「🔊 朗读」按钮
+(function selectionSpeak() {
+  let fab = null;
+  const remove = () => { if (fab) { fab.remove(); fab = null; } };
+  document.addEventListener('selectionchange', () => {
+    const sel = window.getSelection();
+    const text = sel && sel.toString().trim();
+    if (!text || text.length > 200 || !sel.rangeCount) return remove();
+    const rect = sel.getRangeAt(0).getBoundingClientRect();
+    if (!rect || (!rect.width && !rect.height)) return remove();
+    if (!fab) {
+      fab = document.createElement('button');
+      fab.id = 'speakFab';
+      fab.onclick = (ev) => {
+        ev.preventDefault(); ev.stopPropagation();
+        speak(fab.dataset.text);
+        remove();
+      };
+      document.body.appendChild(fab);
+    }
+    fab.textContent = '🔊 朗读';
+    fab.dataset.text = text;
+    fab.style.left = Math.min(window.innerWidth - 96, Math.max(8, rect.left)) + 'px';
+    fab.style.top = Math.max(8, rect.top - 46) + 'px';
+  });
+  document.addEventListener('click', (e) => { if (e.target.id !== 'speakFab') remove(); });
+})();
 
 // ── 启动 ──────────────────────────────────────────────
 document.querySelectorAll('.tabbar button').forEach((b) => {
