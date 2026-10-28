@@ -27,9 +27,9 @@ header .sp{flex:1}
 header select{background:var(--card);color:var(--text);border:1px solid var(--line);border-radius:9px;padding:6px 8px;font-size:13px;max-width:52vw}
 main{flex:1;overflow-y:auto;overscroll-behavior:contain;padding:14px 14px 8px}
 .tabbar{display:flex;border-top:1px solid var(--line);padding-bottom:var(--safe-b);background:var(--bg)}
-.tabbar button{flex:1;background:none;border:0;color:var(--dim);padding:9px 0 10px;font-size:11px;display:flex;flex-direction:column;align-items:center;gap:3px}
+.tabbar button{flex:1;background:none;border:0;color:var(--dim);padding:8px 0 9px;font-size:10px;display:flex;flex-direction:column;align-items:center;gap:3px}
 .tabbar button.on{color:var(--acc)}
-.tabbar svg{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:1.7}
+.tabbar svg{width:19px;height:19px;stroke:currentColor;fill:none;stroke-width:1.7}
 
 .card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:20px 18px;min-height:210px;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;gap:12px}
 .front{font-size:26px;font-weight:600;line-height:1.35;word-break:break-word}
@@ -76,6 +76,16 @@ input.t{width:100%;background:var(--card);border:1px solid var(--line);color:var
 .tapw{cursor:pointer;border-bottom:1px dashed rgba(139,147,165,.45)}
 .tapw:active{color:var(--acc)}
 .spk{background:none;border:0;font-size:18px;padding:0 0 0 8px;opacity:.65;vertical-align:middle}
+#readerWrap{position:relative;margin:0 auto}
+#readerWrap canvas{display:block;width:100%;height:auto;border-radius:8px;background:#fff}
+.textLayer{position:absolute;left:0;top:0;right:0;bottom:0;overflow:hidden;opacity:.25;line-height:1}
+.textLayer span{color:transparent;position:absolute;white-space:pre;transform-origin:0 0;cursor:text}
+.pager{display:flex;align-items:center;gap:8px;justify-content:center;margin:10px 0}
+.pager button{background:#20242d;border:1px solid var(--line);color:var(--text);border-radius:9px;padding:8px 14px;font-size:14px}
+.pager .pg{font-size:13px;color:var(--dim);min-width:70px;text-align:center}
+#selTools{position:fixed;z-index:99;display:flex;gap:6px;background:#2a2f3a;border:1px solid var(--line);
+  border-radius:999px;padding:6px 8px;box-shadow:0 4px 14px rgba(0,0,0,.4)}
+#selTools button{background:none;border:0;color:#fff;font-size:14px;padding:2px 6px}
 #speakFab{position:fixed;z-index:98;background:#2a2f3a;color:#fff;border:1px solid var(--line);
   border-radius:999px;padding:8px 14px;font-size:14px;box-shadow:0 4px 14px rgba(0,0,0,.35)}
 </style>
@@ -95,6 +105,9 @@ input.t{width:100%;background:var(--card);border:1px solid var(--line);color:var
   </button>
   <button data-tab="browse">
     <svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/></svg>浏览
+  </button>
+  <button data-tab="reader">
+    <svg viewBox="0 0 24 24"><path d="M4 4h7v16H4z"/><path d="M13 4h7v16h-7z"/></svg>阅读
   </button>
   <button data-tab="quiz">
     <svg viewBox="0 0 24 24"><path d="M9 11l3 3 8-8"/><path d="M20 12v7a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h9"/></svg>测验

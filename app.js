@@ -1,7 +1,7 @@
 // 学习机 Lite — 静态 PWA：内容来自 pack.json，进度存本地，AI 直连 OpenAI 兼容接口
 'use strict';
 
-const BUILD = '2026-10-28.7';
+const BUILD = '2026-10-28.8';
 
 const LS = {
   progress: 'zenus.progress.v1',
@@ -9,6 +9,7 @@ const LS = {
   settings: 'zenus.settings.v1',
   chat: 'zenus.chat.v1',
   known: 'zenus.known.v1',
+  userCards: 'zenus.usercards.v1',
 };
 
 const DEFAULT_SETTINGS = {
@@ -45,6 +46,7 @@ function saveJSON(key, val) { localStorage.setItem(key, JSON.stringify(val)); }
 
 let progress = loadJSON(LS.progress, {});
 let known = loadJSON(LS.known, {});   // 已掌握词表：下次抓生词时跳过
+let userCards = loadJSON(LS.userCards, []);  // 阅读时自己存的卡
 let reviewLog = loadJSON(LS.log, []);
 let settings = { ...DEFAULT_SETTINGS, ...loadJSON(LS.settings, {}) };
 state.chat = loadJSON(LS.chat, []);
@@ -156,7 +158,11 @@ async function loadPack() {
     : state.pack.courses[0]?.id;
 }
 
+const MINE_ID = 'mine';
 function course() {
+  if (state.courseId === MINE_ID) {
+    return { id: MINE_ID, title: '我的生词（阅读时存的）', kind: 'vocab', lang: 'en-US', cards: userCards };
+  }
   return state.pack?.courses.find((c) => c.id === state.courseId) || null;
 }
 function allCards() { return course()?.cards || []; }
@@ -172,7 +178,9 @@ function dueQueue() {
 // ── 渲染 ──────────────────────────────────────────────
 function renderHeader() {
   const sel = $('#courseSel');
-  sel.innerHTML = (state.pack?.courses || [])
+  const list = [...(state.pack?.courses || [])];
+  if (userCards.length) list.unshift({ id: MINE_ID, title: `我的生词（${userCards.length}）` });
+  sel.innerHTML = list
     .map((c) => `<option value="${c.id}"${c.id === state.courseId ? ' selected' : ''}>${c.title}</option>`)
     .join('');
   sel.onchange = () => {
@@ -190,6 +198,7 @@ function render() {
   });
   if (state.tab === 'review') return renderReview();
   if (state.tab === 'browse') return renderBrowse();
+  if (state.tab === 'reader') return renderReader();
   if (state.tab === 'quiz') return renderQuizTab();
   if (state.tab === 'chat') return renderChat();
   if (state.tab === 'settings') return renderSettings();
@@ -800,32 +809,203 @@ function toast(msg) {
   setTimeout(() => d.remove(), 2200);
 }
 
-// 选字朗读：选中任意文字 → 浮出「🔊 朗读」按钮
-(function selectionSpeak() {
-  let fab = null;
-  const remove = () => { if (fab) { fab.remove(); fab = null; } };
+
+// ── 阅读器（pdf.js，本地解析，文件不上传）────────────
+const RDR = { pdf: null, page: 1, total: 0, name: '', scale: 1, rendering: false };
+
+function loadScript(src) {
+  return new Promise((res, rej) => {
+    if (document.querySelector('script[src="' + src + '"]')) return res();
+    const el = document.createElement('script');
+    el.src = src; el.onload = res; el.onerror = () => rej(new Error('加载失败 ' + src));
+    document.head.appendChild(el);
+  });
+}
+
+async function ensurePdfJs() {
+  if (window.pdfjsLib) return;
+  await loadScript('vendor/pdf.min.js');
+  window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'vendor/pdf.worker.min.js';
+}
+
+async function openPdfFile(ev) {
+  const f = ev.target.files && ev.target.files[0];
+  if (!f) return;
+  view.innerHTML = '<div class="empty">正在打开 PDF…</div>';
+  try {
+    await ensurePdfJs();
+    const buf = await f.arrayBuffer();
+    RDR.pdf = await pdfjsLib.getDocument({ data: buf }).promise;
+    RDR.total = RDR.pdf.numPages;
+    RDR.page = 1;
+    RDR.name = f.name;
+    RDR.scale = 1;
+    renderReader();
+  } catch (err) {
+    view.innerHTML = '<div class="empty">打不开这个 PDF<br><span class="sub">' + esc(err.message) + '</span></div>';
+  }
+}
+
+function renderReader() {
+  if (!RDR.pdf) {
+    view.innerHTML = '<div class="empty">选一个 PDF，直接在页面里读。<br>'
+      + '<span class="sub">选中任意文字 → 朗读 / 存卡 / 问 AI。文件不上传，全在本机解析。</span>'
+      + '<div class="row" style="margin-top:16px"><button class="btn primary" id="pickPdf">选择 PDF</button></div></div>'
+      + '<input type="file" id="pdfFile" accept="application/pdf" style="display:none">';
+    document.getElementById('pickPdf').onclick = () => document.getElementById('pdfFile').click();
+    document.getElementById('pdfFile').onchange = openPdfFile;
+    return;
+  }
+  view.innerHTML =
+    '<div class="meta"><span>' + esc(RDR.name) + '</span><span id="pgLabel">' + RDR.page + ' / ' + RDR.total + '</span></div>'
+    + '<div id="readerWrap"><canvas id="pdfCanvas"></canvas><div class="textLayer" id="textLayer"></div></div>'
+    + '<div class="pager">'
+    + '<button id="prevPage">◀</button><button id="zoomOut">－</button><button id="zoomIn">＋</button><button id="nextPage">▶</button>'
+    + '</div>'
+    + '<div class="row" style="margin-top:4px"><button class="btn ghost" id="closePdf">关闭这份 PDF</button></div>';
+  document.getElementById('prevPage').onclick = () => gotoPage(RDR.page - 1);
+  document.getElementById('nextPage').onclick = () => gotoPage(RDR.page + 1);
+  document.getElementById('zoomIn').onclick = () => { RDR.scale = Math.min(3, RDR.scale * 1.2); drawPage(); };
+  document.getElementById('zoomOut').onclick = () => { RDR.scale = Math.max(0.5, RDR.scale / 1.2); drawPage(); };
+  document.getElementById('closePdf').onclick = () => { RDR.pdf = null; renderReader(); };
+  drawPage();
+}
+
+function gotoPage(n) {
+  if (!RDR.pdf) return;
+  const p = Math.max(1, Math.min(RDR.total, n));
+  if (p === RDR.page) return;
+  RDR.page = p;
+  drawPage();
+}
+
+async function drawPage() {
+  if (!RDR.pdf || RDR.rendering) return;
+  RDR.rendering = true;
+  const canvas = document.getElementById('pdfCanvas');
+  const tl = document.getElementById('textLayer');
+  if (!canvas || !tl) { RDR.rendering = false; return; }
+  try {
+    const page = await RDR.pdf.getPage(RDR.page);
+    const base = page.getViewport({ scale: 1 });
+    const avail = (view.clientWidth || 360) - 28;
+    const scale = (avail / base.width) * RDR.scale;
+    const vp = page.getViewport({ scale });
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = Math.floor(vp.width * dpr);
+    canvas.height = Math.floor(vp.height * dpr);
+    canvas.style.width = vp.width + 'px';
+    canvas.style.height = vp.height + 'px';
+    await page.render({
+      canvasContext: canvas.getContext('2d'),
+      viewport: vp,
+      transform: dpr !== 1 ? [dpr, 0, 0, dpr, 0, 0] : null,
+    }).promise;
+
+    tl.innerHTML = '';
+    tl.style.width = vp.width + 'px';
+    tl.style.height = vp.height + 'px';
+    tl.style.setProperty('--scale-factor', String(vp.scale));
+    const tc = await page.getTextContent();
+    await pdfjsLib.renderTextLayer({
+      textContentSource: tc,
+      textContent: tc,
+      container: tl,
+      viewport: vp,
+      textDivs: [],
+    }).promise;
+    const lb = document.getElementById('pgLabel');
+    if (lb) lb.textContent = RDR.page + ' / ' + RDR.total;
+  } catch (err) {
+    /* 翻页过快会 abort，忽略 */
+  } finally {
+    RDR.rendering = false;
+  }
+}
+
+// ── 选中文字 → 朗读 / 存卡 / 问 AI ────────────────────
+function addCardFromSelection(text) {
+  const front = String(text).replace(/\s+/g, ' ').trim().slice(0, 80);
+  if (!front) return;
+  if (userCards.some((c) => c.front.toLowerCase() === front.toLowerCase())) {
+    toast('已经在「我的生词」里了');
+    return;
+  }
+  const card = { id: 'mine-' + Date.now(), front: front, back: '', level: '', topic: '阅读生词' };
+  userCards.unshift(card);
+  saveJSON(LS.userCards, userCards);
+  renderHeader();
+  toast('已加入「我的生词」');
+  if (settings.key) fillCardMeaning(card);
+}
+
+async function fillCardMeaning(card) {
+  try {
+    const res = await fetch(settings.apiBase + '/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + settings.key },
+      body: JSON.stringify({
+        model: settings.model,
+        messages: [
+          { role: 'system', content: '你是英语词典，只输出 JSON。' },
+          { role: 'user', content: '词或短语：' + card.front
+            + '\n返回 JSON：{"back":"简体中文释义，短语给出用法","phonetic":"英式音标，短语留空","example":"一个自然例句","exampleCN":"例句中文"}' },
+        ],
+        response_format: { type: 'json_object' },
+        temperature: 0.3,
+      }),
+    });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const j = await res.json();
+    const d = JSON.parse(j.choices[0].message.content);
+    card.back = d.back || '';
+    card.hint = d.phonetic || '';
+    card.example = d.example || '';
+    card.exampleCN = d.exampleCN || '';
+    saveJSON(LS.userCards, userCards);
+    toast('释义已补上');
+  } catch (err) {
+    toast('释义没取到：' + err.message);
+  }
+}
+
+function askFromSelection(t) {
+  state.tab = 'chat';
+  render();
+  pushChat('user', '我读到「' + t + '」，请解释它在这里的意思、用法，并给一个例句。');
+}
+
+(function selectionTools() {
+  let bar = null;
+  const remove = () => { if (bar) { bar.remove(); bar = null; } };
   document.addEventListener('selectionchange', () => {
     const sel = window.getSelection();
     const text = sel && sel.toString().trim();
-    if (!text || text.length > 200 || !sel.rangeCount) return remove();
+    if (!text || text.length > 300 || !sel.rangeCount) return remove();
     const rect = sel.getRangeAt(0).getBoundingClientRect();
     if (!rect || (!rect.width && !rect.height)) return remove();
-    if (!fab) {
-      fab = document.createElement('button');
-      fab.id = 'speakFab';
-      fab.onclick = (ev) => {
-        ev.preventDefault(); ev.stopPropagation();
-        speak(fab.dataset.text);
+    if (!bar) {
+      bar = document.createElement('div');
+      bar.id = 'selTools';
+      bar.innerHTML = '<button data-a="say">🔊</button><button data-a="card">＋卡</button><button data-a="ask">问AI</button>';
+      bar.addEventListener('click', (ev) => {
+        const a = ev.target.dataset && ev.target.dataset.a;
+        if (!a) return;
+        ev.preventDefault();
+        ev.stopPropagation();
+        const t = bar.dataset.text || '';
+        if (a === 'say') speak(t);
+        if (a === 'card') addCardFromSelection(t);
+        if (a === 'ask') askFromSelection(t);
         remove();
-      };
-      document.body.appendChild(fab);
+      });
+      document.body.appendChild(bar);
     }
-    fab.textContent = '🔊 朗读';
-    fab.dataset.text = text;
-    fab.style.left = Math.min(window.innerWidth - 96, Math.max(8, rect.left)) + 'px';
-    fab.style.top = Math.max(8, rect.top - 46) + 'px';
+    bar.dataset.text = text;
+    bar.style.left = Math.min(window.innerWidth - 160, Math.max(8, rect.left)) + 'px';
+    bar.style.top = Math.max(8, rect.top - 48) + 'px';
   });
-  document.addEventListener('click', (e) => { if (e.target.id !== 'speakFab') remove(); });
+  document.addEventListener('click', (e) => { if (!e.target.closest('#selTools')) remove(); });
 })();
 
 // ── 启动 ──────────────────────────────────────────────

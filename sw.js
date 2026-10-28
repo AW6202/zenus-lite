@@ -1,7 +1,7 @@
 // Service Worker
 // 策略：**页面与代码网络优先**，断网才回落到缓存。
 // 之前是"缓存优先"，导致每次发版手机上都要手动清缓存 —— 2026-10-28 改。
-const CACHE = 'zenus-shell-v10';
+const CACHE = 'zenus-shell-v11';
 const SHELL = [
   './',
   './index.html',
@@ -50,6 +50,18 @@ self.addEventListener('fetch', (e) => {
   // 页面导航：网络优先，离线回外壳
   if (req.mode === 'navigate') {
     e.respondWith(networkFirst(req, './index.html'));
+    return;
+  }
+
+  // 第三方库（pdf.js 等，1.4MB）：缓存优先，避免每次进阅读器都重下
+  if (url.pathname.includes('/vendor/')) {
+    e.respondWith(
+      caches.match(req).then((hit) => hit || fetch(req).then((res) => {
+        const copy = res.clone();
+        caches.open(CACHE).then((c) => c.put(req, copy));
+        return res;
+      }))
+    );
     return;
   }
 
