@@ -1,5 +1,8 @@
 # 学习机 Lite
 
+> 线上：https://aw6202.github.io/zenus-lite/
+> 决策记录见 [DECISIONS.md](DECISIONS.md) · 同步选型见 [SYNC.md](SYNC.md)
+
 一个静态 PWA：**电脑上生成内容 → 手机打开就是最新版**。没有后端、没有数据库服务、没有构建步骤。
 
 - 手机端：刷卡片 / 做测验（选择+填空，本地生成，不联网）/ 问 AI（直连 DeepSeek），进度存本机
