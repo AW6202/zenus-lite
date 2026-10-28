@@ -1,7 +1,7 @@
 // 学习机 Lite — 静态 PWA：内容来自 pack.json，进度存本地，AI 直连 OpenAI 兼容接口
 'use strict';
 
-const BUILD = '2026-10-28.5';
+const BUILD = '2026-10-28.6';
 
 const LS = {
   progress: 'zenus.progress.v1',
@@ -379,6 +379,9 @@ function renderSettings() {
 
     <h2>关于</h2>
     <div class="row" style="margin-bottom:8px"><button class="btn" id="checkUpdate">检查更新</button></div>
+    <div class="row" style="margin-bottom:8px">
+      <a class="btn" href="demo.html" style="display:block;text-align:center;text-decoration:none;color:var(--text)">看「要点 → 题 → 重写」试验</a>
+    </div>
     <div class="hint">构建 ${esc(BUILD)} · 内容包 ${esc(state.pack?.version || '-')}<br>
     共 ${state.pack?.courses?.length || 0} 门课。内容在电脑上生成后推到这里，手机刷新即更新。</div>
   `;
