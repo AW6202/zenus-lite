@@ -3,6 +3,7 @@
 
 const LS = {
   progress: 'zenus.progress.v1',
+  log: 'zenus.log.v1',
   settings: 'zenus.settings.v1',
   chat: 'zenus.chat.v1',
 };
@@ -37,6 +38,7 @@ function loadJSON(key, fallback) {
 function saveJSON(key, val) { localStorage.setItem(key, JSON.stringify(val)); }
 
 let progress = loadJSON(LS.progress, {});
+let reviewLog = loadJSON(LS.log, []);
 let settings = { ...DEFAULT_SETTINGS, ...loadJSON(LS.settings, {}) };
 state.chat = loadJSON(LS.chat, []);
 
@@ -67,6 +69,11 @@ function schedule(id, rating) {
   }
   progress[id] = e;
   saveJSON(LS.progress, progress);
+
+  // 只追加的复习流水：换调度算法（SM-2 → FSRS）或换 App 都不丢历史
+  reviewLog.push({ id, r: rating, ts: now });
+  if (reviewLog.length > 5000) reviewLog = reviewLog.slice(-5000);
+  saveJSON(LS.log, reviewLog);
 }
 
 // ── 数据 ──────────────────────────────────────────────
@@ -293,7 +300,8 @@ function renderSettings() {
     toast('设置已保存');
   };
   $('#exportProg').onclick = () => {
-    const blob = new Blob([JSON.stringify({ version: 1, progress }, null, 2)], { type: 'application/json' });
+    const blob = new Blob([JSON.stringify({ version: 1, progress, log: reviewLog }, null, 2)],
+      { type: 'application/json' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
     a.download = `zenus-progress-${new Date().toISOString().slice(0, 10)}.json`;
