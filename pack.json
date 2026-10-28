@@ -1,5 +1,5 @@
 {
-  "version": "2026-10-28.2",
+  "version": "2026-10-28.3",
   "name": "学习机 · 内容包",
   "meta": {
     "note": "内容包由电脑端生成，手机端只读。改内容 = 改 content.py 后重跑 build_pack.py。",
@@ -1756,8 +1756,359 @@
       ]
     },
     {
+      "id": "jp-phrase",
+      "title": "日语 · 常用 12 句",
+      "kind": "vocab",
+      "lang": "ja-JP",
+      "topic": "日语 · 口语",
+      "cards": [
+        {
+          "id": "jp-p-konnichiwa",
+          "front": "こんにちは",
+          "back": "你好（白天）",
+          "hint": "Konnichiwa",
+          "explain": "最常用的白天问候。"
+        },
+        {
+          "id": "jp-p-ohayō-gozaimasu",
+          "front": "おはようございます",
+          "back": "早上好（礼貌）",
+          "hint": "Ohayō gozaimasu",
+          "explain": "对同事/长辈用；朋友间可只说 おはよう。"
+        },
+        {
+          "id": "jp-p-konbanwa",
+          "front": "こんばんは",
+          "back": "晚上好",
+          "hint": "Konbanwa",
+          "explain": "注意不是 こんにちは 的晚上版写法。"
+        },
+        {
+          "id": "jp-p-arigatō-gozaimasu",
+          "front": "ありがとうございます",
+          "back": "谢谢（礼貌）",
+          "hint": "Arigatō gozaimasu",
+          "explain": "朋友间用 ありがとう。"
+        },
+        {
+          "id": "jp-p-sumimasen",
+          "front": "すみません",
+          "back": "不好意思 / 打扰一下 / 抱歉",
+          "hint": "Sumimasen",
+          "explain": "一个词干三件事：叫人、道歉、谢谢都能用。"
+        },
+        {
+          "id": "jp-p-hajimemashite",
+          "front": "はじめまして",
+          "back": "初次见面",
+          "hint": "Hajimemashite",
+          "explain": "自我介绍第一句。"
+        },
+        {
+          "id": "jp-p-onegai-shimasu",
+          "front": "お願いします",
+          "back": "拜托了 / 麻烦了",
+          "hint": "Onegai shimasu",
+          "explain": "点餐、请求帮忙都常用。"
+        },
+        {
+          "id": "jp-p-ikura-desu-ka",
+          "front": "いくらですか",
+          "back": "多少钱？",
+          "hint": "Ikura desu ka",
+          "explain": "购物必备。"
+        },
+        {
+          "id": "jp-p-wakarimasen",
+          "front": "わかりません",
+          "back": "我不懂 / 不知道",
+          "hint": "Wakarimasen",
+          "explain": "听不懂时直接说这句。"
+        },
+        {
+          "id": "jp-p-mō-ichido-onegai-shimasu",
+          "front": "もう一度お願いします",
+          "back": "请再说一遍",
+          "hint": "Mō ichido onegai shimasu",
+          "explain": "配合 すみません 更好用。"
+        },
+        {
+          "id": "jp-p-itadakimasu",
+          "front": "いただきます",
+          "back": "我开动了",
+          "hint": "Itadakimasu",
+          "explain": "饭前说，回应不用答。"
+        },
+        {
+          "id": "jp-p-gochisōsama-deshita",
+          "front": "ごちそうさまでした",
+          "back": "谢谢招待 / 吃好了",
+          "hint": "Gochisōsama deshita",
+          "explain": "饭后说。"
+        }
+      ]
+    },
+    {
+      "id": "math-eq",
+      "title": "数学 · 一次方程",
+      "kind": "quiz",
+      "lang": "zh-CN",
+      "topic": "数学",
+      "cards": [
+        {
+          "id": "meq-01",
+          "front": "2x + 3 = 11，x = ?",
+          "back": "4",
+          "options": [
+            "3",
+            "4",
+            "5",
+            "7"
+          ],
+          "explain": "两边减 3 得 2x = 8，再除以 2。"
+        },
+        {
+          "id": "meq-02",
+          "front": "3x − 6 = 9，x = ?",
+          "back": "5",
+          "options": [
+            "3",
+            "5",
+            "1",
+            "15"
+          ],
+          "explain": "两边加 6 得 3x = 15，再除以 3。"
+        },
+        {
+          "id": "meq-03",
+          "front": "x/2 + 1 = 4，x = ?",
+          "back": "6",
+          "options": [
+            "5",
+            "6",
+            "8",
+            "3"
+          ],
+          "explain": "两边减 1 得 x/2 = 3，再乘 2。"
+        },
+        {
+          "id": "meq-04",
+          "front": "5x = 20，x = ?",
+          "back": "4",
+          "options": [
+            "4",
+            "5",
+            "100",
+            "15"
+          ],
+          "explain": "两边同除以 5。"
+        },
+        {
+          "id": "meq-05",
+          "front": "−2x + 7 = 1，x = ?",
+          "back": "3",
+          "options": [
+            "3",
+            "−3",
+            "4",
+            "−4"
+          ],
+          "explain": "两边减 7 得 −2x = −6，再除以 −2。"
+        },
+        {
+          "id": "meq-06",
+          "front": "3(x + 2) = 15，x = ?",
+          "back": "3",
+          "options": [
+            "3",
+            "5",
+            "7",
+            "13"
+          ],
+          "explain": "先展开或两边除以 3：x + 2 = 5。"
+        },
+        {
+          "id": "meq-07",
+          "front": "2x + 1 = x + 5，x = ?",
+          "back": "4",
+          "options": [
+            "4",
+            "2",
+            "6",
+            "3"
+          ],
+          "explain": "两边减 x 得 x + 1 = 5，再减 1。"
+        },
+        {
+          "id": "meq-08",
+          "front": "x/3 = 4，x = ?",
+          "back": "12",
+          "options": [
+            "12",
+            "7",
+            "1",
+            "4/3"
+          ],
+          "explain": "两边乘 3。"
+        },
+        {
+          "id": "meq-09",
+          "front": "4x − 2 = 2x + 6，x = ?",
+          "back": "4",
+          "options": [
+            "4",
+            "2",
+            "8",
+            "1"
+          ],
+          "explain": "两边减 2x 得 2x − 2 = 6，再加 2 除以 2。"
+        },
+        {
+          "id": "meq-10",
+          "front": "7 − x = 2，x = ?",
+          "back": "5",
+          "options": [
+            "5",
+            "−5",
+            "9",
+            "−9"
+          ],
+          "explain": "移项得 x = 7 − 2 = 5。"
+        }
+      ]
+    },
+    {
+      "id": "math-ratio",
+      "title": "数学 · 比例与百分数",
+      "kind": "quiz",
+      "lang": "zh-CN",
+      "topic": "数学",
+      "cards": [
+        {
+          "id": "mrt-01",
+          "front": "20% 写成小数是？",
+          "back": "0.2",
+          "options": [
+            "0.2",
+            "2.0",
+            "0.02",
+            "20.0"
+          ],
+          "explain": "百分数除 100：20 ÷ 100 = 0.2。"
+        },
+        {
+          "id": "mrt-02",
+          "front": "0.35 写成百分数是？",
+          "back": "35%",
+          "options": [
+            "3.5%",
+            "35%",
+            "0.35%",
+            "350%"
+          ],
+          "explain": "乘 100 再加 %。"
+        },
+        {
+          "id": "mrt-03",
+          "front": "50 的 20% 是多少？",
+          "back": "10",
+          "options": [
+            "10",
+            "5",
+            "25",
+            "100"
+          ],
+          "explain": "50 × 0.2 = 10。"
+        },
+        {
+          "id": "mrt-04",
+          "front": "a : b = 2 : 3，若 a = 8，b = ?",
+          "back": "12",
+          "options": [
+            "12",
+            "9",
+            "16",
+            "6"
+          ],
+          "explain": "2 份 = 8，则 1 份 = 4，3 份 = 12。"
+        },
+        {
+          "id": "mrt-05",
+          "front": "a : b = 2 : 5，若 a = 6，b = ?",
+          "back": "15",
+          "options": [
+            "15",
+            "12",
+            "10",
+            "20"
+          ],
+          "explain": "2 份 = 6，1 份 = 3，5 份 = 15。"
+        },
+        {
+          "id": "mrt-06",
+          "front": "1.5 写成百分数是？",
+          "back": "150%",
+          "options": [
+            "15%",
+            "150%",
+            "1.5%",
+            "0.15%"
+          ],
+          "explain": "1.5 × 100 = 150。"
+        },
+        {
+          "id": "mrt-07",
+          "front": "80 元打八折是多少？",
+          "back": "64",
+          "options": [
+            "64",
+            "72",
+            "16",
+            "60"
+          ],
+          "explain": "八折 = 80%，80 × 0.8 = 64。"
+        },
+        {
+          "id": "mrt-08",
+          "front": "25% 化成最简分数是？",
+          "back": "1/4",
+          "options": [
+            "1/4",
+            "1/2",
+            "2/5",
+            "1/5"
+          ],
+          "explain": "25/100 = 1/4。"
+        },
+        {
+          "id": "mrt-09",
+          "front": "0.6 化成最简分数是？",
+          "back": "3/5",
+          "options": [
+            "3/5",
+            "6/10",
+            "1/6",
+            "2/3"
+          ],
+          "explain": "0.6 = 6/10 = 3/5。"
+        },
+        {
+          "id": "mrt-10",
+          "front": "一件商品先涨 10% 再降 10%，最终是原价的？",
+          "back": "99%",
+          "options": [
+            "100%",
+            "99%",
+            "101%",
+            "90%"
+          ],
+          "explain": "1 × 1.1 × 0.9 = 0.99。涨幅和降幅相同也会略低于原价。"
+        }
+      ]
+    },
+    {
       "id": "jp-kana",
-      "title": "日语 · 五十音（前五行）",
+      "title": "日语 · 五十音（完整清音）",
       "kind": "vocab",
       "cards": [
         {
@@ -1893,6 +2244,119 @@
           "front": "の",
           "back": "no",
           "explain": "最常见的助词之一，相当于「的」。"
+        },
+        {
+          "id": "jp-ha",
+          "front": "は",
+          "back": "ha",
+          "hint": "哈"
+        },
+        {
+          "id": "jp-hi",
+          "front": "ひ",
+          "back": "hi",
+          "hint": "西"
+        },
+        {
+          "id": "jp-fu",
+          "front": "ふ",
+          "back": "fu",
+          "hint": "呼（不是 hu）"
+        },
+        {
+          "id": "jp-he",
+          "front": "へ",
+          "back": "he",
+          "hint": "嘿"
+        },
+        {
+          "id": "jp-ho",
+          "front": "ほ",
+          "back": "ho",
+          "hint": "豁"
+        },
+        {
+          "id": "jp-ma",
+          "front": "ま",
+          "back": "ma"
+        },
+        {
+          "id": "jp-mi",
+          "front": "み",
+          "back": "mi"
+        },
+        {
+          "id": "jp-mu",
+          "front": "む",
+          "back": "mu"
+        },
+        {
+          "id": "jp-me",
+          "front": "め",
+          "back": "me"
+        },
+        {
+          "id": "jp-mo",
+          "front": "も",
+          "back": "mo"
+        },
+        {
+          "id": "jp-ya",
+          "front": "や",
+          "back": "ya"
+        },
+        {
+          "id": "jp-yu",
+          "front": "ゆ",
+          "back": "yu"
+        },
+        {
+          "id": "jp-yo",
+          "front": "よ",
+          "back": "yo"
+        },
+        {
+          "id": "jp-ra",
+          "front": "ら",
+          "back": "ra",
+          "hint": "拉（弹舌感，不是 la）"
+        },
+        {
+          "id": "jp-ri",
+          "front": "り",
+          "back": "ri"
+        },
+        {
+          "id": "jp-ru",
+          "front": "る",
+          "back": "ru"
+        },
+        {
+          "id": "jp-re",
+          "front": "れ",
+          "back": "re"
+        },
+        {
+          "id": "jp-ro",
+          "front": "ろ",
+          "back": "ro"
+        },
+        {
+          "id": "jp-wa",
+          "front": "わ",
+          "back": "wa"
+        },
+        {
+          "id": "jp-wo",
+          "front": "を",
+          "back": "wo",
+          "hint": "读 o，只作助词"
+        },
+        {
+          "id": "jp-n",
+          "front": "ん",
+          "back": "n",
+          "hint": "鼻音，单独成音节"
         }
       ],
       "lang": "ja-JP"
