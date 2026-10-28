@@ -1,6 +1,8 @@
 // 学习机 Lite — 静态 PWA：内容来自 pack.json，进度存本地，AI 直连 OpenAI 兼容接口
 'use strict';
 
+const BUILD = '2026-10-28.4';
+
 const LS = {
   progress: 'zenus.progress.v1',
   log: 'zenus.log.v1',
@@ -360,7 +362,8 @@ function renderSettings() {
     <input type="file" id="fileProg" accept="application/json" style="display:none">
 
     <h2>关于</h2>
-    <div class="hint">内容包版本：${esc(state.pack?.version || '-')}<br>
+    <div class="row" style="margin-bottom:8px"><button class="btn" id="checkUpdate">检查更新</button></div>
+    <div class="hint">构建 ${esc(BUILD)} · 内容包 ${esc(state.pack?.version || '-')}<br>
     共 ${state.pack?.courses?.length || 0} 门课。内容在电脑上生成后推到这里，手机刷新即更新。</div>
   `;
   $('#saveSettings').onclick = () => {
@@ -376,6 +379,19 @@ function renderSettings() {
   if (tst) tst.onclick = () => {
     settings.ttsRate = Math.min(1.2, Math.max(0.5, Number($('#s-rate').value) || 0.9));
     speak('This is how it sounds. Tap any word to hear it again.');
+  };
+  const cu = $('#checkUpdate');
+  if (cu) cu.onclick = async () => {
+    try {
+      if ('serviceWorker' in navigator) {
+        const reg = await navigator.serviceWorker.getRegistration();
+        if (reg) await reg.update();
+        const keys = await caches.keys();
+        await Promise.all(keys.map((k) => caches.delete(k)));
+      }
+      toast('已清理缓存，正在重新加载…');
+      setTimeout(() => location.replace(location.pathname + '?v=' + Date.now()), 600);
+    } catch (err) { toast('更新失败：' + err.message); }
   };
   $('#exportProg').onclick = () => {
     const blob = new Blob([JSON.stringify({ version: 1, progress, log: reviewLog }, null, 2)],
@@ -529,6 +545,7 @@ function localQuiz(kind = 'mixed', n = 10) {
         type: 'cloze',
         q: c.example.replace(new RegExp(escRe(c.front), 'gi'), '____'),
         answer: c.front,
+        hint: `提示：${c.back}`,
         explain: `${c.front} — ${c.back}`,
       });
       return;
@@ -561,18 +578,19 @@ function startQuiz(qs) {
 
 function renderQuizTab() {
   if (state.quiz) return renderQuiz();
+  const hasKey = !!settings.key;
   view.innerHTML = `<h2>${esc(course()?.title || '')} · ${allCards().length} 张</h2>
-    <div class="hint">题目由本机卡片自动生成，不联网、不花钱。填空用的是卡片里的例句。</div>
-    <div class="row" style="margin-top:12px"><button class="btn primary" id="qMix">混合 10 题</button></div>
+    ${hasKey ? `<div class="hint">AI 会按这门课的内容另编题，更贴近实际用法。</div>
+    <div class="row" style="margin-top:12px"><button class="btn primary" id="qAi">✨ 让 AI 出 5 道新题</button></div>
+    <h2>离线自测（不联网、不花钱）</h2>` : `<div class="hint">先在「设置」填 API Key，就能让 AI 按课程内容另编题；下面这些不联网也能用。</div>`}
+    <div class="row" style="margin-top:12px"><button class="btn ${hasKey ? '' : 'primary'}" id="qMix">混合 10 题</button></div>
     <div class="row" style="margin-top:8px"><button class="btn" id="qMcq">只做选择题</button></div>
-    <div class="row" style="margin-top:8px"><button class="btn" id="qCloze">只做例句填空</button></div>
-    <h2>让 AI 出新的题</h2>
-    <div class="hint">AI 按这门课另编题，需要先在设置里填 API Key。</div>
-    <div class="row" style="margin-top:8px"><button class="btn" id="qAi">✨ AI 出 5 道新题</button></div>`;
+    <div class="row" style="margin-top:8px"><button class="btn" id="qCloze">只做例句填空</button></div>`;
   $('#qMix').onclick = () => startQuiz(localQuiz('mixed'));
   $('#qMcq').onclick = () => startQuiz(localQuiz('mcq'));
   $('#qCloze').onclick = () => startQuiz(localQuiz('cloze'));
-  $('#qAi').onclick = () => startAiQuiz();
+  const aiBtn = $('#qAi');
+  if (aiBtn) aiBtn.onclick = () => startAiQuiz();
 }
 
 async function startAiQuiz() {
@@ -643,6 +661,7 @@ function renderQuiz() {
   const head = `<div class="meta"><span>第 ${z.idx + 1} / ${z.qs.length} 题</span>
     <span>答对 ${z.right}</span></div>`;
   let body = `<div class="front" style="font-size:19px">${esc(q.q)}</div>`;
+  if (q.hint && !z.revealed) body += `<div class="sub">${esc(q.hint)}</div>`;
 
   if (q.type === 'mcq' && Array.isArray(q.options)) {
     body += `<div class="opts">${q.options.map((o, i) => {
