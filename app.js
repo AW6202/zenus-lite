@@ -1,7 +1,7 @@
 // 学习机 Lite — 静态 PWA：内容来自 pack.json，进度存本地，AI 直连 OpenAI 兼容接口
 'use strict';
 
-const BUILD = '2026-10-28.9';
+const BUILD = '2026-10-28.10';
 
 const LS = {
   progress: 'zenus.progress.v1',
@@ -993,9 +993,119 @@ async function ensurePdfJs() {
   window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'vendor/pdf.worker.min.js';
 }
 
-async function openPdfFile(ev) {
+async function openBookFile(ev) {
   const f = ev.target.files && ev.target.files[0];
   if (!f) return;
+  const name = f.name.toLowerCase();
+  if (name.endsWith('.epub')) return openEpubBook(f);
+  if (name.endsWith('.txt') || name.endsWith('.md')) return openTextBook(f);
+  return openPdfFile(f);
+}
+
+async function openTextBook(f) {
+  const txt = await f.text();
+  RDR.kind = 'text';
+  RDR.pdf = null;
+  RDR.book = { name: f.name, chapters: chunkText(txt, 6000) };
+  RDR.ch = 0;
+  renderReader();
+}
+
+// 按段落把纯文本切成「章」
+function chunkText(txt, size) {
+  const paras = txt.split(/\n\s*\n/).map((x) => x.trim()).filter(Boolean);
+  const out = [];
+  let cur = '';
+  for (const p of paras) {
+    if (cur.length + p.length > size && cur) { out.push(cur); cur = ''; }
+    cur += p + '\n\n';
+  }
+  if (cur.trim()) out.push(cur);
+  return out.map((t, i) => ({ title: '第 ' + (i + 1) + ' 段', text: t }));
+}
+
+async function openEpubBook(f) {
+  view.innerHTML = '<div class="empty">正在解析 EPUB…</div>';
+  try {
+    await ensureJSZip();
+    const zip = await JSZip.loadAsync(await f.arrayBuffer());
+    const chapters = await parseEpub(zip);
+    if (!chapters.length) throw new Error('没找到可读的章节');
+    RDR.kind = 'epub';
+    RDR.pdf = null;
+    RDR.book = { name: f.name, chapters: chapters };
+    RDR.ch = 0;
+    renderReader();
+  } catch (err) {
+    view.innerHTML = '<div class="empty">打不开这个 EPUB<br><span class="sub">' + esc(err.message) + '</span></div>';
+  }
+}
+
+async function ensureJSZip() {
+  if (window.JSZip) return;
+  await loadScript('vendor/jszip.min.js');
+}
+
+function htmlToText(html) {
+  let h = html.replace(/<script[\s\S]*?<\/script>/gi, '')
+              .replace(/<style[\s\S]*?<\/style>/gi, '')
+              .replace(/<head[\s\S]*?<\/head>/gi, '');
+  h = h.replace(/<(br|\/p|\/div|\/h[1-6]|\/li)\s*\/?>/gi, '\n');
+  h = h.replace(/<[^>]+>/g, '');
+  h = h.replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<')
+       .replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'");
+  h = h.replace(/[ \t]+/g, ' ').replace(/\n{3,}/g, '\n\n');
+  return h.trim();
+}
+
+function firstHeading(html) {
+  const m = /<h[1-3][^>]*>([\s\S]*?)<\/h[1-3]>/i.exec(html);
+  if (!m) return '';
+  return htmlToText(m[1]).replace(/\s+/g, ' ').slice(0, 40);
+}
+
+async function parseEpub(zip) {
+  const containerFile = zip.file('META-INF/container.xml');
+  if (!containerFile) throw new Error('不是标准 EPUB（缺 container.xml）');
+  const container = await containerFile.async('string');
+  const opfMatch = /full-path="([^"]+)"/.exec(container);
+  if (!opfMatch) throw new Error('找不到 package.opf');
+  const opfPath = opfMatch[1];
+  const opf = await zip.file(opfPath).async('string');
+  const baseDir = opfPath.includes('/') ? opfPath.slice(0, opfPath.lastIndexOf('/') + 1) : '';
+
+  const manifest = {};
+  const itemRe = /<item\b[^>]*>/gi;
+  let m;
+  while ((m = itemRe.exec(opf))) {
+    const tag = m[0];
+    const id = /id="([^"]+)"/.exec(tag);
+    const href = /href="([^"]+)"/.exec(tag);
+    const type = /media-type="([^"]+)"/.exec(tag);
+    if (id && href) manifest[id[1]] = { href: href[1], type: type ? type[1] : '' };
+  }
+
+  const order = [];
+  const refRe = /<itemref\b[^>]*idref="([^"]+)"/gi;
+  while ((m = refRe.exec(opf))) {
+    const it = manifest[m[1]];
+    if (it && (!it.type || it.type.indexOf('html') >= 0)) order.push(it.href);
+  }
+
+  const chapters = [];
+  for (const href of order) {
+    const path = decodeURIComponent(baseDir + href.split('#')[0]);
+    const f = zip.file(path);
+    if (!f) continue;
+    const html = await f.async('string');
+    const text = htmlToText(html);
+    if (text.length < 60) continue;
+    chapters.push({ title: firstHeading(html) || ('第 ' + (chapters.length + 1) + ' 节'), text: text });
+  }
+  return chapters;
+}
+
+async function openPdfFile(f) {
   view.innerHTML = '<div class="empty">正在打开 PDF…</div>';
   try {
     await ensurePdfJs();
@@ -1012,13 +1122,15 @@ async function openPdfFile(ev) {
 }
 
 function renderReader() {
-  if (!RDR.pdf) {
-    view.innerHTML = '<div class="empty">选一个 PDF，直接在页面里读。<br>'
+  if (RDR.kind === 'epub' || RDR.kind === 'text') return renderTextBook();
+  if (!RDR.pdf && !RDR.book) {
+    view.innerHTML = '<div class="empty">选一本书，直接在页面里读。<br>'
       + '<span class="sub">选中任意文字 → 朗读 / 存卡 / 问 AI。文件不上传，全在本机解析。</span>'
-      + '<div class="row" style="margin-top:16px"><button class="btn primary" id="pickPdf">选择 PDF</button></div></div>'
-      + '<input type="file" id="pdfFile" accept="application/pdf" style="display:none">';
+      + '<div class="row" style="margin-top:16px"><button class="btn primary" id="pickPdf">选择文件</button></div>'
+      + '<div class="sub" style="margin-top:10px">支持 PDF · EPUB · TXT · Markdown</div></div>'
+      + '<input type="file" id="pdfFile" accept=".pdf,.epub,.txt,.md,application/pdf,application/epub+zip,text/plain" style="display:none">';
     document.getElementById('pickPdf').onclick = () => document.getElementById('pdfFile').click();
-    document.getElementById('pdfFile').onchange = openPdfFile;
+    document.getElementById('pdfFile').onchange = openBookFile;
     return;
   }
   view.innerHTML =
@@ -1032,8 +1144,34 @@ function renderReader() {
   document.getElementById('nextPage').onclick = () => gotoPage(RDR.page + 1);
   document.getElementById('zoomIn').onclick = () => { RDR.scale = Math.min(3, RDR.scale * 1.2); drawPage(); };
   document.getElementById('zoomOut').onclick = () => { RDR.scale = Math.max(0.5, RDR.scale / 1.2); drawPage(); };
-  document.getElementById('closePdf').onclick = () => { RDR.pdf = null; renderReader(); };
+  document.getElementById('closePdf').onclick = () => { RDR.pdf = null; RDR.kind = null; renderReader(); };
   drawPage();
+}
+
+function renderTextBook() {
+  const b = RDR.book;
+  const ch = b.chapters[RDR.ch];
+  view.innerHTML =
+    '<div class="meta"><span>' + esc(b.name) + '</span><span>' + (RDR.ch + 1) + ' / ' + b.chapters.length + '</span></div>'
+    + '<h2 style="margin:6px 2px 8px;color:var(--text);font-size:14px">' + esc(ch.title) + '</h2>'
+    + '<div class="bookText" id="bookText">'
+    + ch.text.split(/\n{2,}/).map((p) => '<p>' + esc(p.trim()) + '</p>').join('')
+    + '</div>'
+    + '<div class="pager"><button id="prevCh">◀</button><button id="nextCh">▶</button></div>'
+    + '<div class="row" style="margin-top:4px"><button class="btn ghost" id="closeBook">关闭这本书</button></div>';
+  document.getElementById('prevCh').onclick = () => gotoChapter(RDR.ch - 1);
+  document.getElementById('nextCh').onclick = () => gotoChapter(RDR.ch + 1);
+  document.getElementById('closeBook').onclick = () => {
+    RDR.book = null; RDR.kind = null; RDR.pdf = null; renderReader();
+  };
+}
+
+function gotoChapter(n) {
+  const b = RDR.book;
+  if (!b) return;
+  RDR.ch = Math.max(0, Math.min(b.chapters.length - 1, n));
+  renderTextBook();
+  view.scrollTop = 0;
 }
 
 function gotoPage(n) {
