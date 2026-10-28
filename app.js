@@ -157,6 +157,7 @@ function render() {
   });
   if (state.tab === 'review') return renderReview();
   if (state.tab === 'browse') return renderBrowse();
+  if (state.tab === 'quiz') return renderQuizTab();
   if (state.tab === 'chat') return renderChat();
   if (state.tab === 'settings') return renderSettings();
 }
@@ -185,7 +186,7 @@ function renderReview() {
     view.innerHTML = `${statsBar()}
       <div class="empty">今天这一课清空了 👍<br><span class="sub">换一门课，或让 AI 出几道新题</span></div>
       <div class="row" style="margin-top:16px">
-        <button class="btn primary" id="aiQuizBtn">✨ 让 AI 出 5 道题</button>
+        <button class="btn primary" id="aiQuizBtn">做 10 道测验题</button>
       </div>
       <div class="row" style="margin-top:8px">
         <button class="btn" id="againAll">再来一遍（全部重排）</button>
@@ -195,7 +196,7 @@ function renderReview() {
       saveJSON(LS.progress, progress);
       state.queue = dueQueue(); render();
     };
-    $('#aiQuizBtn').onclick = () => startAiQuiz();
+    $('#aiQuizBtn').onclick = () => { state.tab = 'quiz'; state.quiz = null; render(); };
     return;
   }
   if (!state.current) {
@@ -308,11 +309,11 @@ function renderBrowse() {
     return `<div class="it"><span>${esc(c.front)}</span><small>${tag}</small></div>`;
   }).join('');
   view.innerHTML = `<div class="row" style="margin:6px 0 4px">
-      <button class="btn primary" id="aiQuizBtn2">✨ 让 AI 出 5 道题</button>
+      <button class="btn primary" id="aiQuizBtn2">做测验</button>
     </div>
     <h2>${esc(course()?.title || '')} · ${allCards().length} 张</h2>
     <div class="list">${items || '<div class="empty">这门课还没有卡片</div>'}</div>`;
-  $('#aiQuizBtn2').onclick = () => startAiQuiz();
+  $('#aiQuizBtn2').onclick = () => { state.tab = 'quiz'; state.quiz = null; render(); };
 }
 
 function renderChat() {
@@ -504,16 +505,83 @@ async function sendChat() {
   await pushChat('user', text);
 }
 
-// ── AI 出题（选择 / 填空）──────────────────────────────
+// ── 测验：本地出题（不联网）+ AI 出题（可选）──────────
+function shuffle(a) {
+  const r = a.slice();
+  for (let i = r.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [r[i], r[j]] = [r[j], r[i]];
+  }
+  return r;
+}
+function escRe(s) { return String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
+
+function localQuiz(kind = 'mixed', n = 10) {
+  const cards = allCards().filter((c) => c.front && c.back);
+  if (cards.length < 4) return [];
+  const qs = [];
+  shuffle(cards).forEach((c, i) => {
+    if (qs.length >= n) return;
+    // 例句填空：句子来自卡片自带的 example；混合模式下约 4 成是填空
+    const wantCloze = kind === 'cloze' || (kind === 'mixed' && i % 5 < 2);
+    if (wantCloze && c.example && new RegExp(escRe(c.front), 'i').test(c.example)) {
+      qs.push({
+        type: 'cloze',
+        q: c.example.replace(new RegExp(escRe(c.front), 'gi'), '____'),
+        answer: c.front,
+        explain: `${c.front} — ${c.back}`,
+      });
+      return;
+    }
+    if (kind === 'cloze') return;
+    const toCn = i % 2 === 0;                       // 交替：看词选义 / 看义选词
+    const answer = toCn ? c.back : c.front;
+    const pool = shuffle(cards
+      .filter((x) => x.id !== c.id)
+      .map((x) => (toCn ? x.back : x.front))
+      .filter((v) => v && v !== answer));
+    const options = shuffle([answer, ...pool.slice(0, 3)]);
+    if (options.length < 3) return;
+    qs.push({
+      type: 'mcq',
+      q: toCn ? c.front : c.back,
+      options,
+      answer,
+      explain: c.example ? `${c.example}${c.exampleCN ? '\n' + c.exampleCN : ''}` : '',
+    });
+  });
+  return qs;
+}
+
+function startQuiz(qs) {
+  if (!qs.length) { toast('这门课卡片太少，出不了题'); return; }
+  state.quiz = { qs, idx: 0, right: 0, picked: null, revealed: false, typed: '' };
+  renderQuiz();
+}
+
+function renderQuizTab() {
+  if (state.quiz) return renderQuiz();
+  view.innerHTML = `<h2>${esc(course()?.title || '')} · ${allCards().length} 张</h2>
+    <div class="hint">题目由本机卡片自动生成，不联网、不花钱。填空用的是卡片里的例句。</div>
+    <div class="row" style="margin-top:12px"><button class="btn primary" id="qMix">混合 10 题</button></div>
+    <div class="row" style="margin-top:8px"><button class="btn" id="qMcq">只做选择题</button></div>
+    <div class="row" style="margin-top:8px"><button class="btn" id="qCloze">只做例句填空</button></div>
+    <h2>让 AI 出新的题</h2>
+    <div class="hint">AI 按这门课另编题，需要先在设置里填 API Key。</div>
+    <div class="row" style="margin-top:8px"><button class="btn" id="qAi">✨ AI 出 5 道新题</button></div>`;
+  $('#qMix').onclick = () => startQuiz(localQuiz('mixed'));
+  $('#qMcq').onclick = () => startQuiz(localQuiz('mcq'));
+  $('#qCloze').onclick = () => startQuiz(localQuiz('cloze'));
+  $('#qAi').onclick = () => startAiQuiz();
+}
+
 async function startAiQuiz() {
   if (!aiReady() || state.busy) return;
   const cards = allCards();
   if (cards.length < 4) { toast('这门课卡片太少，先加点内容'); return; }
   state.busy = true;
   view.innerHTML = '<div class="empty">AI 正在出题…<div class="spin" style="margin:12px auto"></div></div>';
-  const sample = cards.slice()
-    .sort(() => Math.random() - 0.5).slice(0, 15)
-    .map((c) => `- ${c.front} = ${c.back}`).join('\n');
+  const sample = shuffle(cards).slice(0, 15).map((c) => `- ${c.front} = ${c.back}`).join('\n');
   const prompt = `课程：${course().title}\n卡片：\n${sample}\n\n`
     + '出 5 道题，覆盖这些内容：3 道单选（4 个选项，只有 1 个正确），2 道填空（答案是词或短语）。\n'
     + '只返回 JSON，不要解释：{"questions":['
@@ -538,35 +606,41 @@ async function startAiQuiz() {
     const data = JSON.parse(j.choices[0].message.content);
     const qs = (data.questions || []).slice(0, 5);
     if (!qs.length) throw new Error('模型没给出题目');
-    state.aiQuiz = { qs, idx: 0, right: 0, picked: null, revealed: false };
-    state.tab = 'review';
-    renderAiQuiz();
+    state.quiz = { qs, idx: 0, right: 0, picked: null, revealed: false, typed: '' };
+    state.tab = 'quiz';
+    renderQuiz();
   } catch (err) {
     toast('出题失败：' + err.message);
-    state.tab = 'review'; render();
+    state.tab = 'quiz'; state.quiz = null; render();
   } finally {
     state.busy = false;
   }
 }
 
-function renderAiQuiz() {
-  const z = state.aiQuiz;
-  if (!z) { render(); return; }
+function renderQuiz() {
+  const z = state.quiz;
+  if (!z) { renderQuizTab(); return; }
   if (z.idx >= z.qs.length) {
+    const pct = Math.round((z.right / z.qs.length) * 100);
     view.innerHTML = `<div class="empty">做完啦 🎉<br>
-      <span class="sub">答对 ${z.right} / ${z.qs.length}</span></div>
+      <span class="sub">答对 ${z.right} / ${z.qs.length}（${pct}%）</span></div>
       <div class="row" style="margin-top:16px">
         <button class="btn primary" id="qAgain">再来一组</button>
       </div>
       <div class="row" style="margin-top:8px">
-        <button class="btn" id="qBack">回到复习</button>
+        <button class="btn" id="qBack">挑别的题型</button>
       </div>`;
-    $('#qAgain').onclick = () => { state.aiQuiz = null; startAiQuiz(); };
-    $('#qBack').onclick = () => { state.aiQuiz = null; state.queue = []; render(); };
+    $('#qAgain').onclick = () => startQuiz(localQuiz('mixed'));
+    $('#qBack').onclick = () => { state.quiz = null; render(); };
+    if (!z.done) {
+      z.done = true;
+      reviewLog.push({ id: 'quiz-' + Date.now(), r: pct >= 80 ? 'good' : 'again', ts: Date.now() });
+      saveJSON(LS.log, reviewLog.slice(-5000));
+    }
     return;
   }
   const q = z.qs[z.idx];
-  const head = `<div class="meta"><span>AI 出题 ${z.idx + 1} / ${z.qs.length}</span>
+  const head = `<div class="meta"><span>第 ${z.idx + 1} / ${z.qs.length} 题</span>
     <span>答对 ${z.right}</span></div>`;
   let body = `<div class="front" style="font-size:19px">${esc(q.q)}</div>`;
 
@@ -601,9 +675,7 @@ function renderAiQuiz() {
       z.picked = Number(b.dataset.i);
       z.revealed = true;
       if (q.options[z.picked] === q.answer) z.right++;
-      reviewLog.push({ id: 'ai-' + Date.now(), r: q.options[z.picked] === q.answer ? 'good' : 'again', ts: Date.now() });
-      saveJSON(LS.log, reviewLog.slice(-5000));
-      renderAiQuiz();
+      renderQuiz();
     };
   });
   const sub = $('#qSubmit');
@@ -614,11 +686,11 @@ function renderAiQuiz() {
       z.revealed = true;
       const norm = (s) => String(s).toLowerCase().replace(/[^a-z0-9一-龥 ]/g, '').trim();
       if (norm(v) === norm(q.answer)) z.right++;
-      renderAiQuiz();
+      renderQuiz();
     };
   }
   const next = $('#qNext');
-  if (next) next.onclick = () => { z.idx++; z.picked = null; z.revealed = false; z.typed = ''; renderAiQuiz(); };
+  if (next) next.onclick = () => { z.idx++; z.picked = null; z.revealed = false; z.typed = ''; renderQuiz(); };
 }
 
 // ── 工具 ──────────────────────────────────────────────
