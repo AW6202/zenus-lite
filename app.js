@@ -1,7 +1,7 @@
 // 学习机 Lite — 静态 PWA：内容来自 pack.json，进度存本地，AI 直连 OpenAI 兼容接口
 'use strict';
 
-const BUILD = '2026-10-28.8';
+const BUILD = '2026-10-28.9';
 
 const LS = {
   progress: 'zenus.progress.v1',
@@ -19,6 +19,9 @@ const DEFAULT_SETTINGS = {
   dailyNew: 10,
   ttsRate: 0.9,
   ctxMsgs: 12,
+  syncToken: '',
+  syncRepo: 'AW6202/zenus-state',
+  syncDevice: '',
   ttsVoice: '',
 };
 
@@ -139,6 +142,8 @@ function schedule(id, rating, word) {
   reviewLog.push({ id, r: rating, ts: now });
   if (reviewLog.length > 5000) reviewLog = reviewLog.slice(-5000);
   saveJSON(LS.log, reviewLog);
+
+  scheduleSync();
 
   // 复习结果联动已知词表：答错就退回「不认识」，答得稳就升级
   if (word) {
@@ -421,6 +426,18 @@ function renderSettings() {
     </div>
     <div class="row" style="margin-top:16px"><button class="btn primary" id="saveSettings">保存</button></div>
 
+    <h2>跨设备同步</h2>
+    <div class="hint">私有仓库 ${esc(settings.syncRepo)}；本机设备号 ${esc(deviceId())}。
+    每台设备只写自己的文件，打开时合并，写操作不会互相覆盖。</div>
+    <label class="f">GitHub Token（只给这个仓库 contents 读写）</label>
+    <input class="t" id="s-gh" type="password" value="${esc(settings.syncToken)}" placeholder="github_pat_...">
+    <label class="f">仓库</label>
+    <input class="t" id="s-repo" value="${esc(settings.syncRepo)}">
+    <div class="row" style="margin-top:10px">
+      <button class="btn primary" id="doSync">立即同步</button>
+      <button class="btn" id="saveSync">保存</button>
+    </div>
+
     <h2>已掌握词表</h2>
     <div class="hint">共 ${Object.keys(known).length} 条。复习稳（间隔≥21天且连续答对）会自动加入，答错自动移出；抓生词时会跳过这些。</div>
     <div class="row" style="margin-top:8px"><button class="btn" id="clearKnown">清空词表</button></div>
@@ -457,6 +474,21 @@ function renderSettings() {
     settings.ttsRate = Math.min(1.2, Math.max(0.5, Number($('#s-rate').value) || 0.9));
     speak('This is how it sounds. Tap any word to hear it again.');
   };
+  const ds = $('#doSync');
+  if (ds) ds.onclick = async () => {
+    settings.syncToken = $('#s-gh').value.trim();
+    settings.syncRepo = $('#s-repo').value.trim() || settings.syncRepo;
+    saveJSON(LS.settings, settings);
+    await syncNow();
+    renderSettings();
+  };
+  const ss = $('#saveSync');
+  if (ss) ss.onclick = () => {
+    settings.syncToken = $('#s-gh').value.trim();
+    settings.syncRepo = $('#s-repo').value.trim() || settings.syncRepo;
+    saveJSON(LS.settings, settings);
+    toast('已保存');
+  };
   const ck = $('#clearKnown');
   if (ck) ck.onclick = () => {
     if (!Object.keys(known).length) return toast('本来就是空的');
@@ -465,7 +497,8 @@ function renderSettings() {
   const cu = $('#checkUpdate');
   if (cu) cu.onclick = async () => {
     try {
-      if ('serviceWorker' in navigator) {
+      if (settings.syncToken) setTimeout(() => syncNow({ quiet: true }), 1500);
+  if ('serviceWorker' in navigator) {
         const reg = await navigator.serviceWorker.getRegistration();
         if (reg) await reg.update();
         const keys = await caches.keys();
@@ -810,6 +843,138 @@ function toast(msg) {
 }
 
 
+
+// ── 跨设备同步（GitHub 私有仓，按设备分文件）──────────
+// 每个设备只写 devices/<自己>.json，读取时合并 → 写操作永不冲突
+function b64encode(str) {
+  const bytes = new TextEncoder().encode(str);
+  let bin = '';
+  for (let i = 0; i < bytes.length; i += 0x8000) {
+    bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+  }
+  return btoa(bin);
+}
+function b64decode(b64) {
+  const bin = atob(String(b64).replace(/\s/g, ''));
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return new TextDecoder().decode(bytes);
+}
+
+function deviceId() {
+  if (!settings.syncDevice) {
+    settings.syncDevice = 'dev-' + Math.random().toString(36).slice(2, 8);
+    saveJSON(LS.settings, settings);
+  }
+  return settings.syncDevice;
+}
+
+function ghHeaders() {
+  return {
+    Authorization: 'Bearer ' + settings.syncToken,
+    Accept: 'application/vnd.github+json',
+    'X-GitHub-Api-Version': '2022-11-28',
+  };
+}
+
+async function ghGet(path) {
+  const r = await fetch('https://api.github.com/repos/' + settings.syncRepo + '/contents/' + path,
+    { headers: ghHeaders(), cache: 'no-store' });
+  if (r.status === 404) return null;
+  if (!r.ok) throw new Error('读取失败 HTTP ' + r.status);
+  return r.json();
+}
+
+async function ghPut(path, obj, sha) {
+  const body = { message: 'sync ' + new Date().toISOString(), content: b64encode(JSON.stringify(obj)) };
+  if (sha) body.sha = sha;
+  const r = await fetch('https://api.github.com/repos/' + settings.syncRepo + '/contents/' + path, {
+    method: 'PUT',
+    headers: { ...ghHeaders(), 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (!r.ok) throw new Error('写入失败 HTTP ' + r.status + ' ' + (await r.text()).slice(0, 120));
+  return r.json();
+}
+
+function localState() {
+  return { device: deviceId(), updatedAt: Date.now(), progress, log: reviewLog, known, userCards };
+}
+
+function mergeState(remote) {
+  let changed = 0;
+  // 进度：取「复习次数更多 / 到期更晚」
+  for (const [id, v] of Object.entries(remote.progress || {})) {
+    const cur = progress[id];
+    if (!cur || (v.reps || 0) > (cur.reps || 0) || (v.due || 0) > (cur.due || 0)) {
+      progress[id] = v; changed++;
+    }
+  }
+  // 复习流水：按 (id, ts) 求并集
+  const seen = new Set(reviewLog.map((x) => x.id + '@' + x.ts));
+  for (const e of remote.log || []) {
+    if (!seen.has(e.id + '@' + e.ts)) { reviewLog.push(e); seen.add(e.id + '@' + e.ts); changed++; }
+  }
+  reviewLog.sort((a, b) => a.ts - b.ts);
+  if (reviewLog.length > 5000) reviewLog = reviewLog.slice(-5000);
+  // 已掌握：并集，取更新的时间戳
+  for (const [k, v] of Object.entries(remote.known || {})) {
+    if (!known[k] || (v.ts || 0) > (known[k].ts || 0)) { known[k] = v; changed++; }
+  }
+  // 自己存的卡：按正面去重
+  const fronts = new Set(userCards.map((c) => String(c.front).toLowerCase()));
+  for (const c of remote.userCards || []) {
+    if (c && c.front && !fronts.has(String(c.front).toLowerCase())) {
+      userCards.unshift(c); fronts.add(String(c.front).toLowerCase()); changed++;
+    }
+  }
+  if (changed) {
+    saveJSON(LS.progress, progress);
+    saveJSON(LS.log, reviewLog);
+    saveJSON(LS.known, known);
+    saveJSON(LS.userCards, userCards);
+    renderHeader();
+  }
+  return changed;
+}
+
+async function syncNow(opts) {
+  const quiet = opts && opts.quiet;
+  if (!settings.syncToken) {
+    if (!quiet) toast('先在设置里填 GitHub token');
+    return null;
+  }
+  try {
+    if (!quiet) toast('同步中…');
+    // 1) 拉所有设备的文件并合并
+    const dir = await ghGet('devices');
+    let pulled = 0, files = 0;
+    for (const f of (Array.isArray(dir) ? dir : [])) {
+      if (!f.name.endsWith('.json') || f.name === deviceId() + '.json') continue;
+      const one = await ghGet('devices/' + f.name);
+      if (!one || !one.content) continue;
+      pulled += mergeState(JSON.parse(b64decode(one.content)));
+      files++;
+    }
+    // 2) 推自己的文件
+    const own = await ghGet('devices/' + deviceId() + '.json');
+    await ghPut('devices/' + deviceId() + '.json', localState(), own && own.sha);
+    if (!quiet) toast('同步完成：合并 ' + files + ' 台设备，更新 ' + pulled + ' 条');
+    return pulled;
+  } catch (err) {
+    if (!quiet) toast('同步失败：' + err.message);
+    return null;
+  }
+}
+
+let syncTimer = null;
+function scheduleSync() {
+  if (!settings.syncToken) return;
+  clearTimeout(syncTimer);
+  syncTimer = setTimeout(() => syncNow({ quiet: true }), 60000);
+}
+
+
 // ── 阅读器（pdf.js，本地解析，文件不上传）────────────
 const RDR = { pdf: null, page: 1, total: 0, name: '', scale: 1, rendering: false };
 
@@ -1021,6 +1186,7 @@ document.querySelectorAll('.tabbar button').forEach((b) => {
   } catch (err) {
     view.innerHTML = `<div class="empty">内容包加载失败<br><span class="sub">${esc(err.message)}</span></div>`;
   }
+  if (settings.syncToken) setTimeout(() => syncNow({ quiet: true }), 1500);
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('sw.js').catch(() => {});
   }
