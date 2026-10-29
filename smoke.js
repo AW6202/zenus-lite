@@ -127,7 +127,34 @@ ${filler}
   dzip.file('word/media/pic.png', png);
   fs.writeFileSync(path.join(TMP, 'smoke.docx'), await dzip.generateAsync({ type: 'nodebuffer' }));
 
+  fs.writeFileSync(path.join(TMP, 'smoke-nofont.pdf'), makeNoFontPdf());
   if (pdfPath) fs.copyFileSync(pdfPath, path.join(TMP, 'smoke.pdf'));
+}
+
+// 手搓最小 PDF：Type0 + CIDFontType2 + UniGB-UCS2-H，且不带 /FontFile（= 中文必然画不出来）
+function makeNoFontPdf() {
+  const NL = String.fromCharCode(10);
+  const content = 'BT /F1 14 Tf 20 150 Td <4E2D6587> Tj ET';   // 「中文」的 UCS-2 码
+  const objs = [
+    '<< /Type /Catalog /Pages 2 0 R >>',
+    '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 200] /Resources << /Font << /F1 5 0 R >> >> /Contents 4 0 R >>',
+    '<< /Length ' + content.length + ' >>' + NL + 'stream' + NL + content + NL + 'endstream',
+    '<< /Type /Font /Subtype /Type0 /BaseFont /SimSun /Encoding /UniGB-UCS2-H /DescendantFonts [6 0 R] >>',
+    '<< /Type /Font /Subtype /CIDFontType2 /BaseFont /SimSun /CIDSystemInfo << /Registry (Adobe) /Ordering (GB1) /Supplement 4 >> /DW 1000 >>',
+  ];
+  let out = '%PDF-1.7' + NL;
+  const offsets = [];
+  objs.forEach((body, i) => {
+    offsets.push(out.length);
+    out += (i + 1) + ' 0 obj' + NL + body + NL + 'endobj' + NL;
+  });
+  const xref = out.length;
+  out += 'xref' + NL + '0 ' + (objs.length + 1) + NL + '0000000000 65535 f' + NL;
+  for (const off of offsets) out += String(off).padStart(10, '0') + ' 00000 n' + NL;
+  out += 'trailer' + NL + '<< /Size ' + (objs.length + 1) + ' /Root 1 0 R >>' + NL;
+  out += 'startxref' + NL + xref + NL + '%%EOF' + NL;
+  return Buffer.from(out, 'latin1');
 }
 
 // Node 只能解 GBK、不能编 GBK：把解码器反过来用，造一张「字 → 字节」表
@@ -341,6 +368,27 @@ class CDP {
       docx.table === 1 && docx.layoutFlattened, docx);
     check('DOCX 自动编号加符号，自带编号不重复加', docx.bullet && docx.noDoubleNum, docx);
     check('DOCX 粗体与图片', docx.strong === 1 && docx.img === 1 && docx.imgLoaded > 0, docx);
+
+    // F2. 缺字体 PDF：必须给出提示和兜底入口
+    const nofont = await probe('缺字体 PDF', `
+      const b = await (await fetch('${base}smoke-nofont.pdf')).blob();
+      await openPdfFile(new File([b], 'nofont.pdf'));
+      await new Promise(r => setTimeout(r, 2000));
+      return { risk: RDR.fontRisk, warn: !!document.getElementById('pdfFontWarn'),
+               sys: !!document.getElementById('openSys'), spans: document.querySelectorAll('#textLayer span').length };
+    `);
+    check('缺字体的 PDF 被识别并给出「用系统阅读器打开」',
+      nofont.risk === true && nofont.warn === true && nofont.sys === true, nofont);
+
+    // F3. 脚本全局丢失时能自愈（缓存里存过坏响应的场景）
+    const heal = await probe('依赖自愈', `
+      await ensureJSZip();
+      const loaded = !!window.JSZip;
+      delete window.JSZip;
+      await ensureJSZip();
+      return { loaded, healed: !!window.JSZip };
+    `);
+    check('脚本全局丢了能自己重新取到（不再 JSZip is not defined）', heal.loaded && heal.healed, heal);
 
     // G. PDF 的 CMap / 标准字体资源要在线上存在（缺了中文 CID 字体整块空白）
     const cmap = await probe('PDF 字体资源', `

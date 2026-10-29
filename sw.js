@@ -1,7 +1,7 @@
 // Service Worker
 // 策略：**页面与代码网络优先**，断网才回落到缓存。
 // 之前是"缓存优先"，导致每次发版手机上都要手动清缓存 —— 2026-10-28 改。
-const CACHE = 'zenus-shell-v15';
+const CACHE = 'zenus-shell-v16';
 const SHELL = [
   './',
   './index.html',
@@ -53,14 +53,21 @@ self.addEventListener('fetch', (e) => {
     return;
   }
 
-  // 第三方库（pdf.js 等，1.4MB）：缓存优先，避免每次进阅读器都重下
+  // 第三方库（pdf.js / jszip / cmaps）：缓存优先，避免每次进阅读器都重下。
+  // ⚠️ 只缓存「成功」响应：历史上这里不看 res.ok，一次抖动/404 就会被永久缓存，
+  // 之后永远 "JSZip is not defined"（2026-10-29 用户手机上的报错就是这个）。
   if (url.pathname.includes('/vendor/')) {
     e.respondWith(
-      caches.match(req).then((hit) => hit || fetch(req).then((res) => {
-        const copy = res.clone();
-        caches.open(CACHE).then((c) => c.put(req, copy));
-        return res;
-      }))
+      caches.match(req).then((hit) => {
+        if (hit && hit.ok) return hit;
+        return fetch(req).then((res) => {
+          if (res && res.ok) {
+            const copy = res.clone();
+            caches.open(CACHE).then((c) => c.put(req, copy));
+          }
+          return res;
+        });
+      })
     );
     return;
   }

@@ -60,6 +60,21 @@ body 顶层只有 3 个表格 + 2 个段落，1100+ 段落全在表格里（表�
 现在 `getDocument` 带 `cMapUrl: 'vendor/cmaps/'`、`cMapPacked: true`、`standardFontDataUrl: 'vendor/standard_fonts/'`（共 2.2MB，SW 按需缓存）。
 另加一道兜底：`document.fonts` 还在 loading 时，字体就绪后补画一次当前页（手机上子集字体晚到会在画布上留空白）。
 
+## D-011 缺字体 PDF：识别 + 交回系统阅读器
+**2026-10-29 定。** 用户的全电发票（`26449223693000109344-电子发票.pdf`）中文整块空白，**放大也不出现**。
+实测这份文件：SimSun/KaiTi/SimHei/DengXian **全部未嵌入**（`/FontFile` 0 个）、编码 `UniGB-UCS2-H`、**连 ToUnicode 都没有**
+→ pdf.js 既没有字形可画，`getTextContent()` 也拿不到任何中文（41 个文本项里 CJK 为 0）。补 CMap 救不了：CMap 只解决编码映射，不提供字形。
+**所以这类文件在纯前端就是无解**，只能换渲染器。现在：打开时做结构检测（无 `/FontFile` + 中文 CMap/CID 编码 → 标记风险），
+顶部提示「这份 PDF 没嵌入字体」+ 按钮**「用系统阅读器打开」**（blob 交给 Edge/系统 pdfium，它用系统字体 fallback，能显示但取不了词）。
+渲染后若其实取到了中文 → 自动撤销提示（防结构检测误报）。
+**推翻条件**：真做 OCR（扫描版 PDF 一起解决）时，可以把「画不出来的字」并到同一条路上。
+
+## D-012 第三方库加载：验全局 + 自愈；SW 不缓存坏响应
+**2026-10-29 定（用户报 "JSZip is not defined"）。**
+两处叠加：① `loadScript` 一旦 DOM 里有同名 script 就立刻 resolve（并发/第二次打开时全局还没挂上）；
+② SW 的 vendor 缓存分支**不检查 `res.ok`** → 一次抖动/404 的响应被永久缓存，之后每次 onload 触发但 `window.JSZip` 永远是 undefined。
+现在：脚本加载按 URL 去重共用同一个 promise；加载后**必须验全局**，没挂上用 `?v=BUILD` 再取一次；SW 只缓存 ok 响应。
+
 ## 待办
 1. ~~**阅读器**：PDF.js（含文字层）+ 选中取词；EPUB 用 epub.js 或只抽文本~~ → 已按 D-007 定案
 2. **喂资料 → 抓词**：粘贴文本 / TXT / PDF / EPUB → 判类型 → 抓词 → 过已掌握表 → 勾选入库

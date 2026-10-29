@@ -1,7 +1,7 @@
 // 学习机 Lite — 静态 PWA：内容来自 pack.json，进度存本地，AI 直连 OpenAI 兼容接口
 'use strict';
 
-const BUILD = '2026-10-29.2';
+const BUILD = '2026-10-29.3';
 
 const LS = {
   progress: 'zenus.progress.v1',
@@ -981,18 +981,35 @@ const RDR = {
   kind: null, book: null, ch: 0, urls: [], assets: {},
 };
 
+const scriptOnce = {};
 function loadScript(src) {
-  return new Promise((res, rej) => {
-    if (document.querySelector('script[src="' + src + '"]')) return res();
+  if (scriptOnce[src]) return scriptOnce[src];           // 并发/重复调用共用一次加载
+  scriptOnce[src] = new Promise((res, rej) => {
     const el = document.createElement('script');
-    el.src = src; el.onload = res; el.onerror = () => rej(new Error('加载失败 ' + src));
+    el.src = src;
+    el.async = true;
+    el.onload = () => res();
+    el.onerror = () => { delete scriptOnce[src]; el.remove(); rej(new Error('加载失败 ' + src)); };
     document.head.appendChild(el);
-  });
+  }).catch((e) => { delete scriptOnce[src]; throw e; });
+  return scriptOnce[src];
+}
+
+// 关键：脚本「加载完了」不等于「全局变量挂上了」（缓存里存过坏响应时，
+// onload 照样触发，但 window.JSZip 是 undefined —— 2026-10-29 用户手机上就报这个）。
+// 所以加载后必须验全局，失败就用带版本号的 URL 再取一次（绕开坏缓存）。
+async function ensureLib(url, globalName) {
+  if (window[globalName]) return window[globalName];
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const src = attempt === 0 ? url : url + '?v=' + encodeURIComponent(BUILD);
+    try { await loadScript(src); } catch (err) { if (attempt === 1) throw new Error('取不到 ' + url + '（' + err.message + '）'); }
+    if (window[globalName]) return window[globalName];
+  }
+  throw new Error(globalName + ' 没加载成功，请再点一次「选择文件」');
 }
 
 async function ensurePdfJs() {
-  if (window.pdfjsLib) return;
-  await loadScript('vendor/pdf.min.js');
+  await ensureLib('vendor/pdf.min.js', 'pdfjsLib');
   window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'vendor/pdf.worker.min.js';
 }
 
@@ -1176,11 +1193,13 @@ function resetBook() {
   RDR.book = null;
   RDR.kind = null;
   RDR.fontFix = false;
+  if (RDR.srcUrl) { try { URL.revokeObjectURL(RDR.srcUrl); } catch { /* 已释放 */ } }
+  RDR.srcUrl = null;
+  RDR.fontRisk = false;
 }
 
 async function ensureJSZip() {
-  if (window.JSZip) return;
-  await loadScript('vendor/jszip.min.js');
+  await ensureLib('vendor/jszip.min.js', 'JSZip');
 }
 
 function htmlToText(html) {
@@ -1537,12 +1556,26 @@ function splitBySize(ch, limit) {
   });
 }
 
+// 「字体没嵌入 + 中文 CID 编码」这两条凑齐时，浏览器没有字形可画 → 整块中文空白
+// （2026-10-29 用户的全电发票：SimSun/KaiTi 全未嵌入、UniGB-UCS2-H、连 ToUnicode 都没有）
+function pdfFontRisk(buf) {
+  try {
+    const s = new TextDecoder('latin1').decode(new Uint8Array(buf));
+    if (/\/FontFile[23]?/.test(s)) return false;                 // 有嵌入字体 → 能画
+    const cjk = /UniGB|UniCNS|UniJIS|UniKS|GBK-EUC|B5pc|KSCms-UHC/.test(s);
+    const type0 = /\/Subtype\s*\/Type0/.test(s) || /CIDFontType2/.test(s);
+    return cjk && type0;
+  } catch { return false; }
+}
+
 async function openPdfFile(f) {
   view.innerHTML = '<div class="empty">正在打开 PDF…</div>';
   try {
     await ensurePdfJs();
     resetBook();
     const buf = await f.arrayBuffer();
+    RDR.fontRisk = pdfFontRisk(buf);
+    RDR.srcUrl = URL.createObjectURL(new Blob([buf], { type: 'application/pdf' }));
     // cMaps + 标准字体必须给：中文/日文 PDF 常用 CID 字体（GBK-EUC-H / Identity-H），
     // 没有 cMaps 时这类字体整块渲染成空白——2026-10-29 用户报「发票有的字不显示」。
     RDR.pdf = await pdfjsLib.getDocument({
@@ -1576,6 +1609,10 @@ function renderReader() {
   }
   view.innerHTML =
     '<div class="meta"><span>' + esc(RDR.name) + '</span><span id="pgLabel">' + RDR.page + ' / ' + RDR.total + '</span></div>'
+    + (RDR.fontRisk ? '<div class="notice" id="pdfFontWarn">这份 PDF 没嵌入字体，浏览器画不出其中一些字。'
+      + '可改用手机自带的阅读器打开（能正常显示，但不能取词）。'
+      + '<div class="row" style="margin-top:8px"><button class="btn ghost" id="openSys" style="padding:7px 10px;font-size:13px">用系统阅读器打开</button>'
+      + '<button class="btn ghost" id="dismissWarn" style="padding:7px 10px;font-size:13px">知道了</button></div></div>' : '')
     + '<div id="readerWrap"><canvas id="pdfCanvas"></canvas><div class="textLayer" id="textLayer"></div></div>'
     + '<div class="pager">'
     + '<button id="prevPage">◀</button><button id="zoomOut">－</button><button id="zoomIn">＋</button><button id="nextPage">▶</button>'
@@ -1585,7 +1622,16 @@ function renderReader() {
   document.getElementById('nextPage').onclick = () => gotoPage(RDR.page + 1);
   document.getElementById('zoomIn').onclick = () => { RDR.scale = Math.min(3, RDR.scale * 1.2); drawPage(); };
   document.getElementById('zoomOut').onclick = () => { RDR.scale = Math.max(0.5, RDR.scale / 1.2); drawPage(); };
-  document.getElementById('closePdf').onclick = () => { RDR.pdf = null; RDR.kind = null; renderReader(); };
+  document.getElementById('closePdf').onclick = () => { resetBook(); renderReader(); };
+  const sysBtn = document.getElementById('openSys');
+  if (sysBtn) sysBtn.onclick = () => {
+    if (!RDR.srcUrl) return;
+    const a = document.createElement('a');
+    a.href = RDR.srcUrl; a.target = '_blank'; a.rel = 'noopener';
+    document.body.appendChild(a); a.click(); a.remove();
+  };
+  const dis = document.getElementById('dismissWarn');
+  if (dis) dis.onclick = () => { const w = document.getElementById('pdfFontWarn'); if (w) w.remove(); };
   drawPage();
 }
 
@@ -1669,6 +1715,13 @@ async function drawPage() {
     }).promise;
     const lb = document.getElementById('pgLabel');
     if (lb) lb.textContent = RDR.page + ' / ' + RDR.total;
+
+    // 结构检测可能误报（字体藏在压缩对象流里）：真取到中文了就把提示撤掉
+    if (RDR.fontRisk && tc.items.some((it) => /[㐀-鿿]/.test(it.str))) {
+      RDR.fontRisk = false;
+      const w = document.getElementById('pdfFontWarn');
+      if (w) w.remove();
+    }
 
     // 字体是异步注册的：手机上个别字（常用另一套子集字体）会晚到 → 画布上留下空白。
     // 等 document.fonts 全部就绪后补画一次当前页；每份文档只补一次。
