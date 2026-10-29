@@ -453,6 +453,28 @@ class CDP {
       `);
       check('PDF 仍能渲染（画布 + 文字层）', pdf.pages > 0 && pdf.canvas > 0 && pdf.spans > 0, pdf);
 
+      // A：翻页手势与浮动工具条
+      const flip = await probe('翻页手势', `
+        const el = document.getElementById('view');
+        const tap = (x) => {
+          el.dispatchEvent(new PointerEvent('pointerdown', { clientX: x, clientY: 400, pointerType: 'touch', bubbles: true }));
+          el.dispatchEvent(new PointerEvent('pointerup', { clientX: x, clientY: 400, pointerType: 'touch', bubbles: true }));
+        };
+        const before = RDR.page;
+        tap(370);
+        await new Promise(r => setTimeout(r, 900));
+        const afterRight = RDR.page;
+        tap(20);
+        await new Promise(r => setTimeout(r, 900));
+        const afterLeft = RDR.page;
+        tap(195);
+        await new Promise(r => setTimeout(r, 200));
+        const tools = document.getElementById('pdfTools');
+        return { before, afterRight, afterLeft, toolsShown: !!tools && tools.classList.contains('show') };
+      `);
+      check('左/右边缘点击翻页 + 中间点击出工具条',
+        flip.afterRight === flip.before + 1 && flip.afterLeft === flip.before && flip.toolsShown === true, flip);
+
       // 「关闭这份 PDF」必须真的回到选文件页（2026-10-29 回归：按钮点了没反应）
       const closed = await probe('关闭 PDF', `
         const btn = document.getElementById('closePdf');

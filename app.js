@@ -1,7 +1,7 @@
 // 学习机 Lite — 静态 PWA：内容来自 pack.json，进度存本地，AI 直连 OpenAI 兼容接口
 'use strict';
 
-const BUILD = '2026-10-29.6';
+const BUILD = '2026-10-29.7';
 
 const LS = {
   progress: 'zenus.progress.v1',
@@ -981,7 +981,7 @@ function scheduleSync() {
 // ── 阅读器（pdf.js，本地解析，文件不上传）────────────
 const RDR = {
   pdf: null, page: 1, total: 0, name: '', scale: 1, rendering: false,
-  kind: null, book: null, ch: 0, urls: [], assets: {},
+  kind: null, book: null, ch: 0, urls: [], assets: {}, toolsVisible: false,
 };
 
 const scriptOnce = {};
@@ -1960,6 +1960,61 @@ async function openPdfFile(f) {
   }
 }
 
+// ── A：翻页手势（左右点击 / 横滑翻页，中间点击呼出工具条）────────
+// 只在「没选中文字、没点在按钮上」时生效，免得和取词、点按钮打架。
+const FLIP_HINT = 'zenus.tip.flip';
+
+function bindFlipGestures(container, handlers) {
+  RDR.handle = handlers;                     // 每次渲染只换处理函数，监听器永远只绑一次
+  if (container.dataset.flipBound) return;   // 否则一次点击会把整章/整页翻好几次
+  container.dataset.flipBound = '1';
+  let sx = 0, sy = 0, st = 0, down = false;
+  const isInteractive = (target) => !!(target && target.closest
+    && target.closest('button, a, input, select, textarea, #selTools'));
+
+  container.addEventListener('pointerdown', (e) => {
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    sx = e.clientX; sy = e.clientY; st = Date.now(); down = true;
+  }, { passive: true });
+
+  container.addEventListener('pointerup', (e) => {
+    if (!down) return;
+    down = false;
+    const h = RDR.handle;                    // 用当前这次渲染的处理函数
+    if (!h) return;
+    if (Date.now() - st > 700) return;                       // 长按（选字）不翻页
+    if (isInteractive(e.target)) return;
+    const sel = window.getSelection();
+    if (sel && String(sel).trim()) return;                    // 有选区 → 这是取词，不翻页
+    const dx = e.clientX - sx;
+    const dy = e.clientY - sy;
+
+    if (Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy) * 1.4) {   // 横滑
+      if (dx < 0) h.next(); else h.prev();
+      return;
+    }
+    if (Math.abs(dx) < 12 && Math.abs(dy) < 12) {                   // 轻点
+      const x = e.clientX / window.innerWidth;
+      if (x < 0.28) h.prev();
+      else if (x > 0.72) h.next();
+      else h.middle();
+    }
+  }, { passive: true });
+
+  container.addEventListener('pointercancel', () => { down = false; }, { passive: true });
+}
+
+function flipHintOnce() {
+  if (loadJSON(FLIP_HINT, false)) return;
+  saveJSON(FLIP_HINT, true);
+  toast('点屏幕左右两边翻页，点中间显示工具条');
+}
+
+function toggleTools() {
+  RDR.toolsVisible = !RDR.toolsVisible;
+  document.querySelectorAll('.floating').forEach((el) => el.classList.toggle('show', RDR.toolsVisible));
+}
+
 // 文字视图：字体缺失时把内容流里解出来的文字排成可读的一段段
 function renderPdfText() {
   const lines = RDR.textLines || [];
@@ -1978,6 +2033,11 @@ function renderPdfText() {
   const sys = document.getElementById('openSys');
   if (sys) sys.onclick = () => openWithSystemReader();
   view.scrollTop = 0;
+  bindFlipGestures(view, {
+    prev: () => { const r = RDR.pdf; if (r && RDR.page > 1) gotoPage(RDR.page - 1); },
+    next: () => { if (RDR.pdf) gotoPage(RDR.page + 1); },
+    middle: toggleTools,
+  });
 }
 
 function openWithSystemReader() {
@@ -2012,12 +2072,11 @@ function renderReader() {
       + '<div class="row" style="margin-top:8px"><button class="btn ghost" id="openSys" style="padding:7px 10px;font-size:13px">用系统阅读器打开</button>'
       + '<button class="btn ghost" id="dismissWarn" style="padding:7px 10px;font-size:13px">知道了</button></div></div>' : '')
     + '<div id="readerWrap"><canvas id="pdfCanvas"></canvas><div class="textLayer" id="textLayer"></div></div>'
-    + '<div class="pager">'
+    + '<div class="floating pager' + (RDR.toolsVisible ? ' show' : '') + '" id="pdfTools">'
     + '<button id="prevPage">◀</button><button id="zoomOut">－</button><button id="zoomIn">＋</button><button id="nextPage">▶</button>'
-    + '</div>'
-    + '<div class="row" style="margin-top:4px">'
-    + (RDR.textLines && RDR.textLines.length ? '<button class="btn ghost" id="showText">文字视图</button>' : '')
-    + '<button class="btn ghost" id="closePdf">关闭这份 PDF</button></div>';
+    + '<button id="closePdf" class="t-close">关闭</button>'
+    + (RDR.textLines && RDR.textLines.length ? '<button id="showText" class="t-close">文字视图</button>' : '')
+    + '</div>';
   const st = document.getElementById('showText');
   if (st) st.onclick = () => { RDR.textMode = true; renderReader(); };
   document.getElementById('prevPage').onclick = () => gotoPage(RDR.page - 1);
@@ -2030,6 +2089,12 @@ function renderReader() {
   const dis = document.getElementById('dismissWarn');
   if (dis) dis.onclick = () => { const w = document.getElementById('pdfFontWarn'); if (w) w.remove(); };
   drawPage();
+  bindFlipGestures(view, {
+    prev: () => gotoPage(RDR.page - 1),
+    next: () => gotoPage(RDR.page + 1),
+    middle: toggleTools,
+  });
+  flipHintOnce();
 }
 
 // EPUB / MD 走「结构渲染」；TXT 走「段落 + 保留换行」
@@ -2050,14 +2115,21 @@ function renderTextBook() {
     '<div class="meta"><span>' + esc(b.name) + '</span><span>' + (RDR.ch + 1) + ' / ' + b.chapters.length + '</span></div>'
     + (ownHeading ? '' : '<h2 class="chTitle">' + esc(ch.title) + '</h2>')
     + '<div class="bookText' + (isHtml ? '' : ' plain') + '" id="bookText">' + html + '</div>'
-    + '<div class="pager"><button id="prevCh">◀</button><button id="nextCh">▶</button></div>'
-    + '<div class="row" style="margin-top:4px"><button class="btn ghost" id="closeBook">关闭这本书</button></div>';
+    + '<div class="floating pager' + (RDR.toolsVisible ? ' show' : '') + '" id="bookTools">'
+    + '<button id="prevCh">◀</button><button id="nextCh">▶</button>'
+    + '<button id="closeBook" class="t-close">关闭</button></div>';
   // 远程图挂了就把位置收起来，别留一个破图标
   view.querySelectorAll('#bookText img').forEach((img) => img.addEventListener('error', () => img.remove()));
   document.getElementById('prevCh').onclick = () => gotoChapter(RDR.ch - 1);
   document.getElementById('nextCh').onclick = () => gotoChapter(RDR.ch + 1);
   document.getElementById('closeBook').onclick = () => { saveReadPos(); resetBook(); renderReader(); };
-  view.scrollTop = 0;
+  if (!RDR.restoring) view.scrollTop = 0;
+  bindFlipGestures(view, {
+    prev: () => gotoChapter(RDR.ch - 1),
+    next: () => gotoChapter(RDR.ch + 1),
+    middle: toggleTools,
+  });
+  flipHintOnce();
 }
 
 function gotoChapter(n) {
