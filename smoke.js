@@ -867,6 +867,32 @@ class CDP {
       spk.count === 2 && spk.afterExample.length === 1 && spk.afterExample[0] === spk.example
       && spk.all.length === 2 && spk.all[1] === spk.front, spk);
 
+    // U. 「标记为已掌握」按钮要在翻面后看得见、点了生效
+    const known = await probe('已掌握按钮', `
+      state.tab = 'review'; render();
+      const card = allCards()[0];
+      state.queue = [card]; state.current = card; state.revealed = true;
+      renderReview();
+      await new Promise(r => setTimeout(r, 200));
+      const tk = document.getElementById('toggleKnown');
+      if (!tk) return { found: false };
+      const rect = tk.getBoundingClientRect();
+      const inView = rect.top >= 0 && rect.bottom <= innerHeight;
+      const wasKnown = isKnown(card.front);
+      tk.click();
+      await new Promise(r => setTimeout(r, 200));
+      const nowKnown = isKnown(card.front);
+      const label = (document.getElementById('toggleKnown') || {}).textContent || '';
+      const btn2 = document.getElementById('toggleKnown');
+      if (btn2) btn2.click();      // 还原
+      await new Promise(r => setTimeout(r, 200));
+      return { found: true, inView, wasKnown, nowKnown,
+               labelChanged: label.indexOf('已在') >= 0, restored: isKnown(card.front) === wasKnown };
+    `);
+    check('翻面后「标记为已掌握」按钮可见且生效',
+      known.found === true && known.inView === true && known.nowKnown !== known.wasKnown
+      && known.labelChanged === true && known.restored === true, known);
+
     // H. 关书释放 blob URL
     const clean = await probe('关书释放', `
       const b = await (await fetch('${base}smoke.epub')).blob();

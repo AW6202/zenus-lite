@@ -1,7 +1,7 @@
 // 学习机 Lite — 静态 PWA：内容来自 pack.json，进度存本地，AI 直连 OpenAI 兼容接口
 'use strict';
 
-const BUILD = '2026-10-29.28';
+const BUILD = '2026-10-29.29';
 
 const LS = {
   progress: 'zenus.progress.v1',
@@ -328,11 +328,7 @@ function renderReview() {
     body += `<div class="row" style="width:100%;margin-top:4px">
       <button class="btn ghost" id="askAI">问 AI 讲讲这道</button>
     </div>
-    <div class="sub" style="margin-top:6px">
-      <a href="javascript:void 0" id="toggleKnown" style="color:var(--dim)">
-        ${isKnown(c.front) ? '✓ 已在「已掌握」里，点此移除' : '标记为已掌握（以后抓生词会跳过）'}
-      </a>
-    </div>`;
+`;
   }
 
   const rates = `<div class="rates">
@@ -340,6 +336,11 @@ function renderReview() {
     <button data-r="hard">模糊</button>
     <button data-r="good">记得</button>
     <button data-r="easy">简单</button>
+  </div>
+  <div class="row" style="margin-top:8px">
+    <button class="btn ghost" id="toggleKnown" style="font-size:13px;padding:9px">
+      ${isKnown(c.front) ? '✓ 已在「已掌握」里，点此移除' : '标记为已掌握（以后抓生词会跳过）'}
+    </button>
   </div>`;
 
   view.innerHTML = `${statsBar()}
