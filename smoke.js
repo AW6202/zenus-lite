@@ -825,6 +825,24 @@ class CDP {
     check('维基文库：取正文后导入成可读材料',
       srcs.wxKind === 'md' && srcs.chapters >= 1 && srcs.textLen > 100, srcs);
 
+    // S. 离线词典查词
+    const dic = await probe('离线词典', `
+      state.tab = 'reader'; render();
+      const t0 = performance.now();
+      const en = await loadDict('en');
+      const ms = Math.round(performance.now() - t0);
+      const hit = lookupIn(en, 'salmon')[0];
+      const miss = lookupIn(en, 'zzzzqqq').length;
+      renderLookup('salmon');
+      await new Promise(r => setTimeout(r, 700));
+      const box = document.getElementById('lkResult');
+      return { count: Object.keys(en).length, ms, phon: hit ? hit.entry[0] : '',
+               tr: hit ? String(hit.entry[1]).slice(0, 12) : '', miss,
+               ui: box ? box.querySelectorAll('.it').length : 0 };
+    `);
+    check('离线词典：加载并从 gzip 解出词条、UI 能查到',
+      dic.count > 100000 && dic.phon.length > 0 && dic.tr.length > 0 && dic.miss === 0 && dic.ui === 1, dic);
+
     // H. 关书释放 blob URL
     const clean = await probe('关书释放', `
       const b = await (await fetch('${base}smoke.epub')).blob();

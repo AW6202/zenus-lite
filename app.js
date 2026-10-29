@@ -1,7 +1,7 @@
 // 学习机 Lite — 静态 PWA：内容来自 pack.json，进度存本地，AI 直连 OpenAI 兼容接口
 'use strict';
 
-const BUILD = '2026-10-29.23';
+const BUILD = '2026-10-29.24';
 
 const LS = {
   progress: 'zenus.progress.v1',
@@ -2196,12 +2196,14 @@ function renderReader() {
     view.innerHTML = '<div class="empty">选一本书，直接在页面里读。<br>'
       + '<span class="sub">选中任意文字 → 朗读 / 存卡 / 问 AI。文件不上传，全在本机解析。</span>'
       + '<div class="row" style="margin-top:16px"><button class="btn primary" id="pickPdf">选择文件</button></div>'
-      + '<div class="row" style="margin-top:8px"><button class="btn" id="findBooks">找教材</button></div>'
+      + '<div class="row" style="margin-top:8px"><button class="btn" id="findBooks">找教材</button>'
+      + '<button class="btn" id="lookupBtn">查词</button></div>'
       + '<div class="sub" style="margin-top:10px">支持 PDF · EPUB · DOCX · TXT · Markdown · 图片</div></div>'
       + '<input type="file" id="pdfFile" accept=".pdf,.epub,.docx,.txt,.md,.png,.jpg,.jpeg,.webp,image/*,application/pdf,application/epub+zip,'
       + 'application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain" style="display:none">';
     document.getElementById('pickPdf').onclick = () => document.getElementById('pdfFile').click();
     document.getElementById('findBooks').onclick = () => renderFind();
+    document.getElementById('lookupBtn').onclick = () => renderLookup();
     document.getElementById('pdfFile').onchange = openBookFile;
     return;
   }
@@ -2450,6 +2452,116 @@ async function fetchFullText(url) {
     } catch { /* 换下一条通道 */ }
   }
   return null;
+}
+
+// ── 离线查词（ECDICT 英汉 / JMdict 日英，都是开放许可）──────────
+// 词典以 gzip 存在 vendor/dict/，首次查词才下载（之后走 SW 缓存），浏览器本地解压解析。
+
+const DICT = { en: null, ja: null, loading: {} };
+
+async function loadDict(lang) {
+  if (DICT[lang]) return DICT[lang];
+  if (DICT.loading[lang]) return DICT.loading[lang];
+  DICT.loading[lang] = (async () => {
+    const res = await fetch('vendor/dict/' + lang + '.json.gz');
+    if (!res.ok) throw new Error('词典下载失败 HTTP ' + res.status);
+    const buf = await res.arrayBuffer();
+    if (typeof DecompressionStream === 'undefined') throw new Error('这个浏览器不支持解压（需要较新的 Chrome/Edge）');
+    const stream = new Blob([buf]).stream().pipeThrough(new DecompressionStream('gzip'));
+    const text = await new Response(stream).text();
+    DICT[lang] = JSON.parse(text);
+    return DICT[lang];
+  })();
+  try { return await DICT.loading[lang]; } finally { DICT.loading[lang] = null; }
+}
+
+const hasKanaOrKanji = (s) => /[぀-ヿ一-鿿]/.test(s);
+
+function lookupIn(dict, q) {
+  const key = String(q || '').trim();
+  if (!key) return [];
+  const out = [];
+  if (dict[key]) out.push({ head: key, entry: dict[key], exact: true });
+  if (out.length) return out;
+  const lower = key.toLowerCase();
+  // 英文：大小写不敏感 + 词形还原的粗匹配（去掉 s/ed/ing）
+  const bases = [lower, lower.replace(/ies$/, 'y'), lower.replace(/es$/, ''), lower.replace(/s$/, ''),
+    lower.replace(/ed$/, ''), lower.replace(/ing$/, ''), lower.replace(/ing$/, 'e')];
+  for (const k of bases) {
+    const hit = Object.keys(dict).find((w) => w.toLowerCase() === k);
+    if (hit) { out.push({ head: hit, entry: dict[hit], exact: false }); break; }
+  }
+  return out;
+}
+
+function renderLookupResult(list, q, lang) {
+  if (!list.length) {
+    return '<div class="empty">没查到「' + esc(q) + '」。'
+      + (lang === 'ja' ? '日语词典是常用词（3.8 万条），生僻词可能没有。' : '英汉词典收 6 万常用词，生僻词可能没有。')
+      + '</div>';
+  }
+  return '<div class="list">' + list.map((r) => {
+    const isJa = lang === 'ja';
+    const phon = isJa ? (r.entry[0] || '') : (r.entry[0] || '');
+    const tr = isJa ? (r.entry[2] || '') : (r.entry[1] || '');
+    const pos = isJa ? (r.entry[1] || '') : (r.entry[2] || '');
+    const tag = isJa ? '' : (r.entry[3] || '');
+    return '<div class="it" style="align-items:flex-start;flex-direction:column;gap:6px">'
+      + '<div style="width:100%"><b style="font-size:17px">' + esc(r.head) + '</b>'
+      + (isJa && phon ? ' <span class="sub">' + esc(phon) + '</span>' : '')
+      + (!isJa && phon ? ' <span class="sub">/' + esc(phon) + '/</span>' : '')
+      + (pos ? ' <span class="tag">' + esc(pos) + '</span>' : '')
+      + (tag ? ' <span class="tag">' + esc(tag) + '</span>' : '')
+      + '</div>'
+      + '<div style="width:100%;font-size:14px;line-height:1.6">'
+      + (isJa ? '<span class="sub">英文释义：</span>' : '') + esc(tr) + '</div>'
+      + '<div class="row" style="width:100%;margin-top:4px">'
+      + '<button class="btn ghost" data-add="' + esc(r.head) + '" style="width:auto;padding:6px 10px;font-size:12px">＋生词</button>'
+      + '<button class="btn ghost" data-say="' + esc(r.head) + '" style="width:auto;padding:6px 10px;font-size:12px">🔊</button>'
+      + '<button class="btn ghost" data-ask="' + esc(r.head) + '" style="width:auto;padding:6px 10px;font-size:12px">问 AI</button>'
+      + '</div></div>';
+  }).join('') + '</div>';
+}
+
+async function doLookup() {
+  const q = (document.getElementById('lkQ') || {}).value || '';
+  const box = document.getElementById('lkResult');
+  const word = q.trim();
+  if (!word) return;
+  box.innerHTML = '<div class="empty"><span class="spin"></span> 正在查…</div>';
+  try {
+    const lang = hasKanaOrKanji(word) ? 'ja' : 'en';
+    const dict = await loadDict(lang);
+    const list = lookupIn(dict, word);
+    box.innerHTML = renderLookupResult(list, word, lang);
+    box.querySelectorAll('[data-add]').forEach((b) => {
+      b.onclick = () => { addCardFromSelection(b.dataset.add); b.textContent = '已加入'; b.disabled = true; };
+    });
+    box.querySelectorAll('[data-say]').forEach((b) => {
+      b.onclick = () => speak(b.dataset.say, lang === 'ja' ? 'ja-JP' : 'en-US');
+    });
+    box.querySelectorAll('[data-ask]').forEach((b) => {
+      b.onclick = () => askFromSelection(b.dataset.ask);
+    });
+  } catch (err) {
+    box.innerHTML = '<div class="empty">查词失败：' + esc(err.message) + '</div>';
+  }
+}
+
+function renderLookup(prefill) {
+  view.innerHTML =
+    '<div class="meta"><span>查词</span><span>离线词典</span></div>'
+    + '<div class="row" style="margin:6px 0"><input class="t" id="lkQ" placeholder="英文单词 或 日语假名/汉字" value="' + esc(prefill || '') + '">'
+    + '<button class="btn primary" id="lkGo" style="width:80px">查</button></div>'
+    + '<div class="hint">英汉 6 万词（ECDICT，MIT）· 日英 3.8 万条（JMdict，CC-BY-SA）。首次查词下载约 2MB，之后离线可用。</div>'
+    + '<div id="lkResult" style="margin-top:10px"></div>'
+    + '<div class="row" style="margin-top:14px"><button class="btn ghost" id="lkBack">← 回阅读</button></div>';
+  const go = () => doLookup();
+  document.getElementById('lkGo').onclick = go;
+  document.getElementById('lkQ').onkeydown = (e) => { if (e.key === 'Enter') go(); };
+  document.getElementById('lkBack').onclick = () => renderReader();
+  if (prefill) doLookup();
+  else document.getElementById('lkQ').focus();
 }
 
 // ── 开放书源：直接下载整本书（EPUB/TXT），而不是抓网页摘要 ──────
@@ -3796,7 +3908,8 @@ function askFromSelection(t) {
     if (!bar) {
       bar = document.createElement('div');
       bar.id = 'selTools';
-      bar.innerHTML = '<button data-a="say">🔊</button><button data-a="card">＋卡</button><button data-a="ask">问AI</button>';
+      bar.innerHTML = '<button data-a="say">🔊</button><button data-a="card">＋卡</button>'
+        + '<button data-a="dic">查词</button><button data-a="ask">问AI</button>';
       bar.addEventListener('click', (ev) => {
         const a = ev.target.dataset && ev.target.dataset.a;
         if (!a) return;
@@ -3805,6 +3918,7 @@ function askFromSelection(t) {
         const t = bar.dataset.text || '';
         if (a === 'say') speak(t);
         if (a === 'card') addCardFromSelection(t);
+        if (a === 'dic') { renderLookup(t.replace(/[^\w぀-ヿ一-鿿'’-]/g, '').slice(0, 30)); }
         if (a === 'ask') askFromSelection(t);
         remove();
       });

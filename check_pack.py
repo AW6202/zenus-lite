@@ -3,7 +3,9 @@
 用法: python check_pack.py [pack.json]
 退出码: 0 全过 / 1 有问题（问题清单打到 stdout）
 """
+import gzip
 import json
+import os
 import re
 import string
 import unicodedata
@@ -12,6 +14,7 @@ from fractions import Fraction
 
 FAIL = []
 WARN = []
+NOTE = []
 
 
 def fail(msg):
@@ -20,6 +23,10 @@ def fail(msg):
 
 def warn(msg):
     WARN.append(msg)
+
+
+def note(msg):
+    NOTE.append(msg)
 
 
 def norm(s):
@@ -153,6 +160,59 @@ def ipa_char_ok(ch):
     return cat.startswith("L") or cat.startswith("M")
 
 
+# ── 用离线词典校验音标（ECDICT）──────────────────────────
+DICT_EN = None
+
+
+def load_en_dict():
+    global DICT_EN
+    if DICT_EN is not None:
+        return DICT_EN
+    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "vendor", "dict", "en.json.gz")
+    if not os.path.exists(path):
+        DICT_EN = {}
+        return DICT_EN
+    DICT_EN = json.loads(gzip.open(path, "rb").read().decode("utf-8"))
+    return DICT_EN
+
+
+VOWELS = set("aeiouəɜɑɒɔæʌɛɪʊyɚɝɐœøɵɤ")
+
+
+def ipa_core(x):
+    """归一化：去掉长度/重音符号和英美记音体系差异，返回 (元音骨位, 辅音骨位)。"""
+    t = str(x or "").strip().strip("/[]")
+    t = (t.replace("ˈ", "").replace("ˌ", "").replace("'", "")
+         .replace("ː", "").replace(":", "").replace("ɡ", "g")
+         .replace("ә", "ə").replace(" ", "").replace("-", ""))
+    t = (t.replace("əʊ", "ou").replace("oʊ", "ou").replace("eɪ", "ei")
+         .replace("aɪ", "ai").replace("ɔɪ", "oi").replace("aʊ", "au")
+         .replace("ɪə", "ie").replace("eə", "ee").replace("ʊə", "ue")
+         .replace("ɪ", "i").replace("ʊ", "u"))
+    vowel_part = "".join(ch for ch in t if ch in VOWELS)
+    cons_part = "".join(ch for ch in t if ch not in VOWELS)
+    cons_part = cons_part.replace("j", "")     # /tjuː/ 与 /tuː/ 是记音体系差异，不算错
+    return vowel_part, cons_part
+
+
+def check_phonetic(card, cid, c_id):
+    hint = str(card.get("hint") or "")
+    word = str(card.get("front") or "").strip()
+    if not hint.startswith("/") or not word:
+        return
+    d = load_en_dict()
+    entry = d.get(word) or d.get(word.lower())
+    if not entry or not entry[0]:
+        note(f"{cid}: {c_id} 词典里没有「{word}」，音标无法核对（多词/复数形式常见）")
+        return
+    card_v, card_c = ipa_core(hint)
+    dict_v, dict_c = ipa_core(entry[0])
+    if card_c != dict_c:
+        note(f"{cid}: {c_id} 音标与词典记法不同 {word}: 卡片 {hint} vs 词典 /{entry[0]}/（ECDICT 记音不权威，仅供参考）")
+    elif card_v != dict_v:
+        note(f"{cid}: {c_id} 音标元音写法不同（多为英/美或记音体系差异）{word}: {hint} vs /{entry[0]}/")
+
+
 def main(path="pack.json"):
     pack = json.load(open(path, encoding="utf-8"))
     ids = set()
@@ -195,12 +255,15 @@ def main(path="pack.json"):
                 bad = [ch for ch in hint if not ipa_char_ok(ch)]
                 if bad:
                     warn(f"{cid}: {c_id} 音标里有非 IPA 字符 {bad} —— {hint}")
+            check_phonetic(card, cid, c_id)
             lvl = card.get("level")
             if lvl not in (None, "", "A1", "A2", "B1", "B2", "C1", "C2"):
                 fail(f"{cid}: {c_id} level 取值异常 {lvl}")
     print(f"共 {total} 张卡、{len(pack.get('courses', []))} 门课")
     for w in WARN:
         print("WARN ", w)
+    for n in NOTE:
+        print("NOTE ", n)
     for f in FAIL:
         print("FAIL ", f)
     print(f"\n结果: {'PASS' if not FAIL else 'FAIL'}（{len(FAIL)} 个错误 / {len(WARN)} 个提示）")
