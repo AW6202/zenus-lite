@@ -218,21 +218,21 @@ def check_level(card, cid, c_id, en_dict):
 
 
 def check_phonetic(card, cid, c_id):
+    """音标现在统一来自词典：标了 cmudict 就必须逐字一致，否则直接判错。"""
     hint = str(card.get("hint") or "")
     word = str(card.get("front") or "").strip()
-    if not hint.startswith("/") or not word:
+    src = str(card.get("phonSrc") or "")
+    if not hint or not word:
         return
     d = load_en_dict()
     entry = d.get(word) or d.get(word.lower())
-    if not entry or not entry[0]:
-        note(f"{cid}: {c_id} 词典里没有「{word}」，音标无法核对（多词/复数形式常见）")
+    if src == "原估值" or not entry or not entry[0]:
+        note(f"{cid}: {c_id} 《{word}》音标无词典出处（多词短语常见）{hint}")
         return
-    card_v, card_c = ipa_core(hint)
-    dict_v, dict_c = ipa_core(entry[0])
-    if card_c != dict_c:
-        note(f"{cid}: {c_id} 音标与词典不同 {word}: 卡片 {hint} vs 词典 /{entry[0]}/")
-    elif card_v != dict_v:
-        note(f"{cid}: {c_id} 音标元音不同（多为英式/美式差异）{word}: {hint} vs /{entry[0]}/")
+    want = "/" + entry[0] + "/"
+    if hint != want:
+        fail(f"{cid}: {c_id} 音标与词典不一致 {word}: 卡片 {hint} vs 词典 {want}")
+
 
 
 def main(path="pack.json"):

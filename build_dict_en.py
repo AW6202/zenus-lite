@@ -43,6 +43,10 @@ VOWEL = {'AA', 'AE', 'AH', 'AO', 'AW', 'AY', 'EH', 'ER', 'EY', 'IH', 'IY',
 
 def arp_to_ipa(phones):
     """ARPAbet → IPA。重音标记放在该音节的起首辅音前，非重读 AH 读 ə。"""
+    # 单音节词不标重音（/ˈiːl/、/ˈkræb/ 这种不合规范）
+    syllables = [x for x in phones if (x[:-1] if x[-1:] in ('0', '1', '2') else x) in VOWEL]
+    mono = len(syllables) <= 1
+
     syms = []
     stress_at = {}
     for idx, raw in enumerate(phones):
@@ -62,7 +66,7 @@ def arp_to_ipa(phones):
             elif p == 'ER':
                 sym += 'ː'
         syms.append(sym)
-        if stress in ('1', '2'):
+        if stress in ('1', '2') and not mono:
             stress_at[idx] = 'ˈ' if stress == '1' else 'ˌ'
 
     # 重音标记前移到「紧挨元音的那串辅音」之前（音节起首）

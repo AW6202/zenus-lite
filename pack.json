@@ -1,5 +1,5 @@
 {
- "version": "2026-10-29.4",
+ "version": "2026-10-29.5",
  "name": "学习机 · 内容包",
  "meta": {
   "note": "内容包由电脑端生成，手机端只读。改内容 = 改 content.py 后重跑 build_pack.py。",
@@ -30,7 +30,8 @@
      "examTags": [
       "cet6",
       "gre"
-     ]
+     ],
+     "phonSrc": "cmudict"
     },
     {
      "id": "en-fish-tuna",
@@ -43,7 +44,8 @@
      "levelSrc": "ecdict:frq(5993)",
      "examTags": [
       "cet6"
-     ]
+     ],
+     "phonSrc": "cmudict"
     },
     {
      "id": "en-fish-cod",
@@ -52,8 +54,9 @@
      "example": "Cod is often used in fish and chips.",
      "exampleCN": "炸鱼薯条常用鳕鱼。",
      "level": "C1",
-     "hint": "/kɒd/",
-     "levelSrc": "ecdict:frq(11780)"
+     "hint": "/kɑːd/",
+     "levelSrc": "ecdict:frq(11780)",
+     "phonSrc": "cmudict"
     },
     {
      "id": "en-fish-trout",
@@ -62,8 +65,9 @@
      "example": "He caught a trout in the river.",
      "exampleCN": "他在河里钓到一条鳟鱼。",
      "level": "B2",
-     "hint": "/traʊt/",
-     "levelSrc": "ecdict:frq(5046)"
+     "hint": "/tɹaʊt/",
+     "levelSrc": "ecdict:frq(5046)",
+     "phonSrc": "cmudict"
     },
     {
      "id": "en-fish-mackerel",
@@ -72,8 +76,9 @@
      "example": "Mackerel is cheap and full of oil.",
      "exampleCN": "鲭鱼便宜又油脂丰富。",
      "level": "C1",
-     "hint": "/ˈmækrəl/",
-     "levelSrc": "ecdict:frq(16460)"
+     "hint": "/ˈmækɝːəl/",
+     "levelSrc": "ecdict:frq(16460)",
+     "phonSrc": "cmudict"
     },
     {
      "id": "en-fish-sardine",
@@ -82,11 +87,12 @@
      "example": "She opened a can of sardines.",
      "exampleCN": "她开了一罐沙丁鱼。",
      "level": "C1",
-     "hint": "/sɑːˈdiːn/",
+     "hint": "/sɑːˈɹdiːn/",
      "levelSrc": "ecdict:frq(15458)",
      "examTags": [
       "cet6"
-     ]
+     ],
+     "phonSrc": "cmudict"
     },
     {
      "id": "en-fish-herring",
@@ -95,8 +101,9 @@
      "example": "Pickled herring is popular in northern Europe.",
      "exampleCN": "腌鲱鱼在北欧很受欢迎。",
      "level": "C1",
-     "hint": "/ˈherɪŋ/",
-     "levelSrc": "ecdict:frq(10304)"
+     "hint": "/ˈheɹɪŋ/",
+     "levelSrc": "ecdict:frq(10304)",
+     "phonSrc": "cmudict"
     },
     {
      "id": "en-fish-halibut",
@@ -105,8 +112,9 @@
      "example": "Halibut fillets are thick and meaty.",
      "exampleCN": "大比目鱼柳厚实有嚼劲。",
      "level": "C1",
-     "hint": "/ˈhælɪbət/",
-     "levelSrc": "ecdict:frq(17000)"
+     "hint": "/ˈhæləbət/",
+     "levelSrc": "ecdict:frq(17000)",
+     "phonSrc": "cmudict"
     },
     {
      "id": "en-fish-sea-bass",
@@ -116,7 +124,8 @@
      "exampleCN": "这条鲈鱼火候刚好。",
      "level": "B1",
      "hint": "/ˌsiː ˈbæs/",
-     "levelSrc": "原估值"
+     "levelSrc": "原估值",
+     "phonSrc": "原估值"
     },
     {
      "id": "en-fish-tilapia",
@@ -126,7 +135,8 @@
      "exampleCN": "很多国家养殖罗非鱼。",
      "level": "B2",
      "hint": "/tɪˈlɑːpiə/",
-     "levelSrc": "原估值"
+     "levelSrc": "原估值",
+     "phonSrc": "原估值"
     },
     {
      "id": "en-fish-eel",
@@ -136,7 +146,8 @@
      "exampleCN": "烤鳗鱼是日本夏天的菜。",
      "level": "C1",
      "hint": "/iːl/",
-     "levelSrc": "ecdict:frq(13160)"
+     "levelSrc": "ecdict:frq(13160)",
+     "phonSrc": "cmudict"
     },
     {
      "id": "en-fish-shrimp",
@@ -145,12 +156,13 @@
      "example": "Peel the shrimp before cooking.",
      "exampleCN": "下锅前把虾剥壳。",
      "level": "B2",
-     "hint": "/ʃrɪmp/",
+     "hint": "/ʃɹɪmp/",
      "levelSrc": "ecdict:frq(4144)",
      "examTags": [
       "cet6",
       "toefl"
-     ]
+     ],
+     "phonSrc": "cmudict"
     },
     {
      "id": "en-fish-prawn",
@@ -159,8 +171,9 @@
      "example": "Prawns are bigger than shrimp.",
      "exampleCN": "大虾比小虾大。",
      "level": "C1",
-     "hint": "/prɔːn/",
-     "levelSrc": "ecdict:frq(19467)"
+     "hint": "/pɹɔːn/",
+     "levelSrc": "ecdict:frq(19467)",
+     "phonSrc": "cmudict"
     },
     {
      "id": "en-fish-crab",
@@ -169,14 +182,15 @@
      "example": "We cracked open the crab legs.",
      "exampleCN": "我们掰开了蟹腿。",
      "level": "B2",
-     "hint": "/kræb/",
+     "hint": "/kɹæb/",
      "levelSrc": "ecdict:frq(5100)",
      "examTags": [
       "cet6",
       "ky",
       "toefl",
       "gre"
-     ]
+     ],
+     "phonSrc": "cmudict"
     },
     {
      "id": "en-fish-lobster",
@@ -185,11 +199,12 @@
      "example": "Lobster is expensive here.",
      "exampleCN": "这儿龙虾很贵。",
      "level": "B2",
-     "hint": "/ˈlɒbstə/",
+     "hint": "/ˈlɑːbstɝː/",
      "levelSrc": "ecdict:frq(6212)",
      "examTags": [
       "toefl"
-     ]
+     ],
+     "phonSrc": "cmudict"
     },
     {
      "id": "en-fish-oyster",
@@ -198,12 +213,13 @@
      "example": "He doesn't like raw oysters.",
      "exampleCN": "他不喜欢生蚝。",
      "level": "B2",
-     "hint": "/ˈɔɪstə/",
+     "hint": "/ˈɔɪstɝː/",
      "levelSrc": "ecdict:frq(6305)",
      "examTags": [
       "cet6",
       "toefl"
-     ]
+     ],
+     "phonSrc": "cmudict"
     },
     {
      "id": "en-fish-mussel",
@@ -212,8 +228,9 @@
      "example": "Mussels are cooked with white wine.",
      "exampleCN": "贻贝用白葡萄酒煮。",
      "level": "B2",
-     "hint": "/ˈmʌsl/",
-     "levelSrc": "原估值"
+     "hint": "/ˈmʌsəl/",
+     "levelSrc": "原估值",
+     "phonSrc": "cmudict"
     },
     {
      "id": "en-fish-scallop",
@@ -222,8 +239,9 @@
      "example": "Pan-fried scallops need high heat.",
      "exampleCN": "煎扇贝要用大火。",
      "level": "C1",
-     "hint": "/ˈskɒləp/",
-     "levelSrc": "ecdict:frq(12363)"
+     "hint": "/ˈskæləp/",
+     "levelSrc": "ecdict:frq(12363)",
+     "phonSrc": "cmudict"
     },
     {
      "id": "en-fish-squid",
@@ -236,7 +254,8 @@
      "levelSrc": "ecdict:frq(11582)",
      "examTags": [
       "gk"
-     ]
+     ],
+     "phonSrc": "cmudict"
     },
     {
      "id": "en-fish-octopus",
@@ -245,11 +264,12 @@
      "example": "The octopus was tender, not chewy.",
      "exampleCN": "这章鱼很嫩，不韧。",
      "level": "C1",
-     "hint": "/ˈɒktəpəs/",
+     "hint": "/ˈɑːktəˌpʊs/",
      "levelSrc": "ecdict:frq(15455)",
      "examTags": [
       "toefl"
-     ]
+     ],
+     "phonSrc": "cmudict"
     }
    ]
   },
@@ -267,8 +287,9 @@
      "example": "Steam the broccoli for three minutes.",
      "exampleCN": "西兰花蒸三分钟。",
      "level": "B2",
-     "hint": "/ˈbrɒkəli/",
-     "levelSrc": "ecdict:frq(7853)"
+     "hint": "/ˈbɹɑːkəliː/",
+     "levelSrc": "ecdict:frq(7853)",
+     "phonSrc": "cmudict"
     },
     {
      "id": "en-veg-cauliflower",
@@ -277,8 +298,9 @@
      "example": "Cut the cauliflower into small pieces.",
      "exampleCN": "把花菜切成小块。",
      "level": "C1",
-     "hint": "/ˈkɒliflaʊə/",
-     "levelSrc": "ecdict:frq(17817)"
+     "hint": "/ˈkɑːləˌflaʊɝː/",
+     "levelSrc": "ecdict:frq(17817)",
+     "phonSrc": "cmudict"
     },
     {
      "id": "en-veg-spinach",
@@ -287,11 +309,12 @@
      "example": "Spinach shrinks a lot when cooked.",
      "exampleCN": "菠菜一煮就缩很多。",
      "level": "B2",
-     "hint": "/ˈspɪnɪtʃ/",
+     "hint": "/ˈspɪnətʃ/",
      "levelSrc": "ecdict:frq(7185)",
      "examTags": [
       "toefl"
-     ]
+     ],
+     "phonSrc": "cmudict"
     },
     {
      "id": "en-veg-lettuce",
@@ -300,11 +323,12 @@
      "example": "Wash the lettuce under cold water.",
      "exampleCN": "用冷水洗生菜。",
      "level": "B2",
-     "hint": "/ˈletɪs/",
+     "hint": "/ˈletəs/",
      "levelSrc": "ecdict:frq(6589)",
      "examTags": [
       "toefl"
-     ]
+     ],
+     "phonSrc": "cmudict"
     },
     {
      "id": "en-veg-cabbage",
@@ -313,14 +337,15 @@
      "example": "Cabbage keeps well in the fridge.",
      "exampleCN": "卷心菜在冰箱里能放很久。",
      "level": "B2",
-     "hint": "/ˈkæbɪdʒ/",
+     "hint": "/ˈkæbədʒ/",
      "levelSrc": "ecdict:frq(6982)",
      "examTags": [
       "zk",
       "gk",
       "cet4",
       "ky"
-     ]
+     ],
+     "phonSrc": "cmudict"
     },
     {
      "id": "en-veg-kale",
@@ -330,7 +355,8 @@
      "exampleCN": "羽衣甘蓝比菠菜老。",
      "level": "C1",
      "hint": "/keɪl/",
-     "levelSrc": "ecdict:frq(16822)"
+     "levelSrc": "ecdict:frq(16822)",
+     "phonSrc": "cmudict"
     },
     {
      "id": "en-veg-celery",
@@ -339,8 +365,9 @@
      "example": "Chop the celery into thin strips.",
      "exampleCN": "把芹菜切成细条。",
      "level": "C1",
-     "hint": "/ˈseləri/",
-     "levelSrc": "ecdict:frq(8168)"
+     "hint": "/ˈselɝːiː/",
+     "levelSrc": "ecdict:frq(8168)",
+     "phonSrc": "cmudict"
     },
     {
      "id": "en-veg-cucumber",
@@ -349,7 +376,7 @@
      "example": "Slice the cucumber for the salad.",
      "exampleCN": "切点黄瓜做沙拉。",
      "level": "C1",
-     "hint": "/ˈkjuːkʌmbə/",
+     "hint": "/ˈkjuːkəmbɝː/",
      "levelSrc": "ecdict:frq(8294)",
      "examTags": [
       "cet4",
@@ -357,7 +384,8 @@
       "ky",
       "toefl",
       "ielts"
-     ]
+     ],
+     "phonSrc": "cmudict"
     },
     {
      "id": "en-veg-zucchini",
@@ -366,8 +394,9 @@
      "example": "Zucchini is called courgette in the UK.",
      "exampleCN": "西葫芦在英式英语里叫 courgette。",
      "level": "C1",
-     "hint": "/zuˈkiːni/",
-     "levelSrc": "ecdict:frq(10413)"
+     "hint": "/zuːˈkiːniː/",
+     "levelSrc": "ecdict:frq(10413)",
+     "phonSrc": "cmudict"
     },
     {
      "id": "en-veg-eggplant",
@@ -376,11 +405,12 @@
      "example": "Eggplant soaks up a lot of oil.",
      "exampleCN": "茄子很吸油。",
      "level": "C1",
-     "hint": "/ˈeɡplɑːnt/",
+     "hint": "/ˈeˌɡplænt/",
      "levelSrc": "ecdict:frq(10618)",
      "examTags": [
       "gk"
-     ]
+     ],
+     "phonSrc": "cmudict"
     },
     {
      "id": "en-veg-bell-pepper",
@@ -390,7 +420,8 @@
      "exampleCN": "把甜椒烤到皮起泡。",
      "level": "B1",
      "hint": "/bel ˈpepə/",
-     "levelSrc": "原估值"
+     "levelSrc": "原估值",
+     "phonSrc": "原估值"
     },
     {
      "id": "en-veg-chili-pepper",
@@ -400,7 +431,8 @@
      "exampleCN": "这个辣椒特别辣。",
      "level": "B1",
      "hint": "/ˈtʃɪli ˈpepə/",
-     "levelSrc": "原估值"
+     "levelSrc": "原估值",
+     "phonSrc": "原估值"
     },
     {
      "id": "en-veg-onion",
@@ -416,7 +448,8 @@
       "cet4",
       "cet6",
       "ky"
-     ]
+     ],
+     "phonSrc": "cmudict"
     },
     {
      "id": "en-veg-garlic",
@@ -425,13 +458,14 @@
      "example": "Crush the garlic with the flat of a knife.",
      "exampleCN": "用刀面把蒜拍碎。",
      "level": "B1",
-     "hint": "/ˈɡɑːlɪk/",
+     "hint": "/ˈɡɑːɹlɪk/",
      "levelSrc": "ecdict:frq(2956)",
      "examTags": [
       "gk",
       "cet6",
       "ky"
-     ]
+     ],
+     "phonSrc": "cmudict"
     },
     {
      "id": "en-veg-ginger",
@@ -440,12 +474,13 @@
      "example": "Grate some ginger into the soup.",
      "exampleCN": "擦点姜末进汤里。",
      "level": "B2",
-     "hint": "/ˈdʒɪndʒə/",
+     "hint": "/ˈdʒɪndʒɝː/",
      "levelSrc": "ecdict:frq(7328)",
      "examTags": [
       "cet6",
       "gre"
-     ]
+     ],
+     "phonSrc": "cmudict"
     },
     {
      "id": "en-veg-potato",
@@ -454,12 +489,13 @@
      "example": "Boil the potatoes for twenty minutes.",
      "exampleCN": "土豆煮二十分钟。",
      "level": "B1",
-     "hint": "/pəˈteɪtəʊ/",
+     "hint": "/pəˈteɪˌtoʊ/",
      "levelSrc": "ecdict:frq(2253)",
      "examTags": [
       "zk",
       "gk"
-     ]
+     ],
+     "phonSrc": "cmudict"
     },
     {
      "id": "en-veg-sweet-potato",
@@ -469,7 +505,8 @@
      "exampleCN": "红薯不加糖也甜。",
      "level": "B1",
      "hint": "/ˌswiːt pəˈteɪtəʊ/",
-     "levelSrc": "原估值"
+     "levelSrc": "原估值",
+     "phonSrc": "原估值"
     },
     {
      "id": "en-veg-carrot",
@@ -478,7 +515,7 @@
      "example": "Peel the carrots before slicing.",
      "exampleCN": "切之前先把胡萝卜削皮。",
      "level": "B2",
-     "hint": "/ˈkærət/",
+     "hint": "/ˈkæɹət/",
      "levelSrc": "ecdict:frq(4597)",
      "examTags": [
       "gk",
@@ -486,7 +523,8 @@
       "cet6",
       "ky",
       "ielts"
-     ]
+     ],
+     "phonSrc": "cmudict"
     },
     {
      "id": "en-veg-radish",
@@ -495,12 +533,13 @@
      "example": "Radishes have a sharp, peppery taste.",
      "exampleCN": "小萝卜味道辛辣。",
      "level": "C1",
-     "hint": "/ˈrædɪʃ/",
+     "hint": "/ˈɹædɪʃ/",
      "levelSrc": "ecdict:frq(14920)",
      "examTags": [
       "cet4",
       "cet6"
-     ]
+     ],
+     "phonSrc": "cmudict"
     },
     {
      "id": "en-veg-turnip",
@@ -509,12 +548,13 @@
      "example": "Turnip is common in northern soups.",
      "exampleCN": "芜菁在北方的汤里很常见。",
      "level": "C1",
-     "hint": "/ˈtɜːnɪp/",
+     "hint": "/ˈtɝːnəp/",
      "levelSrc": "ecdict:frq(15232)",
      "examTags": [
       "cet4",
       "cet6"
-     ]
+     ],
+     "phonSrc": "cmudict"
     },
     {
      "id": "en-veg-pumpkin",
@@ -528,7 +568,8 @@
      "examTags": [
       "cet6",
       "toefl"
-     ]
+     ],
+     "phonSrc": "cmudict"
     },
     {
      "id": "en-veg-mushroom",
@@ -537,7 +578,7 @@
      "example": "Don't wash mushrooms, just wipe them.",
      "exampleCN": "蘑菇别洗，擦一擦就行。",
      "level": "B2",
-     "hint": "/ˈmʌʃrʊm/",
+     "hint": "/ˈmʌʃɹuːm/",
      "levelSrc": "ecdict:frq(4256)",
      "examTags": [
       "gk",
@@ -547,7 +588,8 @@
       "toefl",
       "ielts",
       "gre"
-     ]
+     ],
+     "phonSrc": "cmudict"
     },
     {
      "id": "en-veg-asparagus",
@@ -556,11 +598,12 @@
      "example": "Asparagus cooks in two minutes.",
      "exampleCN": "芦笋两分钟就熟。",
      "level": "C1",
-     "hint": "/əˈspærəɡəs/",
+     "hint": "/əˈspeɹəɡəs/",
      "levelSrc": "ecdict:frq(9304)",
      "examTags": [
       "gre"
-     ]
+     ],
+     "phonSrc": "cmudict"
     },
     {
      "id": "en-veg-green-beans",
@@ -570,7 +613,8 @@
      "exampleCN": "四季豆先焯水再炒。",
      "level": "B1",
      "hint": "/ˌɡriːn ˈbiːnz/",
-     "levelSrc": "原估值"
+     "levelSrc": "原估值",
+     "phonSrc": "原估值"
     },
     {
      "id": "en-veg-peas",
@@ -580,7 +624,8 @@
      "exampleCN": "最后再加豌豆。",
      "level": "A2",
      "hint": "/piːz/",
-     "levelSrc": "原估值"
+     "levelSrc": "原估值",
+     "phonSrc": "cmudict"
     },
     {
      "id": "en-veg-corn",
@@ -589,7 +634,7 @@
      "example": "Corn on the cob is a summer treat.",
      "exampleCN": "整根煮玉米是夏天的享受。",
      "level": "B1",
-     "hint": "/kɔːn/",
+     "hint": "/kɔːɹn/",
      "levelSrc": "ecdict:frq(2448)",
      "examTags": [
       "gk",
@@ -597,7 +642,8 @@
       "cet6",
       "ky",
       "toefl"
-     ]
+     ],
+     "phonSrc": "cmudict"
     },
     {
      "id": "en-veg-beet",
@@ -610,7 +656,8 @@
      "levelSrc": "ecdict:frq(9427)",
      "examTags": [
       "gre"
-     ]
+     ],
+     "phonSrc": "cmudict"
     }
    ]
   },
@@ -629,7 +676,8 @@
      "exampleCN": "用打蛋器打蛋。",
      "level": "B2",
      "hint": "/wɪsk/",
-     "levelSrc": "ecdict:frq(6314)"
+     "levelSrc": "ecdict:frq(6314)",
+     "phonSrc": "cmudict"
     },
     {
      "id": "en-kitchen-spatula",
@@ -638,11 +686,12 @@
      "example": "Flip the pancake with a spatula.",
      "exampleCN": "用锅铲翻煎饼。",
      "level": "C1",
-     "hint": "/ˈspætʃələ/",
+     "hint": "/ˈspæˌtʃʊlə/",
      "levelSrc": "ecdict:frq(13422)",
      "examTags": [
       "gre"
-     ]
+     ],
+     "phonSrc": "cmudict"
     },
     {
      "id": "en-kitchen-ladle",
@@ -651,8 +700,9 @@
      "example": "Serve the soup with a ladle.",
      "exampleCN": "用汤勺盛汤。",
      "level": "C1",
-     "hint": "/ˈleɪdl/",
-     "levelSrc": "ecdict:frq(17083)"
+     "hint": "/ˈleɪdəl/",
+     "levelSrc": "ecdict:frq(17083)",
+     "phonSrc": "cmudict"
     },
     {
      "id": "en-kitchen-colander",
@@ -661,11 +711,12 @@
      "example": "Drain the pasta in a colander.",
      "exampleCN": "用滤水篮沥干意面。",
      "level": "C1",
-     "hint": "/ˈkʌləndə/",
+     "hint": "/ˈkɑːləndɝː/",
      "levelSrc": "ecdict:tag(gre)",
      "examTags": [
       "gre"
-     ]
+     ],
+     "phonSrc": "cmudict"
     },
     {
      "id": "en-kitchen-grater",
@@ -674,8 +725,9 @@
      "example": "Use the fine side of the grater.",
      "exampleCN": "用擦丝器细的那一面。",
      "level": "B1",
-     "hint": "/ˈɡreɪtə/",
-     "levelSrc": "原估值"
+     "hint": "/ˈɡɹeɪtɝː/",
+     "levelSrc": "原估值",
+     "phonSrc": "cmudict"
     },
     {
      "id": "en-kitchen-peeler",
@@ -684,8 +736,9 @@
      "example": "A peeler is faster than a knife for carrots.",
      "exampleCN": "削胡萝卜，削皮刀比刀快。",
      "level": "B1",
-     "hint": "/ˈpiːlə/",
-     "levelSrc": "原估值"
+     "hint": "/ˈpiːlɝː/",
+     "levelSrc": "原估值",
+     "phonSrc": "cmudict"
     },
     {
      "id": "en-kitchen-tongs",
@@ -694,11 +747,12 @@
      "example": "Turn the meat with tongs.",
      "exampleCN": "用夹子翻肉。",
      "level": "C1",
-     "hint": "/tɒŋz/",
+     "hint": "/tɑːŋz/",
      "levelSrc": "ecdict:frq(15320)",
      "examTags": [
       "gre"
-     ]
+     ],
+     "phonSrc": "cmudict"
     },
     {
      "id": "en-kitchen-cutting-board",
@@ -708,7 +762,8 @@
      "exampleCN": "别在木砧板上切生肉。",
      "level": "A2",
      "hint": "/ˈkʌtɪŋ bɔːd/",
-     "levelSrc": "原估值"
+     "levelSrc": "原估值",
+     "phonSrc": "原估值"
     },
     {
      "id": "en-kitchen-saucepan",
@@ -717,8 +772,9 @@
      "example": "Heat the milk in a small saucepan.",
      "exampleCN": "在小锅里热牛奶。",
      "level": "B2",
-     "hint": "/ˈsɔːspən/",
-     "levelSrc": "ecdict:frq(7102)"
+     "hint": "/ˈsɔːˌspæn/",
+     "levelSrc": "ecdict:frq(7102)",
+     "phonSrc": "cmudict"
     },
     {
      "id": "en-kitchen-frying-pan",
@@ -728,7 +784,8 @@
      "exampleCN": "在煎锅里热油。",
      "level": "A2",
      "hint": "/ˈfraɪɪŋ pæn/",
-     "levelSrc": "原估值"
+     "levelSrc": "原估值",
+     "phonSrc": "原估值"
     },
     {
      "id": "en-kitchen-kettle",
@@ -737,7 +794,7 @@
      "example": "Put the kettle on for tea.",
      "exampleCN": "烧壶水泡茶。",
      "level": "C1",
-     "hint": "/ˈketl/",
+     "hint": "/ˈketəl/",
      "levelSrc": "ecdict:frq(10726)",
      "examTags": [
       "gk",
@@ -745,7 +802,8 @@
       "cet6",
       "ky",
       "toefl"
-     ]
+     ],
+     "phonSrc": "cmudict"
     },
     {
      "id": "en-kitchen-blender",
@@ -754,8 +812,9 @@
      "example": "Blend the fruit in a blender.",
      "exampleCN": "把水果放进搅拌机里打。",
      "level": "C1",
-     "hint": "/ˈblendə/",
-     "levelSrc": "ecdict:frq(8894)"
+     "hint": "/ˈblendɝː/",
+     "levelSrc": "ecdict:frq(8894)",
+     "phonSrc": "cmudict"
     },
     {
      "id": "en-kitchen-measuring-cup",
@@ -765,7 +824,8 @@
      "exampleCN": "用量杯，别用杯子估。",
      "level": "B1",
      "hint": "/ˈmeʒərɪŋ kʌp/",
-     "levelSrc": "原估值"
+     "levelSrc": "原估值",
+     "phonSrc": "原估值"
     },
     {
      "id": "en-kitchen-strainer",
@@ -775,7 +835,8 @@
      "exampleCN": "用滤网滤茶。",
      "level": "C1",
      "hint": "/ˈstreɪnə/",
-     "levelSrc": "ecdict:frq(18032)"
+     "levelSrc": "ecdict:frq(18032)",
+     "phonSrc": "原估值"
     },
     {
      "id": "en-kitchen-oven-mitt",
@@ -785,7 +846,8 @@
      "exampleCN": "用隔热手套，托盘很烫。",
      "level": "B1",
      "hint": "/ˈʌvn mɪt/",
-     "levelSrc": "原估值"
+     "levelSrc": "原估值",
+     "phonSrc": "原估值"
     }
    ]
   },
@@ -803,7 +865,7 @@
      "example": "Tap the nail in with a hammer.",
      "exampleCN": "用锤子把钉子敲进去。",
      "level": "B2",
-     "hint": "/ˈhæmə/",
+     "hint": "/ˈhæmɝː/",
      "levelSrc": "ecdict:frq(6231)",
      "examTags": [
       "gk",
@@ -812,7 +874,8 @@
       "ky",
       "toefl",
       "gre"
-     ]
+     ],
+     "phonSrc": "cmudict"
     },
     {
      "id": "en-tools-screwdriver",
@@ -821,12 +884,13 @@
      "example": "A Phillips screwdriver fits this screw.",
      "exampleCN": "这是十字螺丝，用十字螺丝刀。",
      "level": "C1",
-     "hint": "/ˈskruːdraɪvə/",
+     "hint": "/ˈskɹuːˌdɹaɪvɝː/",
      "levelSrc": "ecdict:frq(13766)",
      "examTags": [
       "toefl",
       "gre"
-     ]
+     ],
+     "phonSrc": "cmudict"
     },
     {
      "id": "en-tools-pliers",
@@ -835,11 +899,12 @@
      "example": "Grip the wire with pliers.",
      "exampleCN": "用钳子夹住电线。",
      "level": "C1",
-     "hint": "/ˈplaɪəz/",
+     "hint": "/ˈplaɪɝːz/",
      "levelSrc": "ecdict:frq(17958)",
      "examTags": [
       "gre"
-     ]
+     ],
+     "phonSrc": "cmudict"
     },
     {
      "id": "en-tools-wrench",
@@ -848,14 +913,15 @@
      "example": "Tighten the nut with a wrench.",
      "exampleCN": "用扳手拧紧螺母。",
      "level": "C1",
-     "hint": "/rentʃ/",
+     "hint": "/ɹentʃ/",
      "levelSrc": "ecdict:frq(10376)",
      "examTags": [
       "cet6",
       "ky",
       "ielts",
       "gre"
-     ]
+     ],
+     "phonSrc": "cmudict"
     },
     {
      "id": "en-tools-drill",
@@ -864,7 +930,7 @@
      "example": "Drill a hole before you insert the screw.",
      "exampleCN": "上螺丝前先打孔。",
      "level": "B2",
-     "hint": "/drɪl/",
+     "hint": "/dɹɪl/",
      "levelSrc": "ecdict:frq(4760)",
      "examTags": [
       "gk",
@@ -874,7 +940,8 @@
       "toefl",
       "ielts",
       "gre"
-     ]
+     ],
+     "phonSrc": "cmudict"
     },
     {
      "id": "en-tools-saw",
@@ -889,7 +956,8 @@
       "cet4",
       "cet6",
       "ky"
-     ]
+     ],
+     "phonSrc": "cmudict"
     },
     {
      "id": "en-tools-tape-measure",
@@ -899,7 +967,8 @@
      "exampleCN": "用卷尺量一下墙。",
      "level": "B1",
      "hint": "/ˈteɪp meʒə/",
-     "levelSrc": "原估值"
+     "levelSrc": "原估值",
+     "phonSrc": "原估值"
     },
     {
      "id": "en-tools-level",
@@ -908,7 +977,7 @@
      "example": "Check if the shelf is straight with a level.",
      "exampleCN": "用水平尺看看架子平不平。",
      "level": "B1",
-     "hint": "/ˈlevl/",
+     "hint": "/ˈlevəl/",
      "levelSrc": "ecdict:frq(338)",
      "examTags": [
       "zk",
@@ -917,7 +986,8 @@
       "cet6",
       "ky",
       "ielts"
-     ]
+     ],
+     "phonSrc": "cmudict"
     },
     {
      "id": "en-tools-nail",
@@ -934,7 +1004,8 @@
       "cet6",
       "ky",
       "toefl"
-     ]
+     ],
+     "phonSrc": "cmudict"
     },
     {
      "id": "en-tools-screw",
@@ -943,7 +1014,7 @@
      "example": "One screw is missing from the bracket.",
      "exampleCN": "支架上少了一颗螺丝。",
      "level": "B2",
-     "hint": "/skruː/",
+     "hint": "/skɹuː/",
      "levelSrc": "ecdict:frq(4750)",
      "examTags": [
       "cet4",
@@ -952,7 +1023,8 @@
       "toefl",
       "ielts",
       "gre"
-     ]
+     ],
+     "phonSrc": "cmudict"
     },
     {
      "id": "en-tools-bolt",
@@ -961,7 +1033,7 @@
      "example": "The bolt came loose on the bike.",
      "exampleCN": "自行车上的螺栓松了。",
      "level": "B2",
-     "hint": "/bəʊlt/",
+     "hint": "/boʊlt/",
      "levelSrc": "ecdict:frq(4899)",
      "examTags": [
       "cet4",
@@ -969,7 +1041,8 @@
       "ky",
       "ielts",
       "gre"
-     ]
+     ],
+     "phonSrc": "cmudict"
     },
     {
      "id": "en-tools-nut",
@@ -985,7 +1058,8 @@
       "cet4",
       "cet6",
       "ky"
-     ]
+     ],
+     "phonSrc": "cmudict"
     },
     {
      "id": "en-tools-washer",
@@ -994,8 +1068,9 @@
      "example": "Put a washer under the nut.",
      "exampleCN": "螺母下面加个垫圈。",
      "level": "C1",
-     "hint": "/ˈwɒʃə/",
-     "levelSrc": "ecdict:frq(11379)"
+     "hint": "/ˈwɑːʃɝː/",
+     "levelSrc": "ecdict:frq(11379)",
+     "phonSrc": "cmudict"
     },
     {
      "id": "en-tools-sandpaper",
@@ -1004,8 +1079,9 @@
      "example": "Sand the edge smooth with fine sandpaper.",
      "exampleCN": "用细砂纸把边缘磨平。",
      "level": "C1",
-     "hint": "/ˈsændpeɪpə/",
-     "levelSrc": "ecdict:frq(18636)"
+     "hint": "/ˈsæˌndpeɪpɝː/",
+     "levelSrc": "ecdict:frq(18636)",
+     "phonSrc": "cmudict"
     },
     {
      "id": "en-tools-ladder",
@@ -1014,14 +1090,15 @@
      "example": "Don't stand on the top step of the ladder.",
      "exampleCN": "别站在梯子最上面一格。",
      "level": "B2",
-     "hint": "/ˈlædə/",
+     "hint": "/ˈlædɝː/",
      "levelSrc": "ecdict:frq(4505)",
      "examTags": [
       "gk",
       "cet4",
       "cet6",
       "ky"
-     ]
+     ],
+     "phonSrc": "cmudict"
     }
    ]
   },
@@ -1049,7 +1126,8 @@
       "ky",
       "toefl",
       "ielts"
-     ]
+     ],
+     "phonSrc": "cmudict"
     },
     {
      "id": "en-b1-afford",
@@ -1058,7 +1136,7 @@
      "example": "We can't afford a new car this year.",
      "exampleCN": "今年我们买不起新车。",
      "level": "B1",
-     "hint": "/əˈfɔːd/",
+     "hint": "/əˈfɔːɹd/",
      "levelSrc": "ecdict:frq(1846)",
      "examTags": [
       "zk",
@@ -1068,7 +1146,8 @@
       "ky",
       "toefl",
       "ielts"
-     ]
+     ],
+     "phonSrc": "cmudict"
     },
     {
      "id": "en-b1-appreciate",
@@ -1077,7 +1156,7 @@
      "example": "I really appreciate your help.",
      "exampleCN": "非常感谢你的帮助。",
      "level": "B1",
-     "hint": "/əˈpriːʃieɪt/",
+     "hint": "/əˈpɹiːʃiːˌeɪt/",
      "levelSrc": "ecdict:frq(1738)",
      "examTags": [
       "gk",
@@ -1087,7 +1166,8 @@
       "toefl",
       "ielts",
       "gre"
-     ]
+     ],
+     "phonSrc": "cmudict"
     },
     {
      "id": "en-b1-avoid",
@@ -1106,7 +1186,8 @@
       "toefl",
       "ielts",
       "gre"
-     ]
+     ],
+     "phonSrc": "cmudict"
     },
     {
      "id": "en-b1-complain",
@@ -1115,14 +1196,15 @@
      "example": "He complained about the noise.",
      "exampleCN": "他抱怨太吵。",
      "level": "B1",
-     "hint": "/kəmˈpleɪn/",
+     "hint": "/kəˈmpleɪn/",
      "levelSrc": "ecdict:frq(1859)",
      "examTags": [
       "cet4",
       "cet6",
       "ky",
       "toefl"
-     ]
+     ],
+     "phonSrc": "cmudict"
     },
     {
      "id": "en-b1-convenient",
@@ -1131,7 +1213,7 @@
      "example": "Let's meet at a convenient time.",
      "exampleCN": "我们约个方便的时间。",
      "level": "B2",
-     "hint": "/kənˈviːniənt/",
+     "hint": "/kəˈnviːnjənt/",
      "levelSrc": "ecdict:frq(5368)",
      "examTags": [
       "gk",
@@ -1140,7 +1222,8 @@
       "ky",
       "toefl",
       "ielts"
-     ]
+     ],
+     "phonSrc": "cmudict"
     },
     {
      "id": "en-b1-describe",
@@ -1149,7 +1232,7 @@
      "example": "Can you describe what happened?",
      "exampleCN": "你能描述一下发生了什么吗？",
      "level": "B1",
-     "hint": "/dɪˈskraɪb/",
+     "hint": "/dɪˈskɹaɪb/",
      "levelSrc": "ecdict:frq(568)",
      "examTags": [
       "zk",
@@ -1157,7 +1240,8 @@
       "cet4",
       "cet6",
       "ky"
-     ]
+     ],
+     "phonSrc": "cmudict"
     },
     {
      "id": "en-b1-develop",
@@ -1172,7 +1256,8 @@
       "zk",
       "gk",
       "toefl"
-     ]
+     ],
+     "phonSrc": "cmudict"
     },
     {
      "id": "en-b1-encourage",
@@ -1181,7 +1266,7 @@
      "example": "My teacher encouraged me to speak up.",
      "exampleCN": "老师鼓励我多开口。",
      "level": "B1",
-     "hint": "/ɪnˈkʌrɪdʒ/",
+     "hint": "/eˈnkɝːɪdʒ/",
      "levelSrc": "ecdict:frq(1184)",
      "examTags": [
       "zk",
@@ -1190,7 +1275,8 @@
       "cet6",
       "ky",
       "toefl"
-     ]
+     ],
+     "phonSrc": "cmudict"
     },
     {
      "id": "en-b1-improve",
@@ -1199,7 +1285,7 @@
      "example": "My English improved a lot this year.",
      "exampleCN": "今年我的英语进步很多。",
      "level": "B1",
-     "hint": "/ɪmˈpruːv/",
+     "hint": "/ˌɪˈmpɹuːv/",
      "levelSrc": "ecdict:frq(995)",
      "examTags": [
       "zk",
@@ -1207,7 +1293,8 @@
       "cet4",
       "cet6",
       "ky"
-     ]
+     ],
+     "phonSrc": "cmudict"
     },
     {
      "id": "en-b1-manage",
@@ -1216,7 +1303,7 @@
      "example": "I managed to finish before noon.",
      "exampleCN": "我设法在中午前做完了。",
      "level": "B1",
-     "hint": "/ˈmænɪdʒ/",
+     "hint": "/ˈmænədʒ/",
      "levelSrc": "ecdict:frq(945)",
      "examTags": [
       "zk",
@@ -1224,7 +1311,8 @@
       "cet4",
       "cet6",
       "ky"
-     ]
+     ],
+     "phonSrc": "cmudict"
     },
     {
      "id": "en-b1-notice",
@@ -1233,7 +1321,7 @@
      "example": "Did you notice anything strange?",
      "exampleCN": "你注意到有什么不对劲吗？",
      "level": "B1",
-     "hint": "/ˈnəʊtɪs/",
+     "hint": "/ˈnoʊtəs/",
      "levelSrc": "ecdict:frq(1044)",
      "examTags": [
       "zk",
@@ -1243,7 +1331,8 @@
       "ky",
       "toefl",
       "ielts"
-     ]
+     ],
+     "phonSrc": "cmudict"
     },
     {
      "id": "en-b1-prefer",
@@ -1252,14 +1341,15 @@
      "example": "I prefer tea to coffee.",
      "exampleCN": "比起咖啡我更喜欢茶。",
      "level": "B1",
-     "hint": "/prɪˈfɜː/",
+     "hint": "/pɹəˈfɝː/",
      "levelSrc": "ecdict:frq(1716)",
      "examTags": [
       "gk",
       "cet4",
       "cet6",
       "ky"
-     ]
+     ],
+     "phonSrc": "cmudict"
     },
     {
      "id": "en-b1-prepare",
@@ -1268,7 +1358,7 @@
      "example": "We prepared dinner together.",
      "exampleCN": "我们一起准备了晚饭。",
      "level": "B1",
-     "hint": "/prɪˈpeə/",
+     "hint": "/pɹiːˈpeɹ/",
      "levelSrc": "ecdict:frq(774)",
      "examTags": [
       "zk",
@@ -1277,7 +1367,8 @@
       "cet6",
       "ky",
       "ielts"
-     ]
+     ],
+     "phonSrc": "cmudict"
     },
     {
      "id": "en-b1-realize",
@@ -1286,13 +1377,14 @@
      "example": "I didn't realize it was so late.",
      "exampleCN": "我没意识到这么晚了。",
      "level": "B1",
-     "hint": "/ˈriːəlaɪz/",
+     "hint": "/ˈɹiːəˌlaɪz/",
      "levelSrc": "ecdict:frq(616)",
      "examTags": [
       "cet4",
       "cet6",
       "toefl"
-     ]
+     ],
+     "phonSrc": "cmudict"
     },
     {
      "id": "en-b1-recommend",
@@ -1301,7 +1393,7 @@
      "example": "Can you recommend a good restaurant?",
      "exampleCN": "能推荐一家好餐厅吗？",
      "level": "B1",
-     "hint": "/ˌrekəˈmend/",
+     "hint": "/ˌɹekəˈmend/",
      "levelSrc": "ecdict:frq(1688)",
      "examTags": [
       "gk",
@@ -1309,7 +1401,8 @@
       "cet6",
       "ky",
       "toefl"
-     ]
+     ],
+     "phonSrc": "cmudict"
     },
     {
      "id": "en-b1-remind",
@@ -1318,7 +1411,7 @@
      "example": "Remind me to call him tomorrow.",
      "exampleCN": "提醒我明天给他打电话。",
      "level": "B1",
-     "hint": "/rɪˈmaɪnd/",
+     "hint": "/ɹiːˈmaɪnd/",
      "levelSrc": "ecdict:frq(1458)",
      "examTags": [
       "gk",
@@ -1327,7 +1420,8 @@
       "ky",
       "toefl",
       "ielts"
-     ]
+     ],
+     "phonSrc": "cmudict"
     },
     {
      "id": "en-b1-suggest",
@@ -1342,7 +1436,8 @@
       "zk",
       "gk",
       "toefl"
-     ]
+     ],
+     "phonSrc": "cmudict"
     },
     {
      "id": "en-b1-refuse",
@@ -1351,7 +1446,7 @@
      "example": "He refused to answer the question.",
      "exampleCN": "他拒绝回答这个问题。",
      "level": "B1",
-     "hint": "/rɪˈfjuːz/",
+     "hint": "/ɹəˈfjuːz/",
      "levelSrc": "ecdict:frq(1247)",
      "examTags": [
       "zk",
@@ -1360,7 +1455,8 @@
       "cet6",
       "ky",
       "toefl"
-     ]
+     ],
+     "phonSrc": "cmudict"
     },
     {
      "id": "en-b1-apologize",
@@ -1369,14 +1465,15 @@
      "example": "She apologized for being late.",
      "exampleCN": "她为迟到道歉。",
      "level": "B2",
-     "hint": "/əˈpɒlədʒaɪz/",
+     "hint": "/əˈpɑːləˌdʒaɪz/",
      "levelSrc": "ecdict:frq(3739)",
      "examTags": [
       "gk",
       "cet4",
       "toefl",
       "gre"
-     ]
+     ],
+     "phonSrc": "cmudict"
     }
    ]
   },
@@ -1394,7 +1491,7 @@
      "example": "The lighting is barely adequate for reading.",
      "exampleCN": "这个灯光勉强够看书。",
      "level": "B2",
-     "hint": "/ˈædɪkwət/",
+     "hint": "/ˈædəkwət/",
      "levelSrc": "ecdict:frq(3297)",
      "examTags": [
       "gk",
@@ -1404,7 +1501,8 @@
       "toefl",
       "ielts",
       "gre"
-     ]
+     ],
+     "phonSrc": "cmudict"
     },
     {
      "id": "en-b2-anticipate",
@@ -1413,7 +1511,7 @@
      "example": "We didn't anticipate so many problems.",
      "exampleCN": "我们没料到会有这么多问题。",
      "level": "B2",
-     "hint": "/ænˈtɪsɪpeɪt/",
+     "hint": "/æˈntɪsəˌpeɪt/",
      "levelSrc": "ecdict:frq(3187)",
      "examTags": [
       "cet4",
@@ -1422,7 +1520,8 @@
       "toefl",
       "ielts",
       "gre"
-     ]
+     ],
+     "phonSrc": "cmudict"
     },
     {
      "id": "en-b2-assess",
@@ -1441,7 +1540,8 @@
       "toefl",
       "ielts",
       "gre"
-     ]
+     ],
+     "phonSrc": "cmudict"
     },
     {
      "id": "en-b2-assume",
@@ -1450,7 +1550,7 @@
      "example": "Don't assume everyone agrees with you.",
      "exampleCN": "别想当然认为大家都同意你。",
      "level": "B1",
-     "hint": "/əˈsjuːm/",
+     "hint": "/əˈsuːm/",
      "levelSrc": "ecdict:frq(1091)",
      "examTags": [
       "gk",
@@ -1460,7 +1560,8 @@
       "toefl",
       "ielts",
       "gre"
-     ]
+     ],
+     "phonSrc": "cmudict"
     },
     {
      "id": "en-b2-benefit",
@@ -1469,7 +1570,7 @@
      "example": "Regular exercise benefits your sleep.",
      "exampleCN": "规律运动对睡眠有好处。",
      "level": "B1",
-     "hint": "/ˈbenɪfɪt/",
+     "hint": "/ˈbenəfɪt/",
      "levelSrc": "ecdict:frq(812)",
      "examTags": [
       "gk",
@@ -1478,7 +1579,8 @@
       "ky",
       "toefl",
       "ielts"
-     ]
+     ],
+     "phonSrc": "cmudict"
     },
     {
      "id": "en-b2-capable",
@@ -1487,14 +1589,15 @@
      "example": "She is capable of handling it alone.",
      "exampleCN": "她有能力独立处理。",
      "level": "B1",
-     "hint": "/ˈkeɪpəbl/",
+     "hint": "/ˈkeɪpəbəl/",
      "levelSrc": "ecdict:frq(2392)",
      "examTags": [
       "cet4",
       "cet6",
       "ky",
       "toefl"
-     ]
+     ],
+     "phonSrc": "cmudict"
     },
     {
      "id": "en-b2-complex",
@@ -1503,7 +1606,7 @@
      "example": "The issue is more complex than it looks.",
      "exampleCN": "这事比看起来复杂。",
      "level": "B1",
-     "hint": "/ˈkɒmpleks/",
+     "hint": "/ˈkɑːmpleks/",
      "levelSrc": "ecdict:frq(1598)",
      "examTags": [
       "gk",
@@ -1512,7 +1615,8 @@
       "ky",
       "toefl",
       "ielts"
-     ]
+     ],
+     "phonSrc": "cmudict"
     },
     {
      "id": "en-b2-confirm",
@@ -1521,7 +1625,7 @@
      "example": "Please confirm the time by Friday.",
      "exampleCN": "请在周五前确认时间。",
      "level": "B1",
-     "hint": "/kənˈfɜːm/",
+     "hint": "/kəˈnfɝːm/",
      "levelSrc": "ecdict:frq(1851)",
      "examTags": [
       "gk",
@@ -1531,7 +1635,8 @@
       "toefl",
       "ielts",
       "gre"
-     ]
+     ],
+     "phonSrc": "cmudict"
     },
     {
      "id": "en-b2-contribute",
@@ -1540,7 +1645,7 @@
      "example": "Poor sleep contributes to weight gain.",
      "exampleCN": "睡眠不足会导致体重增加。",
      "level": "B1",
-     "hint": "/kənˈtrɪbjuːt/",
+     "hint": "/kəˈntɹɪbjuːt/",
      "levelSrc": "ecdict:frq(1312)",
      "examTags": [
       "gk",
@@ -1549,7 +1654,8 @@
       "ky",
       "toefl",
       "ielts"
-     ]
+     ],
+     "phonSrc": "cmudict"
     },
     {
      "id": "en-b2-convince",
@@ -1558,7 +1664,7 @@
      "example": "He convinced me to try again.",
      "exampleCN": "他说服我再试一次。",
      "level": "B1",
-     "hint": "/kənˈvɪns/",
+     "hint": "/kəˈnvɪns/",
      "levelSrc": "ecdict:frq(2039)",
      "examTags": [
       "gk",
@@ -1568,7 +1674,8 @@
       "toefl",
       "ielts",
       "gre"
-     ]
+     ],
+     "phonSrc": "cmudict"
     },
     {
      "id": "en-b2-decline",
@@ -1587,7 +1694,8 @@
       "toefl",
       "ielts",
       "gre"
-     ]
+     ],
+     "phonSrc": "cmudict"
     },
     {
      "id": "en-b2-demonstrate",
@@ -1596,7 +1704,7 @@
      "example": "Let me demonstrate how it works.",
      "exampleCN": "我来演示一下怎么用。",
      "level": "B1",
-     "hint": "/ˈdemənstreɪt/",
+     "hint": "/ˈdeməˌnstɹeɪt/",
      "levelSrc": "ecdict:frq(1379)",
      "examTags": [
       "cet4",
@@ -1605,7 +1713,8 @@
       "toefl",
       "ielts",
       "gre"
-     ]
+     ],
+     "phonSrc": "cmudict"
     },
     {
      "id": "en-b2-distinguish",
@@ -1623,7 +1732,8 @@
       "ky",
       "toefl",
       "ielts"
-     ]
+     ],
+     "phonSrc": "cmudict"
     },
     {
      "id": "en-b2-eliminate",
@@ -1632,7 +1742,7 @@
      "example": "We eliminated the extra steps.",
      "exampleCN": "我们把多余的步骤去掉了。",
      "level": "B1",
-     "hint": "/ɪˈlɪmɪneɪt/",
+     "hint": "/ɪˈlɪməˌneɪt/",
      "levelSrc": "ecdict:frq(1838)",
      "examTags": [
       "cet4",
@@ -1641,7 +1751,8 @@
       "toefl",
       "ielts",
       "gre"
-     ]
+     ],
+     "phonSrc": "cmudict"
     },
     {
      "id": "en-b2-emphasize",
@@ -1650,7 +1761,7 @@
      "example": "He emphasized the deadline twice.",
      "exampleCN": "他两次强调了截止日期。",
      "level": "B1",
-     "hint": "/ˈemfəsaɪz/",
+     "hint": "/ˈemfəˌsaɪz/",
      "levelSrc": "ecdict:frq(1975)",
      "examTags": [
       "cet4",
@@ -1658,7 +1769,8 @@
       "ky",
       "toefl",
       "ielts"
-     ]
+     ],
+     "phonSrc": "cmudict"
     },
     {
      "id": "en-b2-enhance",
@@ -1667,7 +1779,7 @@
      "example": "The update enhances battery life.",
      "exampleCN": "这次更新提升了续航。",
      "level": "B1",
-     "hint": "/ɪnˈhɑːns/",
+     "hint": "/eˈnhæns/",
      "levelSrc": "ecdict:frq(2331)",
      "examTags": [
       "cet4",
@@ -1676,7 +1788,8 @@
       "toefl",
       "ielts",
       "gre"
-     ]
+     ],
+     "phonSrc": "cmudict"
     },
     {
      "id": "en-b2-ensure",
@@ -1685,14 +1798,15 @@
      "example": "Please ensure the door is locked.",
      "exampleCN": "请确保门已锁好。",
      "level": "B1",
-     "hint": "/ɪnˈʃʊə/",
+     "hint": "/eˈnʃʊɹ/",
      "levelSrc": "ecdict:frq(1754)",
      "examTags": [
       "cet4",
       "cet6",
       "ky",
       "gre"
-     ]
+     ],
+     "phonSrc": "cmudict"
     },
     {
      "id": "en-b2-establish",
@@ -1708,7 +1822,8 @@
       "cet6",
       "ky",
       "ielts"
-     ]
+     ],
+     "phonSrc": "cmudict"
     },
     {
      "id": "en-b2-significant",
@@ -1717,7 +1832,7 @@
      "example": "There was a significant drop in cost.",
      "exampleCN": "成本明显下降。",
      "level": "B1",
-     "hint": "/sɪɡˈnɪfɪkənt/",
+     "hint": "/səˈɡnɪfɪkənt/",
      "levelSrc": "ecdict:frq(719)",
      "examTags": [
       "cet4",
@@ -1726,7 +1841,8 @@
       "toefl",
       "ielts",
       "gre"
-     ]
+     ],
+     "phonSrc": "cmudict"
     },
     {
      "id": "en-b2-struggle",
@@ -1735,7 +1851,7 @@
      "example": "I struggle with long meetings.",
      "exampleCN": "我开长会特别吃力。",
      "level": "B1",
-     "hint": "/ˈstrʌɡl/",
+     "hint": "/ˈstɹʌɡəl/",
      "levelSrc": "ecdict:frq(1669)",
      "examTags": [
       "gk",
@@ -1743,7 +1859,8 @@
       "cet6",
       "ky",
       "toefl"
-     ]
+     ],
+     "phonSrc": "cmudict"
     }
    ]
   },
@@ -1761,7 +1878,7 @@
      "example": "The contract wording is ambiguous.",
      "exampleCN": "合同措辞有歧义。",
      "level": "B2",
-     "hint": "/æmˈbɪɡjuəs/",
+     "hint": "/æˈmbɪɡjuːəs/",
      "levelSrc": "ecdict:frq(7071)",
      "examTags": [
       "gk",
@@ -1770,7 +1887,8 @@
       "toefl",
       "ielts",
       "gre"
-     ]
+     ],
+     "phonSrc": "cmudict"
     },
     {
      "id": "en-c1-articulate",
@@ -1779,7 +1897,7 @@
      "example": "She gave an articulate explanation.",
      "exampleCN": "她的解释很清楚。",
      "level": "B2",
-     "hint": "/ɑːˈtɪkjulət/",
+     "hint": "/ɑːˈɹtɪkjəˌleɪt/",
      "levelSrc": "ecdict:frq(4865)",
      "examTags": [
       "cet6",
@@ -1787,7 +1905,8 @@
       "toefl",
       "ielts",
       "gre"
-     ]
+     ],
+     "phonSrc": "cmudict"
     },
     {
      "id": "en-c1-coherent",
@@ -1796,7 +1915,7 @@
      "example": "Your argument needs to be more coherent.",
      "exampleCN": "你的论证需要更连贯。",
      "level": "B2",
-     "hint": "/kəʊˈhɪərənt/",
+     "hint": "/koʊˈhɪɹənt/",
      "levelSrc": "ecdict:frq(7004)",
      "examTags": [
       "cet6",
@@ -1804,7 +1923,8 @@
       "toefl",
       "ielts",
       "gre"
-     ]
+     ],
+     "phonSrc": "cmudict"
     },
     {
      "id": "en-c1-comprehensive",
@@ -1813,7 +1933,7 @@
      "example": "We need a comprehensive review.",
      "exampleCN": "我们需要一次全面复查。",
      "level": "B1",
-     "hint": "/ˌkɒmprɪˈhensɪv/",
+     "hint": "/ˌkɑːmpɹiːˈhensɪv/",
      "levelSrc": "ecdict:frq(2896)",
      "examTags": [
       "cet4",
@@ -1821,7 +1941,8 @@
       "ky",
       "toefl",
       "gre"
-     ]
+     ],
+     "phonSrc": "cmudict"
     },
     {
      "id": "en-c1-conducive",
@@ -1830,12 +1951,13 @@
      "example": "A quiet room is conducive to study.",
      "exampleCN": "安静的房间有助于学习。",
      "level": "C1",
-     "hint": "/kənˈdjuːsɪv/",
+     "hint": "/kəˈnduːsɪv/",
      "levelSrc": "ecdict:frq(11002)",
      "examTags": [
       "ielts",
       "gre"
-     ]
+     ],
+     "phonSrc": "cmudict"
     },
     {
      "id": "en-c1-deteriorate",
@@ -1844,7 +1966,7 @@
      "example": "His health deteriorated quickly.",
      "exampleCN": "他的健康迅速恶化。",
      "level": "B2",
-     "hint": "/dɪˈtɪəriəreɪt/",
+     "hint": "/dɪˈtɪɹiːɝːˌeɪt/",
      "levelSrc": "ecdict:frq(7587)",
      "examTags": [
       "cet6",
@@ -1852,7 +1974,8 @@
       "toefl",
       "ielts",
       "gre"
-     ]
+     ],
+     "phonSrc": "cmudict"
     },
     {
      "id": "en-c1-deviate",
@@ -1861,7 +1984,7 @@
      "example": "Don't deviate from the agreed plan.",
      "exampleCN": "不要偏离商定的方案。",
      "level": "C1",
-     "hint": "/ˈdiːvieɪt/",
+     "hint": "/ˈdiːviːˌeɪt/",
      "levelSrc": "ecdict:frq(13796)",
      "examTags": [
       "cet6",
@@ -1869,7 +1992,8 @@
       "toefl",
       "ielts",
       "gre"
-     ]
+     ],
+     "phonSrc": "cmudict"
     },
     {
      "id": "en-c1-elicit",
@@ -1878,14 +2002,15 @@
      "example": "Her question elicited a long silence.",
      "exampleCN": "她的问题引来一阵长久的沉默。",
      "level": "B2",
-     "hint": "/iˈlɪsɪt/",
+     "hint": "/ɪˈlɪsɪt/",
      "levelSrc": "ecdict:frq(6680)",
      "examTags": [
       "cet6",
       "toefl",
       "ielts",
       "gre"
-     ]
+     ],
+     "phonSrc": "cmudict"
     },
     {
      "id": "en-c1-encompass",
@@ -1894,12 +2019,13 @@
      "example": "The report encompasses three regions.",
      "exampleCN": "报告涵盖三个地区。",
      "level": "B2",
-     "hint": "/ɪnˈkʌmpəs/",
+     "hint": "/eˈnkʌmpəs/",
      "levelSrc": "ecdict:frq(5635)",
      "examTags": [
       "toefl",
       "gre"
-     ]
+     ],
+     "phonSrc": "cmudict"
     },
     {
      "id": "en-c1-entail",
@@ -1908,7 +2034,7 @@
      "example": "The job entails a lot of travel.",
      "exampleCN": "这份工作需要大量出差。",
      "level": "B2",
-     "hint": "/ɪnˈteɪl/",
+     "hint": "/eˈnteɪl/",
      "levelSrc": "ecdict:frq(6162)",
      "examTags": [
       "cet6",
@@ -1916,7 +2042,8 @@
       "toefl",
       "ielts",
       "gre"
-     ]
+     ],
+     "phonSrc": "cmudict"
     },
     {
      "id": "en-c1-exacerbate",
@@ -1925,12 +2052,13 @@
      "example": "Delays only exacerbated the problem.",
      "exampleCN": "拖延只会让问题更严重。",
      "level": "B2",
-     "hint": "/ɪɡˈzæsəbeɪt/",
+     "hint": "/ɪˈɡzæsɝːˌbeɪt/",
      "levelSrc": "ecdict:frq(7171)",
      "examTags": [
       "ielts",
       "gre"
-     ]
+     ],
+     "phonSrc": "cmudict"
     },
     {
      "id": "en-c1-feasible",
@@ -1939,7 +2067,7 @@
      "example": "Is that timeline feasible?",
      "exampleCN": "这个时间表可行吗？",
      "level": "B2",
-     "hint": "/ˈfiːzəbl/",
+     "hint": "/ˈfiːzəbəl/",
      "levelSrc": "ecdict:frq(7591)",
      "examTags": [
       "cet4",
@@ -1948,7 +2076,8 @@
       "toefl",
       "ielts",
       "gre"
-     ]
+     ],
+     "phonSrc": "cmudict"
     },
     {
      "id": "en-c1-foster",
@@ -1957,7 +2086,7 @@
      "example": "Small habits foster long-term progress.",
      "exampleCN": "小习惯带来长期进步。",
      "level": "B2",
-     "hint": "/ˈfɒstə/",
+     "hint": "/ˈfɑːstɝː/",
      "levelSrc": "ecdict:frq(4359)",
      "examTags": [
       "cet6",
@@ -1965,7 +2094,8 @@
       "toefl",
       "ielts",
       "gre"
-     ]
+     ],
+     "phonSrc": "cmudict"
     },
     {
      "id": "en-c1-hinder",
@@ -1974,7 +2104,7 @@
      "example": "Noise hinders concentration.",
      "exampleCN": "噪音妨碍专注。",
      "level": "C1",
-     "hint": "/ˈhɪndə/",
+     "hint": "/ˈhɪndɝː/",
      "levelSrc": "ecdict:frq(8229)",
      "examTags": [
       "cet6",
@@ -1982,7 +2112,8 @@
       "toefl",
       "ielts",
       "gre"
-     ]
+     ],
+     "phonSrc": "cmudict"
     },
     {
      "id": "en-c1-implicit",
@@ -1991,7 +2122,7 @@
      "example": "There was an implicit warning in his tone.",
      "exampleCN": "他的语气里带着隐含的警告。",
      "level": "B2",
-     "hint": "/ɪmˈplɪsɪt/",
+     "hint": "/ˌɪˈmplɪsət/",
      "levelSrc": "ecdict:frq(6734)",
      "examTags": [
       "cet6",
@@ -1999,7 +2130,8 @@
       "toefl",
       "ielts",
       "gre"
-     ]
+     ],
+     "phonSrc": "cmudict"
     },
     {
      "id": "en-c1-inevitable",
@@ -2008,7 +2140,7 @@
      "example": "Some mistakes are inevitable.",
      "exampleCN": "有些错误不可避免。",
      "level": "B2",
-     "hint": "/ɪnˈevɪtəbl/",
+     "hint": "/ˌɪˈnevətəbəl/",
      "levelSrc": "ecdict:frq(3561)",
      "examTags": [
       "cet4",
@@ -2016,7 +2148,8 @@
       "ky",
       "toefl",
       "ielts"
-     ]
+     ],
+     "phonSrc": "cmudict"
     },
     {
      "id": "en-c1-mitigate",
@@ -2025,13 +2158,14 @@
      "example": "We took steps to mitigate the risk.",
      "exampleCN": "我们采取措施降低风险。",
      "level": "C1",
-     "hint": "/ˈmɪtɪɡeɪt/",
+     "hint": "/ˈmɪtəˌɡeɪt/",
      "levelSrc": "ecdict:frq(8991)",
      "examTags": [
       "toefl",
       "ielts",
       "gre"
-     ]
+     ],
+     "phonSrc": "cmudict"
     },
     {
      "id": "en-c1-plausible",
@@ -2040,7 +2174,7 @@
      "example": "That's a plausible explanation.",
      "exampleCN": "这个解释说得通。",
      "level": "B2",
-     "hint": "/ˈplɔːzəbl/",
+     "hint": "/ˈplɔːzəbəl/",
      "levelSrc": "ecdict:frq(7125)",
      "examTags": [
       "cet6",
@@ -2048,7 +2182,8 @@
       "toefl",
       "ielts",
       "gre"
-     ]
+     ],
+     "phonSrc": "cmudict"
     },
     {
      "id": "en-c1-reluctant",
@@ -2057,7 +2192,7 @@
      "example": "He was reluctant to admit the mistake.",
      "exampleCN": "他不太愿意承认错误。",
      "level": "B2",
-     "hint": "/rɪˈlʌktənt/",
+     "hint": "/ɹɪˈlʌktənt/",
      "levelSrc": "ecdict:frq(3900)",
      "examTags": [
       "cet4",
@@ -2065,7 +2200,8 @@
       "ky",
       "toefl",
       "ielts"
-     ]
+     ],
+     "phonSrc": "cmudict"
     },
     {
      "id": "en-c1-subtle",
@@ -2074,7 +2210,7 @@
      "example": "There's a subtle difference between the two.",
      "exampleCN": "两者之间有细微差别。",
      "level": "B2",
-     "hint": "/ˈsʌtl/",
+     "hint": "/ˈsʌtəl/",
      "levelSrc": "ecdict:frq(3435)",
      "examTags": [
       "cet6",
@@ -2082,7 +2218,8 @@
       "toefl",
       "ielts",
       "gre"
-     ]
+     ],
+     "phonSrc": "cmudict"
     }
    ]
   },
@@ -2100,7 +2237,8 @@
      "example": "We've run out of milk.",
      "exampleCN": "牛奶用完了。",
      "level": "B1",
-     "levelSrc": "原估值"
+     "levelSrc": "原估值",
+     "phonSrc": "原估值"
     },
     {
      "id": "en-colloc-put-off",
@@ -2109,7 +2247,8 @@
      "example": "Don't put off the dentist again.",
      "exampleCN": "别再拖去看牙了。",
      "level": "B1",
-     "levelSrc": "原估值"
+     "levelSrc": "原估值",
+     "phonSrc": "原估值"
     },
     {
      "id": "en-colloc-come-up-with",
@@ -2118,7 +2257,8 @@
      "example": "She came up with a smart fix.",
      "exampleCN": "她想出一个聪明的办法。",
      "level": "B1",
-     "levelSrc": "原估值"
+     "levelSrc": "原估值",
+     "phonSrc": "原估值"
     },
     {
      "id": "en-colloc-look-forward-to",
@@ -2127,7 +2267,8 @@
      "example": "I look forward to hearing from you.",
      "exampleCN": "期待你的回复。",
      "level": "B1",
-     "levelSrc": "原估值"
+     "levelSrc": "原估值",
+     "phonSrc": "原估值"
     },
     {
      "id": "en-colloc-get-used-to",
@@ -2136,7 +2277,8 @@
      "example": "You'll get used to the noise.",
      "exampleCN": "你会习惯这个噪音的。",
      "level": "B1",
-     "levelSrc": "原估值"
+     "levelSrc": "原估值",
+     "phonSrc": "原估值"
     },
     {
      "id": "en-colloc-make-sense",
@@ -2145,7 +2287,8 @@
      "example": "That doesn't make sense to me.",
      "exampleCN": "这在我看来说不通。",
      "level": "B1",
-     "levelSrc": "原估值"
+     "levelSrc": "原估值",
+     "phonSrc": "原估值"
     },
     {
      "id": "en-colloc-take-turns",
@@ -2154,7 +2297,8 @@
      "example": "We take turns cooking dinner.",
      "exampleCN": "我们轮流做晚饭。",
      "level": "B1",
-     "levelSrc": "原估值"
+     "levelSrc": "原估值",
+     "phonSrc": "原估值"
     },
     {
      "id": "en-colloc-be-in-charge-of",
@@ -2163,7 +2307,8 @@
      "example": "She's in charge of the schedule.",
      "exampleCN": "她负责排期。",
      "level": "B1",
-     "levelSrc": "原估值"
+     "levelSrc": "原估值",
+     "phonSrc": "原估值"
     },
     {
      "id": "en-colloc-on-purpose",
@@ -2172,7 +2317,8 @@
      "example": "He did it on purpose.",
      "exampleCN": "他是故意的。",
      "level": "B1",
-     "levelSrc": "原估值"
+     "levelSrc": "原估值",
+     "phonSrc": "原估值"
     },
     {
      "id": "en-colloc-by-chance",
@@ -2181,7 +2327,8 @@
      "example": "We met by chance at the airport.",
      "exampleCN": "我们在机场偶然遇到。",
      "level": "B1",
-     "levelSrc": "原估值"
+     "levelSrc": "原估值",
+     "phonSrc": "原估值"
     },
     {
      "id": "en-colloc-as-far-as-i-know",
@@ -2190,7 +2337,8 @@
      "example": "As far as I know, it's still open.",
      "exampleCN": "据我所知，那家还开着。",
      "level": "B2",
-     "levelSrc": "原估值"
+     "levelSrc": "原估值",
+     "phonSrc": "原估值"
     },
     {
      "id": "en-colloc-it-depends",
@@ -2199,7 +2347,8 @@
      "example": "It depends on the weather.",
      "exampleCN": "得看天气。",
      "level": "B1",
-     "levelSrc": "原估值"
+     "levelSrc": "原估值",
+     "phonSrc": "原估值"
     },
     {
      "id": "en-colloc-i-d-rather",
@@ -2208,7 +2357,8 @@
      "example": "I'd rather stay home tonight.",
      "exampleCN": "今晚我宁愿待在家。",
      "level": "B1",
-     "levelSrc": "原估值"
+     "levelSrc": "原估值",
+     "phonSrc": "原估值"
     },
     {
      "id": "en-colloc-no-wonder",
@@ -2217,7 +2367,8 @@
      "example": "No wonder you're tired.",
      "exampleCN": "难怪你累了。",
      "level": "B1",
-     "levelSrc": "原估值"
+     "levelSrc": "原估值",
+     "phonSrc": "原估值"
     },
     {
      "id": "en-colloc-figure-out",
@@ -2226,7 +2377,8 @@
      "example": "I can't figure out this app.",
      "exampleCN": "我搞不懂这个应用。",
      "level": "B1",
-     "levelSrc": "原估值"
+     "levelSrc": "原估值",
+     "phonSrc": "原估值"
     },
     {
      "id": "en-colloc-end-up",
@@ -2235,7 +2387,8 @@
      "example": "We ended up walking home.",
      "exampleCN": "我们最后走回了家。",
      "level": "B1",
-     "levelSrc": "原估值"
+     "levelSrc": "原估值",
+     "phonSrc": "原估值"
     },
     {
      "id": "en-colloc-turn-out",
@@ -2244,7 +2397,8 @@
      "example": "The meeting turned out to be short.",
      "exampleCN": "会议结果很短。",
      "level": "B2",
-     "levelSrc": "原估值"
+     "levelSrc": "原估值",
+     "phonSrc": "原估值"
     },
     {
      "id": "en-colloc-keep-up-with",
@@ -2253,7 +2407,8 @@
      "example": "I can't keep up with the news.",
      "exampleCN": "我跟不上新闻的节奏。",
      "level": "B2",
-     "levelSrc": "原估值"
+     "levelSrc": "原估值",
+     "phonSrc": "原估值"
     },
     {
      "id": "en-colloc-catch-up",
@@ -2262,7 +2417,8 @@
      "example": "Let's catch up next week.",
      "exampleCN": "下周我们聚聚聊聊。",
      "level": "B1",
-     "levelSrc": "原估值"
+     "levelSrc": "原估值",
+     "phonSrc": "原估值"
     },
     {
      "id": "en-colloc-run-into",
@@ -2271,7 +2427,8 @@
      "example": "I ran into an old friend downtown.",
      "exampleCN": "我在市中心偶遇一位老朋友。",
      "level": "B1",
-     "levelSrc": "原估值"
+     "levelSrc": "原估值",
+     "phonSrc": "原估值"
     }
    ]
   },
@@ -2289,8 +2446,9 @@
      "example": "But the spectre sat down on the opposite side of the fireplace, as if he were quite used to it.",
      "exampleCN": "但那幽灵在壁炉对面坐了下来，仿佛早已习惯。",
      "level": "B2",
-     "hint": "/ˈspektə/",
-     "levelSrc": "原估值"
+     "hint": "/ˈspektɝː/",
+     "levelSrc": "原估值",
+     "phonSrc": "cmudict"
     },
     {
      "id": "en-acc-ghostly",
@@ -2299,8 +2457,9 @@
      "example": "It looked at Scrooge as Marley used to look: with ghostly spectacles turned up on its ghostly forehead.",
      "exampleCN": "它看斯克鲁奇的眼神就像马利生前那样：一副幽灵般的眼镜架在幽灵般的额头上。",
      "level": "C1",
-     "hint": "/ˈɡəʊstli/",
-     "levelSrc": "ecdict:frq(11245)"
+     "hint": "/ˈɡoʊstliː/",
+     "levelSrc": "ecdict:frq(11245)",
+     "phonSrc": "cmudict"
     },
     {
      "id": "en-acc-scarcely",
@@ -2309,7 +2468,7 @@
      "example": "It swung so softly to start with that it scarcely made a sound.",
      "exampleCN": "它起初摆得很轻，几乎没发出声音。",
      "level": "B2",
-     "hint": "/ˈskeəsli/",
+     "hint": "/ˈskeɹsliː/",
      "levelSrc": "ecdict:frq(6981)",
      "examTags": [
       "cet4",
@@ -2317,7 +2476,8 @@
       "ky",
       "toefl",
       "ielts"
-     ]
+     ],
+     "phonSrc": "cmudict"
     },
     {
      "id": "en-acc-solemn",
@@ -2326,7 +2486,7 @@
      "example": "The Phantom slowly, solemnly, silently, approached.",
      "exampleCN": "那幽灵缓慢、庄严、无声地靠近。",
      "level": "C1",
-     "hint": "/ˈsɒləm/",
+     "hint": "/ˈsɑːləm/",
      "levelSrc": "ecdict:frq(9168)",
      "examTags": [
       "cet4",
@@ -2335,7 +2495,8 @@
       "toefl",
       "ielts",
       "gre"
-     ]
+     ],
+     "phonSrc": "cmudict"
     },
     {
      "id": "en-acc-mourner",
@@ -2344,8 +2505,9 @@
      "example": "The register of his burial was signed by the clergyman, the clerk, the funeral director, and the chief mourner.",
      "exampleCN": "他的下葬登记由牧师、办事员、殡葬承办人和主丧人签署。",
      "level": "C1",
-     "hint": "/ˈmɔːnə/",
-     "levelSrc": "ecdict:frq(12726)"
+     "hint": "/ˈmɔːɹnɝː/",
+     "levelSrc": "ecdict:frq(12726)",
+     "phonSrc": "cmudict"
     },
     {
      "id": "en-acc-sorrow",
@@ -2354,14 +2516,15 @@
      "example": "While there is infection in disease and sorrow, there is nothing in the world so catching as laughter and good-humour.",
      "exampleCN": "疾病和悲伤会传染，可世上最会传染的，是笑声和好心情。",
      "level": "B2",
-     "hint": "/ˈsɒrəʊ/",
+     "hint": "/ˈsɑːɹoʊ/",
      "levelSrc": "ecdict:frq(6304)",
      "examTags": [
       "gk",
       "cet4",
       "cet6",
       "ky"
-     ]
+     ],
+     "phonSrc": "cmudict"
     },
     {
      "id": "en-acc-cheerful",
@@ -2370,14 +2533,15 @@
      "example": "There was nothing very cheerful in the climate or the town.",
      "exampleCN": "天气和这座城都谈不上欢快。",
      "level": "B2",
-     "hint": "/ˈtʃɪəfl/",
+     "hint": "/ˈtʃɪɹfəl/",
      "levelSrc": "ecdict:frq(7309)",
      "examTags": [
       "gk",
       "cet4",
       "cet6",
       "ielts"
-     ]
+     ],
+     "phonSrc": "cmudict"
     },
     {
      "id": "en-acc-bleak",
@@ -2394,7 +2558,8 @@
       "toefl",
       "ielts",
       "gre"
-     ]
+     ],
+     "phonSrc": "cmudict"
     },
     {
      "id": "en-acc-brisk",
@@ -2403,7 +2568,7 @@
      "example": "Scrooge's former self came briskly in, accompanied by his fellow apprentice.",
      "exampleCN": "当年的斯克鲁奇轻快地走了进来，身边跟着他的同伴学徒。",
      "level": "C1",
-     "hint": "/brɪsk/",
+     "hint": "/bɹɪsk/",
      "levelSrc": "ecdict:frq(9149)",
      "examTags": [
       "cet4",
@@ -2412,7 +2577,8 @@
       "toefl",
       "ielts",
       "gre"
-     ]
+     ],
+     "phonSrc": "cmudict"
     },
     {
      "id": "en-acc-ponder",
@@ -2421,7 +2587,7 @@
      "example": "Pondering on what the Ghost had said, he did so now, but without lifting up his eyes.",
      "exampleCN": "他琢磨着幽灵说过的话，此刻又这样想着，却没抬起眼睛。",
      "level": "B2",
-     "hint": "/ˈpɒndə/",
+     "hint": "/ˈpɑːndɝː/",
      "levelSrc": "ecdict:frq(5982)",
      "examTags": [
       "cet6",
@@ -2429,7 +2595,8 @@
       "toefl",
       "ielts",
       "gre"
-     ]
+     ],
+     "phonSrc": "cmudict"
     },
     {
      "id": "en-acc-shudder",
@@ -2438,11 +2605,12 @@
      "example": "'Spirit!' said Scrooge, shuddering from head to foot.",
      "exampleCN": "“幽灵！”斯克鲁奇说着，从头到脚打了个寒战。",
      "level": "B2",
-     "hint": "/ˈʃʌdə/",
+     "hint": "/ˈʃʌdɝː/",
      "levelSrc": "ecdict:frq(7900)",
      "examTags": [
       "gre"
-     ]
+     ],
+     "phonSrc": "cmudict"
     },
     {
      "id": "en-acc-tremble",
@@ -2451,7 +2619,7 @@
      "example": "Scrooge trembled more and more.",
      "exampleCN": "斯克鲁奇抖得越来越厉害。",
      "level": "B2",
-     "hint": "/ˈtrembl/",
+     "hint": "/ˈtɹembəl/",
      "levelSrc": "ecdict:frq(5233)",
      "examTags": [
       "gk",
@@ -2460,7 +2628,8 @@
       "ky",
       "toefl",
       "ielts"
-     ]
+     ],
+     "phonSrc": "cmudict"
     },
     {
      "id": "en-acc-dread",
@@ -2469,7 +2638,7 @@
      "example": "It was with great astonishment, and with a strange dread that he could not explain, that he saw this bell begin to swing.",
      "exampleCN": "他是带着极大的惊愕和一种说不清的畏惧，看着那口钟开始摆动的。",
      "level": "C1",
-     "hint": "/dred/",
+     "hint": "/dɹed/",
      "levelSrc": "ecdict:frq(9181)",
      "examTags": [
       "cet4",
@@ -2477,7 +2646,8 @@
       "ky",
       "toefl",
       "ielts"
-     ]
+     ],
+     "phonSrc": "cmudict"
     },
     {
      "id": "en-acc-pity",
@@ -2486,12 +2656,13 @@
      "example": "In pity for his former self, he said, 'Poor boy!' and cried again.",
      "exampleCN": "他怜悯起当年的自己，说了句“可怜的孩子！”，又哭了起来。",
      "level": "B2",
-     "hint": "/ˈpɪti/",
+     "hint": "/ˈpɪtiː/",
      "levelSrc": "ecdict:frq(6927)",
      "examTags": [
       "zk",
       "gk"
-     ]
+     ],
+     "phonSrc": "cmudict"
     },
     {
      "id": "en-acc-generous",
@@ -2500,7 +2671,7 @@
      "example": "It floated on, pouring out, with a generous hand, its bright and harmless happiness on everything within its reach.",
      "exampleCN": "它继续飘着，慷慨地把明亮无害的快乐洒向触手可及的一切。",
      "level": "B2",
-     "hint": "/ˈdʒenərəs/",
+     "hint": "/ˈdʒenɝːəs/",
      "levelSrc": "ecdict:frq(3886)",
      "examTags": [
       "gk",
@@ -2509,7 +2680,8 @@
       "ky",
       "toefl",
       "ielts"
-     ]
+     ],
+     "phonSrc": "cmudict"
     },
     {
      "id": "en-acc-clerk",
@@ -2518,14 +2690,15 @@
      "example": "My clerk, with fifteen shillings a week, and a wife and family, is talking about a merry Christmas.",
      "exampleCN": "我的办事员一周十五先令，还带着老婆孩子，却在谈什么快乐圣诞。",
      "level": "B2",
-     "hint": "/klɑːk/",
+     "hint": "/klɝːk/",
      "levelSrc": "ecdict:frq(3877)",
      "examTags": [
       "gk",
       "cet4",
       "ky",
       "toefl"
-     ]
+     ],
+     "phonSrc": "cmudict"
     },
     {
      "id": "en-acc-nephew",
@@ -2541,7 +2714,8 @@
       "cet4",
       "cet6",
       "ky"
-     ]
+     ],
+     "phonSrc": "cmudict"
     },
     {
      "id": "en-acc-niece",
@@ -2557,7 +2731,8 @@
       "cet4",
       "cet6",
       "ky"
-     ]
+     ],
+     "phonSrc": "cmudict"
     },
     {
      "id": "en-acc-pudding",
@@ -2571,7 +2746,8 @@
      "examTags": [
       "cet4",
       "cet6"
-     ]
+     ],
+     "phonSrc": "cmudict"
     },
     {
      "id": "en-acc-holly",
@@ -2580,8 +2756,9 @@
      "example": "The brightness of the shops where holly shone in the lamp heat of the windows made pale faces red.",
      "exampleCN": "橱窗里冬青在灯火中闪闪发亮，映得路人的脸由苍白转红。",
      "level": "C1",
-     "hint": "/ˈhɒli/",
-     "levelSrc": "ecdict:frq(15971)"
+     "hint": "/ˈhɑːliː/",
+     "levelSrc": "ecdict:frq(15971)",
+     "phonSrc": "cmudict"
     },
     {
      "id": "en-acc-chain",
@@ -2597,7 +2774,8 @@
       "cet4",
       "cet6",
       "ky"
-     ]
+     ],
+     "phonSrc": "cmudict"
     },
     {
      "id": "en-acc-forge",
@@ -2606,7 +2784,7 @@
      "example": "'I wear the chain I forged in life,' replied the Ghost.",
      "exampleCN": "“我戴着我在世时自己铸成的锁链。”幽灵答道。",
      "level": "B2",
-     "hint": "/fɔːdʒ/",
+     "hint": "/fɔːɹdʒ/",
      "levelSrc": "ecdict:frq(5304)",
      "examTags": [
       "cet6",
@@ -2614,7 +2792,8 @@
       "toefl",
       "ielts",
       "gre"
-     ]
+     ],
+     "phonSrc": "cmudict"
     },
     {
      "id": "en-acc-knocker",
@@ -2624,7 +2803,8 @@
      "exampleCN": "那门上的门环毫无特别之处，除了它特别大。",
      "level": "B2",
      "hint": "/ˈnɒkə/",
-     "levelSrc": "原估值"
+     "levelSrc": "原估值",
+     "phonSrc": "原估值"
     },
     {
      "id": "en-acc-parlour",
@@ -2633,8 +2813,9 @@
      "example": "The parlour was the space behind the screen of rags.",
      "exampleCN": "所谓客厅，就是那块破布帘后面的一块地方。",
      "level": "C1",
-     "hint": "/ˈpɑːlə/",
-     "levelSrc": "原估值"
+     "hint": "/ˈpɑːɹlɝː/",
+     "levelSrc": "原估值",
+     "phonSrc": "cmudict"
     },
     {
      "id": "en-acc-threshold",
@@ -2643,14 +2824,15 @@
      "example": "It seemed as if the weather sat in sad meditation on the threshold.",
      "exampleCN": "仿佛天气正坐在门槛上黯然沉思。",
      "level": "B2",
-     "hint": "/ˈθreʃhəʊld/",
+     "hint": "/ˈθɹeˌʃoʊld/",
      "levelSrc": "ecdict:frq(4724)",
      "examTags": [
       "cet6",
       "ky",
       "toefl",
       "ielts"
-     ]
+     ],
+     "phonSrc": "cmudict"
     },
     {
      "id": "en-acc-frost",
@@ -2659,7 +2841,7 @@
      "example": "Frost was on his head, and on his eyebrows, and his thin chin.",
      "exampleCN": "他头上、眉毛上、瘦削的下巴上都结了霜。",
      "level": "C1",
-     "hint": "/frɒst/",
+     "hint": "/fɹɔːst/",
      "levelSrc": "ecdict:tag(gk,cet4,cet6,ky,toefl,ielts)",
      "examTags": [
       "gk",
@@ -2668,7 +2850,8 @@
       "ky",
       "toefl",
       "ielts"
-     ]
+     ],
+     "phonSrc": "cmudict"
     },
     {
      "id": "en-acc-fog",
@@ -2677,7 +2860,7 @@
      "example": "The fog came pouring in at every crack and keyhole.",
      "exampleCN": "雾从每道缝隙和钥匙孔里灌进来。",
      "level": "B2",
-     "hint": "/fɒɡ/",
+     "hint": "/fɑːɡ/",
      "levelSrc": "ecdict:frq(4913)",
      "examTags": [
       "gk",
@@ -2685,7 +2868,8 @@
       "cet6",
       "ky",
       "toefl"
-     ]
+     ],
+     "phonSrc": "cmudict"
     },
     {
      "id": "en-acc-shilling",
@@ -2700,7 +2884,8 @@
       "cet4",
       "cet6",
       "ky"
-     ]
+     ],
+     "phonSrc": "cmudict"
     },
     {
      "id": "en-acc-penny",
@@ -2709,7 +2894,7 @@
      "example": "If you asked me for another penny, I'd not be so liberal.",
      "exampleCN": "你要是再问我要一个便士，我可没这么好说话。",
      "level": "C1",
-     "hint": "/ˈpeni/",
+     "hint": "/ˈpeniː/",
      "levelSrc": "ecdict:tag(zk,gk,cet4,cet6,ky,ielts)",
      "examTags": [
       "zk",
@@ -2718,7 +2903,8 @@
       "cet6",
       "ky",
       "ielts"
-     ]
+     ],
+     "phonSrc": "cmudict"
     },
     {
      "id": "en-acc-clergyman",
@@ -2727,11 +2913,12 @@
      "example": "The register of his burial was signed by the clergyman.",
      "exampleCN": "他的下葬登记由牧师签署。",
      "level": "C1",
-     "hint": "/ˈklɜːdʒimən/",
+     "hint": "/ˈklɝːdʒiːmən/",
      "levelSrc": "ecdict:frq(15346)",
      "examTags": [
       "toefl"
-     ]
+     ],
+     "phonSrc": "cmudict"
     }
    ]
   },
