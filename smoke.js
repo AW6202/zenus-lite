@@ -893,6 +893,36 @@ class CDP {
       known.found === true && known.inView === true && known.nowKnown !== known.wasKnown
       && known.labelChanged === true && known.restored === true, known);
 
+    // V. 粘贴 / 分享导入（网页链接 → 抓正文；纯文本 → 直接成材料）
+    const paste = await probe('粘贴导入', `
+      state.tab = 'reader'; render();
+      await importFromText('这是一段要导入的文字。'.repeat(80));
+      await new Promise(r => setTimeout(r, 400));
+      const textOne = { kind: RDR.kind, name: RDR.book ? RDR.book.name : '',
+                        len: RDR.book ? RDR.book.chapters[0].text.length : 0 };
+      fetchFullText = async () => ({ text: '网页正文'.repeat(150), via: '直连' });
+      await importFromText('https://example.com/a');
+      await new Promise(r => setTimeout(r, 400));
+      const urlOne = { name: RDR.book ? RDR.book.name : '',
+                       ok: RDR.book ? RDR.book.chapters[0].text.indexOf('网页正文') >= 0 : false };
+      const orig = fetchFullText;
+      fetchFullText = async () => null;
+      await importFromText('https://blocked.example/x');
+      await new Promise(r => setTimeout(r, 300));
+      const fallback = !!document.getElementById('pasteBox');
+      fetchFullText = orig;
+      localStorage.setItem('zenus.shared.v1', JSON.stringify({ text: '分享来的文字'.repeat(60), at: Date.now() }));
+      const shared = checkShared();
+      const cleared = localStorage.getItem('zenus.shared.v1') === null;
+      return { textOne, urlOne, fallback, sharedLen: shared ? shared.length : 0, cleared };
+    `);
+    check('粘贴：纯文本直接成材料 / 链接抓正文 / 抓不到给手贴入口',
+      paste.textOne.len > 100 && paste.textOne.name.indexOf('粘贴') === 0
+      && paste.urlOne.ok === true && paste.urlOne.name.indexOf('网页') === 0
+      && paste.fallback === true, paste);
+    check('分享进来的内容能被接手且不重复消费',
+      paste.sharedLen > 100 && paste.cleared === true, paste);
+
     // H. 关书释放 blob URL
     const clean = await probe('关书释放', `
       const b = await (await fetch('${base}smoke.epub')).blob();

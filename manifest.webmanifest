@@ -32,5 +32,15 @@
   ],
   "display_override": [
     "standalone"
-  ]
+  ],
+  "share_target": {
+    "action": "./share.html",
+    "method": "POST",
+    "enctype": "application/x-www-form-urlencoded",
+    "params": {
+      "title": "title",
+      "text": "text",
+      "url": "url"
+    }
+  }
 }

@@ -1,7 +1,7 @@
 // 学习机 Lite — 静态 PWA：内容来自 pack.json，进度存本地，AI 直连 OpenAI 兼容接口
 'use strict';
 
-const BUILD = '2026-10-29.29';
+const BUILD = '2026-10-29.30';
 
 const LS = {
   progress: 'zenus.progress.v1',
@@ -596,7 +596,13 @@ function renderSettings() {
   const cu = $('#checkUpdate');
   if (cu) cu.onclick = async () => {
     try {
-      if (settings.syncToken) setTimeout(() => syncNow({ quiet: true }), 1500);
+      const shared = checkShared();
+  if (shared) {
+    state.tab = 'reader';
+    render();
+    setTimeout(() => importFromText(shared), 300);
+  }
+  if (settings.syncToken) setTimeout(() => syncNow({ quiet: true }), 1500);
   if ('serviceWorker' in navigator) {
         const reg = await navigator.serviceWorker.getRegistration();
         if (reg) await reg.update();
@@ -2210,12 +2216,14 @@ function renderReader() {
       + '<div class="row" style="margin-top:16px"><button class="btn primary" id="pickPdf">选择文件</button></div>'
       + '<div class="row" style="margin-top:8px"><button class="btn" id="findBooks">找教材</button>'
       + '<button class="btn" id="lookupBtn">查词</button></div>'
+      + '<div class="row" style="margin-top:8px"><button class="btn" id="pasteBtn">粘贴 / 分享导入</button></div>'
       + '<div class="sub" style="margin-top:10px">支持 PDF · EPUB · DOCX · TXT · Markdown · 图片</div></div>'
       + '<input type="file" id="pdfFile" accept=".pdf,.epub,.docx,.txt,.md,.png,.jpg,.jpeg,.webp,image/*,application/pdf,application/epub+zip,'
       + 'application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain" style="display:none">';
     document.getElementById('pickPdf').onclick = () => document.getElementById('pdfFile').click();
     document.getElementById('findBooks').onclick = () => renderFind();
     document.getElementById('lookupBtn').onclick = () => renderLookup();
+    document.getElementById('pasteBtn').onclick = () => pasteFromClipboard();
     document.getElementById('pdfFile').onchange = openBookFile;
     return;
   }
@@ -2579,6 +2587,84 @@ function renderLookup(prefill) {
   else document.getElementById('lkQ').focus();
 }
 
+// ── 网页/文字 → 学习材料（粘贴 & 分享进来）──────────────────
+// 纯前端做不了"内嵌浏览器划词"（同源策略），但可以做到：
+//   · 粘贴一条链接 → 抓正文 → 进阅读器
+//   · 粘贴一段文字 → 直接成材料
+//   · 从别的 App「分享」进来 → 走同一套导入
+
+function looksLikeUrl(t) {
+  return /^https?:\/\/\S+$/i.test(String(t || '').trim());
+}
+
+async function importFromText(raw, title) {
+  const t = String(raw || '').trim();
+  if (!t) return toast('没有内容');
+  if (looksLikeUrl(t)) {
+    toast('正在抓取网页正文…');
+    let got = null;
+    try { got = await fetchFullText(t); } catch { got = null; }
+    if (!got) {
+      renderPaste(t, '抓不到这个网页的正文（站点没开跨域、或需要登录）。可以把正文复制出来粘进去。');
+      return;
+    }
+    importAsText([{ name: title || t.replace(/^https?:\/\//, '').slice(0, 40), url: t, full: got.text, via: got.via }],
+      title || '网页', 1, '网页');
+    return;
+  }
+  importAsText([{ name: title || '粘贴的内容', url: 'paste://', full: t, via: '粘贴' }], title || '粘贴', 1, '粘贴');
+}
+
+function renderPaste(prefill, note) {
+  view.innerHTML =
+    '<div class="meta"><span>粘贴 / 分享导入</span><span>链接或文字</span></div>'
+    + '<div class="hint">粘一条网页链接（会抓正文；抓不到就把正文复制进来），或者直接粘一段文字。'
+    + '导入后能分页阅读、选中存卡、生成知识点和自测题。</div>'
+    + (note ? '<div class="notice">' + esc(note) + '</div>' : '')
+    + '<textarea class="t" id="pasteBox" rows="8" style="height:auto;min-height:150px;font-size:14px;line-height:1.6"'
+    + ' placeholder="https://… 或 一整段文字">' + esc(prefill || '') + '</textarea>'
+    + '<div class="row" style="margin-top:10px"><button class="btn primary" id="pasteGo">导入</button>'
+    + '<button class="btn" id="pasteClip">从剪贴板读</button></div>'
+    + '<div class="row" style="margin-top:10px"><button class="btn ghost" id="pasteBack">← 回阅读</button></div>';
+  document.getElementById('pasteBack').onclick = () => renderReader();
+  document.getElementById('pasteGo').onclick = () => {
+    const v = document.getElementById('pasteBox').value;
+    importFromText(v);
+  };
+  document.getElementById('pasteClip').onclick = async () => {
+    try {
+      const t = await navigator.clipboard.readText();
+      document.getElementById('pasteBox').value = t;
+      toast('已读入剪贴板内容');
+    } catch (e) {
+      toast('读不到剪贴板，长按输入框手动粘贴吧');
+    }
+  };
+  view.scrollTop = 0;
+}
+
+async function pasteFromClipboard() {
+  if (navigator.clipboard && navigator.clipboard.readText) {
+    try {
+      const t = await navigator.clipboard.readText();
+      if (t && t.trim()) return importFromText(t);
+    } catch { /* 需要用户手势或权限，退到手动粘贴 */ }
+  }
+  renderPaste('', '');
+}
+
+// 从别的 App 分享进来（share.html 存在 localStorage 里）
+function checkShared() {
+  let data = null;
+  try { data = JSON.parse(localStorage.getItem('zenus.shared.v1') || 'null'); } catch { data = null; }
+  if (!data) return false;
+  try { localStorage.removeItem('zenus.shared.v1'); } catch { /* 忽略 */ }
+  if (Date.now() - (data.at || 0) > 10 * 60 * 1000) return false;   // 超过 10 分钟的旧分享不自动弹
+  const payload = (data.text && data.text.length > 200) ? data.text : (data.url || data.text || '');
+  if (!payload) return false;
+  return payload;
+}
+
 // ── 开放书源：直接下载整本书（EPUB/TXT），而不是抓网页摘要 ──────
 // 现实：中文教材/教辅的正文大多在文档站（付费墙+反爬），抓不到；
 // 能拿到的是「开放书源」里现成的电子书文件。下载下来我们用解析器读，质量最高。
@@ -2842,7 +2928,7 @@ function renderFind() {
   };
 }
 
-function importAsText(items, query, fullCount) {
+function importAsText(items, query, fullCount, prefix) {
   const NL = String.fromCharCode(10);
   const body = items.map((it) => '## ' + it.name + NL + NL
     + (it.full
@@ -2850,7 +2936,7 @@ function importAsText(items, query, fullCount) {
       : '> ⚠️ 没抓到正文（跨域限制），下面只是搜索摘要，不要当教材。' + NL + NL
         + (it.summary || it.snippet || '（没有摘要）'))
     + NL + NL + '来源：' + it.url).join(NL + NL);
-  const name = '找教材：' + (query || '未命名');
+  const name = (prefix || '找教材') + '：' + (query || '未命名');
   RDR.kind = 'md';
   RDR.pdf = null;
   RDR.book = { name: name, chapters: mdChapters(body) };
@@ -3978,6 +4064,12 @@ document.querySelectorAll('.tabbar button').forEach((b) => {
     render();
   } catch (err) {
     view.innerHTML = `<div class="empty">内容包加载失败<br><span class="sub">${esc(err.message)}</span></div>`;
+  }
+  const shared = checkShared();
+  if (shared) {
+    state.tab = 'reader';
+    render();
+    setTimeout(() => importFromText(shared), 300);
   }
   if (settings.syncToken) setTimeout(() => syncNow({ quiet: true }), 1500);
   if ('serviceWorker' in navigator) {

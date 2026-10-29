@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>已接收 · 学习机</title>
+<style>
+body{background:#0f1115;color:#e8eaf0;font:16px/1.6 -apple-system,"PingFang SC","Microsoft YaHei",sans-serif;
+  margin:0;padding:24px;display:flex;flex-direction:column;gap:14px}
+h1{font-size:16px;margin:0;font-weight:600}
+.k{color:#8b93a5;font-size:13px;word-break:break-all}
+a.go{display:block;text-align:center;background:#5b8cff;color:#fff;text-decoration:none;
+  border-radius:12px;padding:14px;font-weight:600}
+</style>
+</head>
+<body>
+<h1>收到分享，正在转存…</h1>
+<div class="k" id="info">读取中</div>
+<a class="go" id="go" href="./">打开学习机</a>
+<script>
+// 分享进来的内容先存在本机，回到主页面时由 app 接手导入
+(function () {
+  var params = new URLSearchParams(location.search);
+  var form = null;
+  // share_target 是 POST 到本页：用 sessionStorage 接力（同源可读）
+  var data = {
+    title: params.get('title') || '',
+    text: params.get('text') || '',
+    url: params.get('url') || '',
+    at: Date.now()
+  };
+  try { localStorage.setItem('zenus.shared.v1', JSON.stringify(data)); } catch (e) {}
+  document.getElementById('info').textContent =
+    (data.title ? '标题：' + data.title + '\n' : '') +
+    (data.url ? '链接：' + data.url + '\n' : '') +
+    (data.text ? '文字：' + data.text.slice(0, 120) : (data.url ? '' : '（没有可用内容）'));
+  setTimeout(function () { location.replace('./?shared=1'); }, 600);
+})();
+</script>
+</body>
+</html>

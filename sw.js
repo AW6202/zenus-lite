@@ -1,7 +1,7 @@
 // Service Worker
 // 策略：**页面与代码网络优先**，断网才回落到缓存。
 // 之前是"缓存优先"，导致每次发版手机上都要手动清缓存 —— 2026-10-28 改。
-const CACHE = 'zenus-shell-v42';
+const CACHE = 'zenus-shell-v43';
 const SHELL = [
   './',
   './index.html',
@@ -41,6 +41,23 @@ async function networkFirst(req, fallbackUrl) {
 
 self.addEventListener('fetch', (e) => {
   const req = e.request;
+
+  // 系统「分享」是 POST 到 share.html：SW 接住，把内容塞进 URL 再转到落地页
+  if (req.method === 'POST' && new URL(req.url).pathname.endsWith('/share.html')) {
+    e.respondWith((async () => {
+      let params = new URLSearchParams();
+      try {
+        const form = await req.formData();
+        for (const k of ['title', 'text', 'url']) {
+          const v = form.get(k);
+          if (v) params.set(k, String(v));
+        }
+      } catch { /* 不是表单就空着 */ }
+      return Response.redirect('./share.html?#' + params.toString(), 303);
+    })());
+    return;
+  }
+
   if (req.method !== 'GET') return;
   const url = new URL(req.url);
 
