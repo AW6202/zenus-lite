@@ -1,7 +1,7 @@
 // 学习机 Lite — 静态 PWA：内容来自 pack.json，进度存本地，AI 直连 OpenAI 兼容接口
 'use strict';
 
-const BUILD = '2026-10-29.12';
+const BUILD = '2026-10-29.13';
 
 const LS = {
   progress: 'zenus.progress.v1',
@@ -209,12 +209,19 @@ function render() {
   if (!state.pack) return;
   view.addEventListener('scroll', onViewScroll, { passive: true });
 
+let resizeTimer = null;
 window.addEventListener('resize', () => {
-  if (RDR.paged && RDR.book) {
-    const ratio = RDR.pages > 1 ? (RDR.pageIdx || 0) / (RDR.pages - 1) : 0;
-    layoutPages(ratio);
-  }
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(() => {
+    if (RDR.pdf) relayoutPdf();
+    else if (RDR.paged && RDR.book) {
+      const ratio = RDR.pages > 1 ? (RDR.pageIdx || 0) / (RDR.pages - 1) : 0;
+      layoutPages(ratio);
+    }
+  }, 180);
 });
+window.addEventListener('orientationchange', () => setTimeout(() => { if (RDR.pdf) relayoutPdf(); }, 300));
+
 
 // 工具条上点了按钮就重新计时（正在缩放/翻页时不要自己收掉）
 document.addEventListener('click', (e) => {
@@ -224,6 +231,7 @@ document.addEventListener('click', (e) => {
 document.querySelectorAll('.tabbar button').forEach((b) => {
     b.classList.toggle('on', b.dataset.tab === state.tab);
   });
+  document.body.classList.toggle('reader-mode', state.tab === 'reader');
   if (state.tab === 'review') return renderReview();
   if (state.tab === 'browse') return renderBrowse();
   if (state.tab === 'reader') return renderReader();
@@ -1045,7 +1053,7 @@ function scheduleSync() {
 const RDR = {
   pdf: null, page: 1, total: 0, name: '', scale: 1, rendering: false,
   kind: null, book: null, ch: 0, urls: [], assets: {}, toolsVisible: false,
-  paged: true, pageIdx: 0, pages: 1,
+  paged: true, pageIdx: 0, pages: 1, pdfScroll: false,
 };
 
 const scriptOnce = {};
@@ -2155,6 +2163,7 @@ function openWithSystemReader() {
 function renderReader() {
   if (RDR.kind === 'epub' || RDR.kind === 'text' || RDR.kind === 'md' || RDR.kind === 'docx') return renderTextBook();
   if (RDR.textMode && RDR.textLines && RDR.textLines.length) return renderPdfText();
+  if (RDR.pdf && RDR.pdfScroll) return renderPdfScroll();
   if (!RDR.pdf && !RDR.book) {
     view.innerHTML = '<div class="empty">选一本书，直接在页面里读。<br>'
       + '<span class="sub">选中任意文字 → 朗读 / 存卡 / 问 AI。文件不上传，全在本机解析。</span>'
@@ -2178,6 +2187,7 @@ function renderReader() {
     + '<div class="floating pager' + (RDR.toolsVisible ? ' show' : '') + '" id="pdfTools">'
     + '<button id="prevPage">◀</button><button id="zoomOut">－</button><button id="zoomIn">＋</button><button id="nextPage">▶</button>'
     + '<button id="ocrBtn" class="t-close">识别文字</button>'
+    + '<button id="toggleScroll" class="t-close">滚动</button>'
     + '<button id="closePdf" class="t-close">关闭</button>'
     + (RDR.textLines && RDR.textLines.length ? '<button id="showText" class="t-close">文字视图</button>' : '')
     + '</div>';
@@ -2192,6 +2202,8 @@ function renderReader() {
   if (sysBtn) sysBtn.onclick = openWithSystemReader;
   const ocrb = document.getElementById('ocrBtn');
   if (ocrb) ocrb.onclick = () => { hideTools(); ocrCurrentPage(); };
+  const ts = document.getElementById('toggleScroll');
+  if (ts) ts.onclick = () => { RDR.pdfScroll = true; renderReader(); };
   const dis = document.getElementById('dismissWarn');
   if (dis) dis.onclick = () => { const w = document.getElementById('pdfFontWarn'); if (w) w.remove(); };
   drawPage();
@@ -2695,6 +2707,119 @@ function gotoPage(n) {
   saveReadPos();
 }
 
+// ── PDF：滚动模式（连续纵向翻页）+ 尺寸自适应 ───────────────
+// 扫描件往往比 A4 长，逐页翻看不方便；给一个「滚动」模式：所有页纵向排开，滚到哪画到哪。
+
+function pdfFitScale(page, base) {
+  const w = Math.max(240, (view.clientWidth || 360) - 28);
+  return w / base.width;
+}
+
+async function renderScrollPage(el) {
+  if (!RDR.pdf || el.dataset.done) return;
+  el.dataset.done = '1';
+  const n = Number(el.dataset.page);
+  try {
+    const page = await RDR.pdf.getPage(n);
+    const base = page.getViewport({ scale: 1 });
+    const vp = page.getViewport({ scale: pdfFitScale(page, base) * (RDR.scale || 1) });
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    const c = document.createElement('canvas');
+    c.width = Math.floor(vp.width * dpr);
+    c.height = Math.floor(vp.height * dpr);
+    await page.render({
+      canvasContext: c.getContext('2d'),
+      viewport: vp,
+      transform: dpr !== 1 ? [dpr, 0, 0, dpr, 0, 0] : null,
+    }).promise;
+    el.innerHTML = '';
+    el.appendChild(c);
+    const no = document.createElement('div');
+    no.className = 'pdfPageNo';
+    no.textContent = n + ' / ' + RDR.total;
+    el.appendChild(no);
+    el.style.minHeight = '0';
+  } catch (err) {
+    el.dataset.done = '';
+  }
+}
+
+function renderPdfScroll() {
+  view.innerHTML =
+    '<div class="meta"><span>' + esc(RDR.name) + '</span><span id="pgLabel">' + RDR.page + ' / ' + RDR.total + '</span></div>'
+    + '<div id="pdfScroll"></div>'
+    + '<div class="floating pager' + (RDR.toolsVisible ? ' show' : '') + '" id="pdfTools">'
+    + '<button id="prevPage">▲</button><button id="nextPage">▼</button>'
+    + '<button id="zoomOut">－</button><button id="zoomIn">＋</button>'
+    + '<button id="toggleScroll" class="t-close">翻页</button>'
+    + '<button id="ocrBtn" class="t-close">识别文字</button>'
+    + '<button id="toggleScroll" class="t-close">滚动</button>'
+    + '<button id="closePdf" class="t-close">关闭</button>'
+    + (RDR.textLines && RDR.textLines.length ? '<button id="showText" class="t-close">文字视图</button>' : '')
+    + '</div>';
+  const host = document.getElementById('pdfScroll');
+  for (let i = 1; i <= RDR.total; i++) {
+    const el = document.createElement('div');
+    el.className = 'pdfPage';
+    el.dataset.page = i;
+    host.appendChild(el);
+  }
+  if (RDR.scrollIO) RDR.scrollIO.disconnect();
+  RDR.scrollIO = new IntersectionObserver((entries) => {
+    for (const e of entries) if (e.isIntersecting) renderScrollPage(e.target);
+  }, { root: view, rootMargin: '400px 0px' });
+  host.querySelectorAll('.pdfPage').forEach((el) => RDR.scrollIO.observe(el));
+  // 进度栏跟着滚动更新
+  view.onscroll = () => {
+    const mid = view.scrollTop + view.clientHeight / 2;
+    let cur = 1;
+    host.querySelectorAll('.pdfPage').forEach((el) => { if (el.offsetTop <= mid) cur = Number(el.dataset.page); });
+    RDR.page = cur;
+    const lb = document.getElementById('pgLabel');
+    if (lb) lb.textContent = cur + ' / ' + RDR.total;
+  };
+  document.getElementById('prevPage').onclick = () => scrollToPdfPage(RDR.page - 1);
+  document.getElementById('nextPage').onclick = () => scrollToPdfPage(RDR.page + 1);
+  document.getElementById('zoomOut').onclick = () => { RDR.scale = Math.max(0.6, RDR.scale / 1.15); relayoutPdf(); };
+  document.getElementById('zoomIn').onclick = () => { RDR.scale = Math.min(3, RDR.scale * 1.15); relayoutPdf(); };
+  document.getElementById('toggleScroll').onclick = () => { RDR.pdfScroll = false; renderReader(); };
+  document.getElementById('closePdf').onclick = () => { saveReadPos(); resetBook(); renderReader(); };
+  const ocrb = document.getElementById('ocrBtn');
+  if (ocrb) ocrb.onclick = () => { hideTools(); ocrCurrentPage(); };
+  const ts = document.getElementById('toggleScroll');
+  if (ts) ts.onclick = () => { RDR.pdfScroll = true; renderReader(); };
+  const st = document.getElementById('showText');
+  if (st) st.onclick = () => { RDR.textMode = true; renderReader(); };
+  bindFlipGestures(view, {
+    prev: () => scrollToPdfPage(RDR.page - 1),
+    next: () => scrollToPdfPage(RDR.page + 1),
+    middle: toggleTools,
+  });
+  // 恢复上次读到的那一页
+  if (RDR.page > 1) setTimeout(() => scrollToPdfPage(RDR.page), 150);
+}
+
+function scrollToPdfPage(n) {
+  const p = Math.max(1, Math.min(RDR.total, n));
+  const el = document.querySelector('.pdfPage[data-page="' + p + '"]');
+  if (!el) return;
+  view.scrollTo({ top: el.offsetTop - 8, behavior: 'smooth' });
+  RDR.page = p;
+  saveReadPos();
+}
+
+// 缩放/换屏后整页重排（清掉 done 标记重新画）
+function relayoutPdf() {
+  if (RDR.pdfScroll) {
+    const keep = RDR.page;
+    renderPdfScroll();
+    RDR.page = keep;
+    setTimeout(() => scrollToPdfPage(keep), 120);
+  } else {
+    drawPage();
+  }
+}
+
 async function drawPage() {
   if (!RDR.pdf || RDR.rendering) return;
   RDR.rendering = true;
@@ -2861,12 +2986,19 @@ function askFromSelection(t) {
 // ── 启动 ──────────────────────────────────────────────
 view.addEventListener('scroll', onViewScroll, { passive: true });
 
+let resizeTimer = null;
 window.addEventListener('resize', () => {
-  if (RDR.paged && RDR.book) {
-    const ratio = RDR.pages > 1 ? (RDR.pageIdx || 0) / (RDR.pages - 1) : 0;
-    layoutPages(ratio);
-  }
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(() => {
+    if (RDR.pdf) relayoutPdf();
+    else if (RDR.paged && RDR.book) {
+      const ratio = RDR.pages > 1 ? (RDR.pageIdx || 0) / (RDR.pages - 1) : 0;
+      layoutPages(ratio);
+    }
+  }, 180);
 });
+window.addEventListener('orientationchange', () => setTimeout(() => { if (RDR.pdf) relayoutPdf(); }, 300));
+
 
 // 工具条上点了按钮就重新计时（正在缩放/翻页时不要自己收掉）
 document.addEventListener('click', (e) => {

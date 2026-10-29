@@ -604,6 +604,30 @@ class CDP {
         && flip.afterLeft === flip.before && flip.afterSwipe === flip.before + 1, flip);
       check('点中间出工具条，且 3.5 秒后自动收起', flip.shown === true && flip.autoHidden === true, flip);
 
+      // PDF 滚动模式 + 阅读页隐藏顶栏
+      const scrolly = await probe('PDF 滚动', `
+        state.tab = 'reader'; render();
+        await new Promise(r => setTimeout(r, 200));
+        const headerHidden = getComputedStyle(document.querySelector('header')).display === 'none';
+        const b = await (await fetch('${base}smoke.pdf')).blob();
+        await openPdfFile(new File([b], 'smoke.pdf'));
+        await new Promise(r => setTimeout(r, 2500));
+        const total = RDR.total;
+        RDR.pdfScroll = true; renderReader();
+        await new Promise(r => setTimeout(r, 2500));
+        const pages = document.querySelectorAll('.pdfPage').length;
+        const rendered = [...document.querySelectorAll('.pdfPage')].filter((e) => e.querySelector('canvas')).length;
+        view.scrollTop = 900;
+        await new Promise(r => setTimeout(r, 1400));
+        const label = (document.getElementById('pgLabel') || {}).textContent;
+        RDR.pdfScroll = false; renderReader();
+        await new Promise(r => setTimeout(r, 1500));
+        return { headerHidden, total, pages, rendered, label, back: !!document.getElementById('pdfCanvas') };
+      `);
+      check('阅读页隐藏顶部标题栏', scrolly.headerHidden === true, scrolly);
+      check('PDF 滚动模式：全部页铺开 + 懒渲染 + 能切回翻页',
+        scrolly.pages === scrolly.total && scrolly.rendered > 0 && scrolly.back === true, scrolly);
+
       // 「关闭这份 PDF」必须真的回到选文件页（2026-10-29 回归：按钮点了没反应）
       const closed = await probe('关闭 PDF', `
         const btn = document.getElementById('closePdf');

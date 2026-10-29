@@ -31,7 +31,6 @@
     }
   ],
   "display_override": [
-    "fullscreen",
     "standalone"
   ]
 }
