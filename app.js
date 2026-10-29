@@ -1,7 +1,7 @@
 // 学习机 Lite — 静态 PWA：内容来自 pack.json，进度存本地，AI 直连 OpenAI 兼容接口
 'use strict';
 
-const BUILD = '2026-10-29.25';
+const BUILD = '2026-10-29.26';
 
 const LS = {
   progress: 'zenus.progress.v1',
@@ -2506,12 +2506,14 @@ function renderLookupResult(list, q, lang) {
     const tr = isJa ? (r.entry[2] || '') : (r.entry[1] || '');
     const pos = isJa ? (r.entry[1] || '') : (r.entry[2] || '');
     const tag = isJa ? '' : (r.entry[3] || '');
+    const src = isJa ? '' : (r.entry[5] || '');
     return '<div class="it" style="align-items:flex-start;flex-direction:column;gap:6px">'
       + '<div style="width:100%"><b style="font-size:17px">' + esc(r.head) + '</b>'
       + (isJa && phon ? ' <span class="sub">' + esc(phon) + '</span>' : '')
       + (!isJa && phon ? ' <span class="sub">/' + esc(phon) + '/</span>' : '')
       + (pos ? ' <span class="tag">' + esc(pos) + '</span>' : '')
       + (tag ? ' <span class="tag">' + esc(tag) + '</span>' : '')
+      + (src === 'ecdict' ? ' <span class="tag">释义:ECDICT</span>' : '')
       + '</div>'
       + '<div style="width:100%;font-size:14px;line-height:1.6">'
       + (isJa ? '<span class="sub">英文释义：</span>' : '') + esc(tr) + '</div>'

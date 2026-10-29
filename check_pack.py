@@ -184,7 +184,7 @@ def ipa_core(x):
     t = str(x or "").strip().strip("/[]")
     t = (t.replace("ˈ", "").replace("ˌ", "").replace("'", "")
          .replace("ː", "").replace(":", "").replace("ɡ", "g")
-         .replace("ә", "ə").replace(" ", "").replace("-", ""))
+         .replace("ɹ", "r").replace("ә", "ə").replace(" ", "").replace("-", ""))
     t = (t.replace("əʊ", "ou").replace("oʊ", "ou").replace("eɪ", "ei")
          .replace("aɪ", "ai").replace("ɔɪ", "oi").replace("aʊ", "au")
          .replace("ɪə", "ie").replace("eə", "ee").replace("ʊə", "ue")
@@ -192,6 +192,7 @@ def ipa_core(x):
     vowel_part = "".join(ch for ch in t if ch in VOWELS)
     cons_part = "".join(ch for ch in t if ch not in VOWELS)
     cons_part = cons_part.replace("j", "")     # /tjuː/ 与 /tuː/ 是记音体系差异，不算错
+    cons_part = cons_part.replace("r", "")     # 英式不卷舌、美式卷舌：r 的有无不判错
     return vowel_part, cons_part
 
 
@@ -229,9 +230,9 @@ def check_phonetic(card, cid, c_id):
     card_v, card_c = ipa_core(hint)
     dict_v, dict_c = ipa_core(entry[0])
     if card_c != dict_c:
-        note(f"{cid}: {c_id} 音标与词典记法不同 {word}: 卡片 {hint} vs 词典 /{entry[0]}/（ECDICT 记音不权威，仅供参考）")
+        note(f"{cid}: {c_id} 音标与词典不同 {word}: 卡片 {hint} vs 词典 /{entry[0]}/")
     elif card_v != dict_v:
-        note(f"{cid}: {c_id} 音标元音写法不同（多为英/美或记音体系差异）{word}: {hint} vs /{entry[0]}/")
+        note(f"{cid}: {c_id} 音标元音不同（多为英式/美式差异）{word}: {hint} vs /{entry[0]}/")
 
 
 def main(path="pack.json"):
