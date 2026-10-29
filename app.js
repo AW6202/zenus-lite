@@ -1,7 +1,7 @@
 // 学习机 Lite — 静态 PWA：内容来自 pack.json，进度存本地，AI 直连 OpenAI 兼容接口
 'use strict';
 
-const BUILD = '2026-10-29.10';
+const BUILD = '2026-10-29.11';
 
 const LS = {
   progress: 'zenus.progress.v1',
@@ -24,6 +24,7 @@ const DEFAULT_SETTINGS = {
   syncRepo: 'AW6202/zenus-state',
   syncDevice: '',
   ttsVoice: '',
+  searchKey: '',
   readFont: 16,
   readLine: 1.8,
 };
@@ -437,6 +438,8 @@ function renderSettings() {
     <input class="t" id="s-model" value="${esc(settings.model)}" placeholder="deepseek-chat">
     <label class="f">API Key（只存在本机）</label>
     <input class="t" id="s-key" type="password" value="${esc(settings.key)}" placeholder="sk-...">
+    <label class="f">搜索 API Key（博查 bochaai.com，用于「找教材」全网搜；只存本机）</label>
+    <input class="t" id="s-bocha" type="password" value="${esc(settings.searchKey || '')}" placeholder="sk-...">
     <label class="f">每天新卡上限</label>
     <input class="t" id="s-new" type="number" min="0" max="100" value="${settings.dailyNew}">
     <label class="f">AI 对话携带上下文条数（0 = 每条独立问）</label>
@@ -492,6 +495,7 @@ function renderSettings() {
     settings.apiBase = $('#s-base').value.trim().replace(/\/$/, '');
     settings.model = $('#s-model').value.trim();
     settings.key = $('#s-key').value.trim();
+    settings.searchKey = ($('#s-bocha') || {}).value ? $('#s-bocha').value.trim() : settings.searchKey;
     settings.dailyNew = Math.max(0, Number($('#s-new').value) || 0);
     settings.ctxMsgs = Math.max(0, Math.min(40, Number($('#s-ctx').value) || 0));
     settings.ttsRate = Math.min(1.2, Math.max(0.5, Number($('#s-rate').value) || 0.9));
@@ -2155,10 +2159,12 @@ function renderReader() {
     view.innerHTML = '<div class="empty">选一本书，直接在页面里读。<br>'
       + '<span class="sub">选中任意文字 → 朗读 / 存卡 / 问 AI。文件不上传，全在本机解析。</span>'
       + '<div class="row" style="margin-top:16px"><button class="btn primary" id="pickPdf">选择文件</button></div>'
+      + '<div class="row" style="margin-top:8px"><button class="btn" id="findBooks">找教材</button></div>'
       + '<div class="sub" style="margin-top:10px">支持 PDF · EPUB · DOCX · TXT · Markdown</div></div>'
       + '<input type="file" id="pdfFile" accept=".pdf,.epub,.docx,.txt,.md,application/pdf,application/epub+zip,'
       + 'application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain" style="display:none">';
     document.getElementById('pickPdf').onclick = () => document.getElementById('pdfFile').click();
+    document.getElementById('findBooks').onclick = () => renderFind();
     document.getElementById('pdfFile').onchange = openBookFile;
     return;
   }
@@ -2197,6 +2203,153 @@ function renderReader() {
 // EPUB / MD 走「结构渲染」；TXT 走「段落 + 保留换行」
 function plainToHtml(text) {
   return String(text || '').split(/\n{2,}/).map((p) => '<p>' + esc(p.replace(/\n+$/, '')) + '</p>').join('');
+}
+
+// ── G：找网络教材 ────────────────────────────────────────
+// 两条通道：
+//   ① 开放书源白名单（公有领域/免费公开）→ 直接给搜索链接，用系统浏览器打开
+//   ② 博查搜索 API（设置里填 key）→ 拿到 标题/链接/摘要，可勾选后当短文导入
+// 说明：浏览器不能随便抓任意网站的正文（跨域限制），所以「导入」进去的是摘要正文，
+// 或者只是链接；能抓到的站点才给全文。
+
+const OPEN_SOURCES = [
+  { name: '维基文库（中文，公有领域）', url: 'https://zh.wikisource.org/w/index.php?search={q}' },
+  { name: 'Project Gutenberg（公版书）', url: 'https://www.gutenberg.org/ebooks/search/?query={q}' },
+  { name: 'MIT OpenCourseWare（公开课）', url: 'https://ocw.mit.edu/search/?q={q}' },
+  { name: '可汗学院（数学/科学）', url: 'https://zh.khanacademy.org/search?page_search_query={q}' },
+  { name: '中国大学 MOOC', url: 'https://www.icourse163.org/search.htm?search={q}' },
+  { name: 'GitHub 开源教材', url: 'https://github.com/search?q={q}&type=repositories' },
+];
+
+const FIND = { query: '', items: [], busy: false, note: '', judged: false };
+
+async function bochaSearch(q) {
+  const res = await fetch('https://api.bochaai.com/v1/web-search', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + settings.searchKey },
+    body: JSON.stringify({ query: q, count: 10, summary: true }),
+  });
+  if (!res.ok) throw new Error('搜索 HTTP ' + res.status);
+  const j = await res.json();
+  const pages = (j && j.data && j.data.webPages && j.data.webPages.value) || [];
+  return pages.map((p) => ({
+    name: p.name || p.displayUrl || p.url,
+    url: p.url,
+    snippet: p.snippet || '',
+    summary: p.summary || '',
+  }));
+}
+
+// 让 AI 只看「标题+摘要」判一下值不值得读（不下载正文，很便宜）
+async function judgeItems(items) {
+  if (!settings.key || !items.length) return items;
+  const brief = items.slice(0, 8).map((it, i) =>
+    (i + 1) + '. 标题：' + it.name + '\n摘要：' + (it.summary || it.snippet || '').slice(0, 220)).join('\n\n');
+  try {
+    const res = await fetch(settings.apiBase + '/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + settings.key },
+      body: JSON.stringify({
+        model: settings.model,
+        messages: [
+          { role: 'system', content: '你帮学习者挑材料，只输出 JSON。' },
+          { role: 'user', content: '下面是搜索结果。逐条判断适不适合当学习材料：'
+            + '能不能直接读（是不是正文而不是导航/广告/付费墙）、属于语言类还是技术类、大概难度。\n\n'
+            + brief + '\n\n返回 JSON：{"items":[{"i":1,"usable":true 或 false,"kind":"language 或 tech","level":"入门/中级/进阶","why":"一句话理由"}]}' },
+        ],
+        response_format: { type: 'json_object' },
+        temperature: 0.2,
+      }),
+    });
+    if (!res.ok) return items;
+    const j = await res.json();
+    const d = JSON.parse(j.choices[0].message.content);
+    for (const it of d.items || []) {
+      const idx = (it.i || 0) - 1;
+      if (items[idx]) Object.assign(items[idx], { usable: it.usable, kind: it.kind, level: it.level, why: it.why });
+    }
+  } catch { /* 判不了就照常列出来 */ }
+  return items;
+}
+
+function renderFind() {
+  const q = FIND.query;
+  const srcLinks = OPEN_SOURCES.map((s) => {
+    const url = s.url.replace('{q}', encodeURIComponent(q || '英语 精读'));
+    return '<div class="it"><span>' + esc(s.name) + '</span>'
+      + '<a href="' + url + '" target="_blank" rel="noopener" style="color:var(--acc);font-size:12px">打开</a></div>';
+  }).join('');
+
+  const items = FIND.items.map((it, i) => {
+    const label = it.usable === true ? '✅ 适合' : it.usable === false ? '⛔ 不建议' : '📄 待判';
+    const meta = [it.kind === 'tech' ? '技术类' : it.kind === 'language' ? '语言类' : '', it.level || ''].filter(Boolean).join(' · ');
+    return '<div class="it" style="align-items:flex-start;flex-direction:column;gap:6px">'
+      + '<label style="display:flex;gap:8px;align-items:flex-start;width:100%">'
+      + '<input type="checkbox" data-pick="' + i + '"' + (it.usable === false ? '' : ' checked') + ' style="margin-top:3px">'
+      + '<span><b>' + esc(it.name) + '</b> <small>' + label + (meta ? ' · ' + esc(meta) : '') + '</small>'
+      + '<div class="sub" style="margin-top:4px">' + esc((it.why || it.summary || it.snippet || '').slice(0, 180)) + '</div>'
+      + '<a href="' + esc(it.url) + '" target="_blank" rel="noopener" style="color:var(--acc);font-size:12px">原网页</a>'
+      + '</span></label></div>';
+  }).join('');
+
+  view.innerHTML =
+    '<div class="meta"><span>找教材</span><span>' + (settings.searchKey ? '博查已接' : '未填搜索 key') + '</span></div>'
+    + '<div class="row" style="margin:6px 0"><input class="t" id="findQ" placeholder="想学什么？例：英语 A2 分级阅读短文 / 六年级分数应用题" value="' + esc(q) + '">'
+    + '<button class="btn primary" id="findGo" style="width:96px">搜索</button></div>'
+    + (FIND.note ? '<div class="hint">' + esc(FIND.note) + '</div>' : '')
+    + (FIND.busy ? '<div class="empty"><span class="spin"></span> 正在搜…</div>' : '')
+    + (items ? '<h2>搜索结果</h2><div class="list">' + items + '</div>'
+      + '<div class="row" style="margin-top:10px"><button class="btn primary" id="findImport">把勾选的当短文导入</button></div>'
+      + '<div class="hint">浏览器读不到别的网站正文（跨域限制），导入的是搜索给的摘要文字；想读全文点「原网页」。</div>' : '')
+    + '<h2>开放书源（公有领域 / 免费公开）</h2><div class="list">' + srcLinks + '</div>'
+    + '<div class="row" style="margin-top:12px"><button class="btn ghost" id="findBack">← 回阅读</button></div>';
+
+  document.getElementById('findBack').onclick = () => renderReader();
+  document.getElementById('findGo').onclick = async () => {
+    const query = (document.getElementById('findQ').value || '').trim();
+    if (!query) return toast('先写想学什么');
+    FIND.query = query;
+    FIND.items = [];
+    FIND.note = '';
+    if (!settings.searchKey) {
+      FIND.note = '没填博查 key，只能用下面的开放书源。要全网搜就去设置页填 key。';
+      return renderFind();
+    }
+    FIND.busy = true; renderFind();
+    try {
+      FIND.items = await bochaSearch(query);
+      FIND.note = '找到 ' + FIND.items.length + ' 条，正在让 AI 判断哪些能用…';
+      renderFind();
+      FIND.items = await judgeItems(FIND.items);
+      FIND.note = '判断完成。勾选要的，点下面导入。';
+    } catch (err) {
+      FIND.note = '搜索失败：' + err.message;
+    }
+    FIND.busy = false;
+    renderFind();
+  };
+  const imp = document.getElementById('findImport');
+  if (imp) imp.onclick = () => {
+    const picks = [...view.querySelectorAll('[data-pick]')].filter((c) => c.checked)
+      .map((c) => FIND.items[Number(c.dataset.pick)]).filter(Boolean);
+    if (!picks.length) return toast('先勾几条');
+    importAsText(picks, FIND.query);
+  };
+}
+
+function importAsText(items, query) {
+  const body = items.map((it) => '## ' + it.name + '\n\n'
+    + (it.summary || it.snippet || '（没有摘要）') + '\n\n来源：' + it.url).join('\n\n');
+  const name = '找教材：' + (query || '未命名');
+  RDR.kind = 'md';                            // 用 markdown 渲染，标题才不会顶着一个 ## 出现在正文里
+  RDR.pdf = null;
+  RDR.book = { name: name, chapters: mdChapters(body) };
+  RDR.ch = 0;
+  RDR.pageIdx = 0;
+  RDR.key = name + '|' + body.length;
+  RDR.textLines = [];
+  renderReader();
+  toast('已导入 ' + items.length + ' 条');
 }
 
 // ── C：整章提知识点（只喂当前这一章，整本塞不进去）────────────

@@ -497,6 +497,29 @@ class CDP {
       && kp.marked === true && kp.back === true, kp);
     check('设置页有「安装到主屏幕」「全屏」入口', kp.installBtn === true && kp.fullBtn === true, kp);
 
+    // J. 找教材（搜索用桩，不打真网络）
+    const find = await probe('找教材', `
+      state.tab = 'reader'; render();
+      settings.searchKey = 'stub'; settings.key = '';
+      bochaSearch = async () => ([
+        { name: '材料甲', url: 'https://a.example', snippet: '片段一', summary: '摘要一' },
+        { name: '材料乙', url: 'https://b.example', snippet: '片段二', summary: '摘要二' },
+      ]);
+      renderFind();
+      const links = view.querySelectorAll('a[target=_blank]').length;
+      document.getElementById('findQ').value = '测试查询';
+      document.getElementById('findGo').click();
+      await new Promise(r => setTimeout(r, 600));
+      const picks = view.querySelectorAll('[data-pick]').length;
+      document.getElementById('findImport').click();
+      await new Promise(r => setTimeout(r, 500));
+      return { links, picks, kind: RDR.kind, chapters: RDR.book ? RDR.book.chapters.length : 0,
+               name: RDR.book ? RDR.book.name : '', heading: !!view.querySelector('#bookText h2, #bookText h3') };
+    `);
+    check('找教材：开放书源直链 + 搜索结果勾选导入成短文',
+      find.links >= 6 && find.picks === 2 && find.kind === 'md'
+      && find.chapters === 2 && find.name.indexOf('找教材') === 0 && find.heading === true, find);
+
     // H. 关书释放 blob URL
     const clean = await probe('关书释放', `
       const b = await (await fetch('${base}smoke.epub')).blob();
