@@ -710,6 +710,32 @@ class CDP {
     `);
     check('打开书不落在封面页（停在有正文的那章）', cover.textLen > 50, cover);
 
+    // P. 图片 → OCR → 知识点；PDF 也能出知识点
+    const kp2 = await probe('图片与PDF出知识点', `
+      state.tab = 'reader'; render();
+      settings.key = 'stub';
+      askPoints = async () => ({ kind: 'tech', summary: '概括', points: ['要点一'], words: [], quiz: [] });
+      // 图片：把已有截图当成待识别图片
+      const png = await (await fetch('icons/icon-192.png')).blob();
+      await openImageFile(new File([png], 'pic.png'));
+      await new Promise(r => setTimeout(r, 300));
+      const imgState = { kind: RDR.kind, shown: !!document.getElementById('imgView'),
+                         tools: document.querySelectorAll('#imgTools button').length };
+      // PDF（有文字层）
+      const b = await (await fetch('${base}smoke.pdf')).blob();
+      await openPdfFile(new File([b], 'smoke.pdf'));
+      await new Promise(r => setTimeout(r, 2200));
+      const t = await chapterText();
+      const textLen = t ? t.text.length : 0;
+      await showPoints();
+      await new Promise(r => setTimeout(r, 400));
+      return { imgState, textLen, points: view.querySelectorAll('.kplist li').length };
+    `);
+    check('图片能导入并给出识别/知识点入口',
+      kp2.imgState.kind === 'image' && kp2.imgState.shown === true && kp2.imgState.tools >= 3, kp2);
+    check('PDF（含文字层）能取到正文并生成知识点',
+      kp2.textLen > 100 && kp2.points >= 1, kp2);
+
     // H. 关书释放 blob URL
     const clean = await probe('关书释放', `
       const b = await (await fetch('${base}smoke.epub')).blob();

@@ -1,7 +1,7 @@
 // 学习机 Lite — 静态 PWA：内容来自 pack.json，进度存本地，AI 直连 OpenAI 兼容接口
 'use strict';
 
-const BUILD = '2026-10-29.18';
+const BUILD = '2026-10-29.19';
 
 const LS = {
   progress: 'zenus.progress.v1',
@@ -1094,6 +1094,7 @@ async function openBookFile(ev) {
   const name = f.name.toLowerCase();
   if (name.endsWith('.epub')) return openEpubBook(f);
   if (name.endsWith('.docx')) return openDocxBook(f);
+  if (/\.(png|jpe?g|webp|gif|bmp)$/i.test(name)) return openImageFile(f);
   if (name.endsWith('.txt') || name.endsWith('.md')) return openTextBook(f);
   return openPdfFile(f);
 }
@@ -2174,6 +2175,7 @@ function openWithSystemReader() {
 }
 
 function renderReader() {
+  if (RDR.kind === 'image') return renderImage();
   if (RDR.kind === 'epub' || RDR.kind === 'text' || RDR.kind === 'md' || RDR.kind === 'docx') return renderTextBook();
   if (RDR.textMode && RDR.textLines && RDR.textLines.length) return renderPdfText();
   if (RDR.pdf && RDR.pdfScroll) return renderPdfScroll();
@@ -2182,8 +2184,8 @@ function renderReader() {
       + '<span class="sub">选中任意文字 → 朗读 / 存卡 / 问 AI。文件不上传，全在本机解析。</span>'
       + '<div class="row" style="margin-top:16px"><button class="btn primary" id="pickPdf">选择文件</button></div>'
       + '<div class="row" style="margin-top:8px"><button class="btn" id="findBooks">找教材</button></div>'
-      + '<div class="sub" style="margin-top:10px">支持 PDF · EPUB · DOCX · TXT · Markdown</div></div>'
-      + '<input type="file" id="pdfFile" accept=".pdf,.epub,.docx,.txt,.md,application/pdf,application/epub+zip,'
+      + '<div class="sub" style="margin-top:10px">支持 PDF · EPUB · DOCX · TXT · Markdown · 图片</div></div>'
+      + '<input type="file" id="pdfFile" accept=".pdf,.epub,.docx,.txt,.md,.png,.jpg,.jpeg,.webp,image/*,application/pdf,application/epub+zip,'
       + 'application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain" style="display:none">';
     document.getElementById('pickPdf').onclick = () => document.getElementById('pdfFile').click();
     document.getElementById('findBooks').onclick = () => renderFind();
@@ -2202,6 +2204,7 @@ function renderReader() {
     + '<button id="tocBtn" class="t-close">目录</button>'
     + '<button id="spreadBtn" class="t-close">' + (RDR.spread ? '单页' : '双页') + '</button>'
     + '<button id="ocrBtn" class="t-close">识别文字</button>'
+    + '<button id="kpBtn" class="t-close">知识点</button>'
     + '<button id="toggleScroll" class="t-close">滚动</button>'
     + '<button id="closePdf" class="t-close">关闭</button>'
     + (RDR.textLines && RDR.textLines.length ? '<button id="showText" class="t-close">文字视图</button>' : '')
@@ -2223,6 +2226,8 @@ function renderReader() {
   if (tb) tb.onclick = () => showOutline();
   const sb = document.getElementById('spreadBtn');
   if (sb) sb.onclick = toggleSpread;
+  const kpb2 = document.getElementById('kpBtn');
+  if (kpb2) kpb2.onclick = () => { hideTools(); showPoints(); };
   const dis = document.getElementById('dismissWarn');
   if (dis) dis.onclick = () => { const w = document.getElementById('pdfFontWarn'); if (w) w.remove(); };
   drawPage();
@@ -2599,13 +2604,123 @@ function importAsText(items, query, fullCount) {
   toast('导入 ' + items.length + ' 条：全文 ' + n + ' 条' + (n < items.length ? '，其余只有摘要' : ''));
 }
 
+// ── 图片：直接看图 / OCR / 出题 ─────────────────────────
+async function openImageFile(f) {
+  resetBook();
+  RDR.kind = 'image';
+  RDR.name = f.name;
+  RDR.srcUrl = URL.createObjectURL(f);
+  RDR.key = docKey(f);
+  RDR.textLines = [];
+  RDR.page = 1;
+  RDR.total = 1;
+  renderReader();
+}
+
+async function ocrImage() {
+  const img = document.getElementById('imgView');
+  if (!img) return;
+  if (!img.complete) await new Promise((r) => { img.onload = r; });
+  ocrStatus('正在准备识别引擎（首次约 9MB，之后走缓存）…');
+  try {
+    const T = await ensureTesseract();
+    const worker = await T.createWorker(['chi_sim', 'eng'], 1, {
+      workerPath: 'vendor/ocr/worker.min.js',
+      corePath: 'vendor/ocr/tesseract-core-simd-lstm.wasm.js',
+      langPath: 'vendor/ocr/',
+      logger: (m) => { if (m.status === 'recognizing text') ocrStatus('识别中… ' + Math.round((m.progress || 0) * 100) + '%'); },
+    });
+    try {
+      const { data } = await worker.recognize(img);
+      const lines = String(data.text || '').split(String.fromCharCode(10)).map((x) => x.trim()).filter(Boolean);
+      RDR.textLines = lines;
+      const st = document.getElementById('ocrStatus');
+      if (st) st.remove();
+      renderReader();
+      toast(lines.length ? ('识别出 ' + lines.length + ' 行') : '这张图没认出文字');
+    } finally { try { await worker.terminate(); } catch { /* 已结束 */ } }
+  } catch (err) {
+    ocrStatus('识别失败：' + err.message);
+  }
+}
+
+function renderImage() {
+  view.innerHTML =
+    '<div class="meta"><span>' + esc(RDR.name) + '</span><span>图片</span></div>'
+    + '<img id="imgView" src="' + RDR.srcUrl + '" alt="" style="max-width:100%;border-radius:8px;background:#fff">'
+    + (RDR.textLines && RDR.textLines.length
+      ? '<h2>识别出的文字</h2><div class="bookText plain" style="font-size:14px">'
+        + RDR.textLines.map((l) => '<p>' + esc(l) + '</p>').join('') + '</div>'
+      : '<div class="hint" style="margin-top:10px">这是图片，没有文字层。点右侧「识别文字」做 OCR，之后就能取词、出知识点。</div>')
+    + '<div class="floating' + (RDR.toolsVisible ? ' show' : '') + '" id="imgTools">'
+    + '<button id="ocrBtn">识别文字</button>'
+    + '<button id="kpBtn" class="t-close">知识点</button>'
+    + '<button id="closeImg" class="t-close">关闭</button></div>';
+  document.getElementById('ocrBtn').onclick = () => { hideTools(); ocrImage(); };
+  document.getElementById('kpBtn').onclick = () => { hideTools(); showPoints(); };
+  document.getElementById('closeImg').onclick = () => { resetBook(); renderReader(); };
+  bindFlipGestures(view, { prev: () => {}, next: () => {}, middle: toggleTools });
+  flipHintOnce();
+  view.scrollTop = 0;
+}
+
 // ── C：整章提知识点（只喂当前这一章，整本塞不进去）────────────
 // 输出：一句话概括 + 要点 + 生词/搭配（可一键进「我的生词」）+ 3~5 道自测题
 
-function chapterText() {
+async function pdfPageTextOf(n) {
+  try {
+    const page = await RDR.pdf.getPage(n);
+    const tc = await page.getTextContent();
+    const t = tc.items.map((it) => it.str).join(' ').replace(/[ 	]+/g, ' ').trim();
+    return t;
+  } catch { return ''; }
+}
+
+// 当前「这一章/这一页/这张图」的文本：文字书取章，PDF 取页（有书签就取整章），图片取 OCR 结果
+async function chapterText() {
   const ch = RDR.book && RDR.book.chapters[RDR.ch];
-  if (!ch) return null;
-  return { title: ch.title || ('第 ' + (RDR.ch + 1) + ' 节'), text: (ch.text || '').slice(0, 9000) };
+  if (ch) return { title: ch.title || ('第 ' + (RDR.ch + 1) + ' 节'), text: (ch.text || '').slice(0, 9000) };
+
+  if (RDR.pdf) {
+    // 有文字重建/OCR 结果就用它：缺字体或扫描件时 getTextContent 只剩零星数字，
+    // 拿那个去出题等于基于半张纸瞎猜
+    if (RDR.textLines && RDR.textLines.length) {
+      return { title: '文字视图', text: RDR.textLines.join(String.fromCharCode(10)).slice(0, 9000) };
+    }
+    // 有书签：按书签区间取多页，凑到 9000 字为止
+    let title = '第 ' + RDR.page + ' 页';
+    let from = RDR.page;
+    let to = RDR.page;
+    const items = RDR.outline && RDR.outline.length ? RDR.outline : null;
+    if (items) {
+      let start = null;
+      let next = null;
+      for (const it of items) {
+        if (!it.page) continue;
+        if (it.page <= RDR.page) start = it;
+        else if (next === null) next = it;
+      }
+      if (start && start.page) { from = start.page; title = start.title; }
+      if (next && next.page) to = next.page - 1;
+    }
+    if (to < from) to = from;
+    let text = '';
+    for (let n = from; n <= to && text.length < 9000; n++) {
+      const t = await pdfPageTextOf(n);
+      if (t) text += (text ? String.fromCharCode(10, 10) : '') + t;
+    }
+    if (!text.trim() && RDR.textLines && RDR.textLines.length) {
+      text = RDR.textLines.join(String.fromCharCode(10));
+      title = '文字视图';
+    }
+    if (!text.trim()) return null;
+    return { title: title, text: text.slice(0, 9000) };
+  }
+
+  if (RDR.textLines && RDR.textLines.length) {
+    return { title: '图片文字', text: RDR.textLines.join(String.fromCharCode(10)).slice(0, 9000) };
+  }
+  return null;
 }
 
 async function askPoints(text) {
@@ -2636,8 +2751,8 @@ async function askPoints(text) {
 function kpKey() { return (RDR.key || '') + '#' + RDR.ch; }
 
 async function showPoints() {
-  const ch = chapterText();
-  if (!ch) return;
+  const ch = await chapterText();
+  if (!ch) return toast('这一页没有可读的文字（扫描件先点「识别文字」）');
   if (!settings.key) { toast('先在「设置」里填 AI Key'); state.tab = 'settings'; return render(); }
   RDR.kpCache = RDR.kpCache || {};
   if (RDR.kpCache[kpKey()]) return renderPoints(RDR.kpCache[kpKey()], ch);
@@ -3141,6 +3256,7 @@ function renderPdfScroll() {
     + '<button id="tocBtn" class="t-close">目录</button>'
     + '<button id="spreadBtn" class="t-close">' + (RDR.spread ? '单页' : '双页') + '</button>'
     + '<button id="ocrBtn" class="t-close">识别文字</button>'
+    + '<button id="kpBtn" class="t-close">知识点</button>'
     + '<button id="toggleScroll" class="t-close">滚动</button>'
     + '<button id="closePdf" class="t-close">关闭</button>'
     + (RDR.textLines && RDR.textLines.length ? '<button id="showText" class="t-close">文字视图</button>' : '')
@@ -3173,6 +3289,8 @@ function renderPdfScroll() {
   document.getElementById('toggleScroll').onclick = () => { RDR.pdfScroll = false; renderReader(); };
   const tb2 = document.getElementById('tocBtn');
   if (tb2) tb2.onclick = () => showOutline();
+  const kpb2 = document.getElementById('kpBtn');
+  if (kpb2) kpb2.onclick = () => { hideTools(); showPoints(); };
   document.getElementById('closePdf').onclick = () => { saveReadPos(); resetBook(); renderReader(); };
   const ocrb = document.getElementById('ocrBtn');
   if (ocrb) ocrb.onclick = () => { hideTools(); ocrCurrentPage(); };
