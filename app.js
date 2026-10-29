@@ -1,7 +1,7 @@
 // 学习机 Lite — 静态 PWA：内容来自 pack.json，进度存本地，AI 直连 OpenAI 兼容接口
 'use strict';
 
-const BUILD = '2026-10-29.8';
+const BUILD = '2026-10-29.9';
 
 const LS = {
   progress: 'zenus.progress.v1',
@@ -24,6 +24,8 @@ const DEFAULT_SETTINGS = {
   syncRepo: 'AW6202/zenus-state',
   syncDevice: '',
   ttsVoice: '',
+  readFont: 16,
+  readLine: 1.8,
 };
 
 const state = {
@@ -200,6 +202,13 @@ function renderHeader() {
 function render() {
   if (!state.pack) return;
   view.addEventListener('scroll', onViewScroll, { passive: true });
+
+window.addEventListener('resize', () => {
+  if (RDR.paged && RDR.book) {
+    const ratio = RDR.pages > 1 ? (RDR.pageIdx || 0) / (RDR.pages - 1) : 0;
+    layoutPages(ratio);
+  }
+});
 
 // 工具条上点了按钮就重新计时（正在缩放/翻页时不要自己收掉）
 document.addEventListener('click', (e) => {
@@ -987,6 +996,7 @@ function scheduleSync() {
 const RDR = {
   pdf: null, page: 1, total: 0, name: '', scale: 1, rendering: false,
   kind: null, book: null, ch: 0, urls: [], assets: {}, toolsVisible: false,
+  paged: true, pageIdx: 0, pages: 1,
 };
 
 const scriptOnce = {};
@@ -1248,8 +1258,12 @@ function saveReadPos() {
   if (RDR.pdf) { r.page = RDR.page; r.scale = RDR.scale; }
   if (RDR.book) {
     r.ch = RDR.ch;
-    const max = Math.max(1, view.scrollHeight - view.clientHeight);
-    r.ratio = Math.max(0, Math.min(1, view.scrollTop / max));
+    if (RDR.paged) {
+      r.ratio = RDR.pages > 1 ? (RDR.pageIdx || 0) / (RDR.pages - 1) : 0;
+    } else {
+      const max = Math.max(1, view.scrollHeight - view.clientHeight);
+      r.ratio = Math.max(0, Math.min(1, view.scrollTop / max));
+    }
   }
   readPositions[RDR.key] = r;
   const keys = Object.keys(readPositions);
@@ -1275,6 +1289,7 @@ function applyReadPos() {
   if (RDR.book) {
     RDR.ch = Math.max(0, Math.min(r.ch || 0, RDR.book.chapters.length - 1));
     setTimeout(() => { RDR.restoring = false; }, 800);
+    RDR.pendingRatio = r.ratio || 0;
     if (RDR.ch > 0) toast('回到上次读的第 ' + (RDR.ch + 1) + ' 节');
     return r.ratio || 0;
   }
@@ -2138,6 +2153,86 @@ function plainToHtml(text) {
   return String(text || '').split(/\n{2,}/).map((p) => '<p>' + esc(p.replace(/\n+$/, '')) + '</p>').join('');
 }
 
+// ── B：真分页（CSS 多栏 = 一屏一页）+ 字号/行距 ─────────────
+// 思路跟 Koodo 一样：把整章内容排成"栏宽 = 屏宽"的多栏，横向平移一栏就是一页。
+// 不用自己量段落高度，浏览器排版，翻页只是 transform。
+
+function layoutPages(keepRatio) {
+  const vp = document.getElementById('pageViewport');
+  const box = document.getElementById('bookText');
+  if (!vp || !box) return;
+  const w = Math.max(240, view.clientWidth - 28);
+  // 高度取「整行」的整数倍，否则每页最后一行会被切掉半个字
+  const lh = Math.max(16, (settings.readFont || 16) * (settings.readLine || 1.8));
+  const h = Math.max(240, Math.floor((view.clientHeight - 34) / lh) * lh);
+  const gap = 28;
+  vp.style.width = w + 'px';
+  vp.style.height = h + 'px';
+  box.style.height = h + 'px';
+  box.style.columnWidth = w + 'px';
+  box.style.columnGap = gap + 'px';
+  box.style.fontSize = settings.readFont + 'px';
+  box.style.lineHeight = String(settings.readLine);
+  RDR.pageW = w;
+  RDR.pageGap = gap;
+  RDR.pages = Math.max(1, Math.round((box.scrollWidth + gap) / (w + gap)));
+  if (keepRatio && RDR.pages > 1) {
+    RDR.pageIdx = Math.min(RDR.pages - 1, Math.round(keepRatio * (RDR.pages - 1)));
+  }
+  RDR.pageIdx = Math.max(0, Math.min(RDR.pageIdx || 0, RDR.pages - 1));
+  applyPageTransform();
+}
+
+function applyPageTransform() {
+  const box = document.getElementById('bookText');
+  if (!box) return;
+  const offset = (RDR.pageIdx || 0) * ((RDR.pageW || 0) + (RDR.pageGap || 0));
+  box.style.transform = 'translateX(' + (-offset) + 'px)';
+  const lab = document.getElementById('pageLabel');
+  if (lab) lab.textContent = (RDR.pageIdx + 1) + ' / ' + (RDR.pages || 1);
+}
+
+function flipPage(delta) {
+  if (!RDR.paged) return false;
+  const next = (RDR.pageIdx || 0) + delta;
+  if (next < 0) { gotoChapter(RDR.ch - 1, 'last'); return true; }
+  if (next >= (RDR.pages || 1)) { gotoChapter(RDR.ch + 1, 'first'); return true; }
+  RDR.pageIdx = next;
+  applyPageTransform();
+  saveReadPos();
+  return true;
+}
+
+function bumpFont(delta) {
+  settings.readFont = Math.max(13, Math.min(26, (settings.readFont || 16) + delta));
+  saveJSON(LS.settings, settings);
+  if (RDR.paged) {
+    const ratio = RDR.pages > 1 ? (RDR.pageIdx || 0) / (RDR.pages - 1) : 0;
+    layoutPages(ratio);
+    applyPageTransform();
+  } else {
+    renderTextBook();
+  }
+}
+
+function bumpLine(delta) {
+  settings.readLine = Math.max(1.4, Math.min(2.4, Math.round(((settings.readLine || 1.8) + delta) * 10) / 10));
+  saveJSON(LS.settings, settings);
+  if (RDR.paged) {
+    const ratio = RDR.pages > 1 ? (RDR.pageIdx || 0) / (RDR.pages - 1) : 0;
+    layoutPages(ratio);
+    applyPageTransform();
+  } else {
+    renderTextBook();
+  }
+}
+
+function togglePaged() {
+  RDR.paged = !RDR.paged;
+  RDR.pageIdx = 0;
+  renderTextBook();
+}
+
 function renderTextBook() {
   const b = RDR.book;
   if (!b || !b.chapters || !b.chapters.length) { resetBook(); return renderReader(); }
@@ -2147,32 +2242,54 @@ function renderTextBook() {
   const html = isHtml ? ch.html : plainToHtml(ch.text);
   // 书里自己就带标题（<h1> 开头）时，别再叠一行同样的标题
   const ownHeading = /^\s*<h[1-4][\s>]/i.test(html);
+  const box = '<div class="bookText' + (isHtml ? '' : ' plain') + '" id="bookText"'
+    + ' style="font-size:' + settings.readFont + 'px;line-height:' + settings.readLine + '">' + html + '</div>';
   view.innerHTML =
-    '<div class="meta"><span>' + esc(b.name) + '</span><span>' + (RDR.ch + 1) + ' / ' + b.chapters.length + '</span></div>'
+    '<div class="meta"><span>' + esc(b.name) + '</span><span id="pageLabel">'
+    + (RDR.paged ? (RDR.pageIdx + 1) + ' / ' + (RDR.pages || 1) : (RDR.ch + 1) + ' / ' + b.chapters.length)
+    + '</span></div>'
     + (ownHeading ? '' : '<h2 class="chTitle">' + esc(ch.title) + '</h2>')
-    + '<div class="bookText' + (isHtml ? '' : ' plain') + '" id="bookText">' + html + '</div>'
+    + (RDR.paged ? '<div id="pageViewport">' + box + '</div>' : box)
     + '<div class="floating pager' + (RDR.toolsVisible ? ' show' : '') + '" id="bookTools">'
     + '<button id="prevCh">◀</button><button id="nextCh">▶</button>'
+    + '<button id="fSmall" title="字号">A-</button><button id="fBig" title="字号">A+</button>'
+    + '<button id="lTight" title="行距">行-</button><button id="lLoose" title="行距">行+</button>'
+    + '<button id="togglePaged" class="t-close">' + (RDR.paged ? '滚动' : '分页') + '</button>'
     + '<button id="closeBook" class="t-close">关闭</button></div>';
   // 远程图挂了就把位置收起来，别留一个破图标
   view.querySelectorAll('#bookText img').forEach((img) => img.addEventListener('error', () => img.remove()));
-  document.getElementById('prevCh').onclick = () => gotoChapter(RDR.ch - 1);
-  document.getElementById('nextCh').onclick = () => gotoChapter(RDR.ch + 1);
+  document.getElementById('prevCh').onclick = () => { if (!flipPage(-1)) gotoChapter(RDR.ch - 1); };
+  document.getElementById('nextCh').onclick = () => { if (!flipPage(1)) gotoChapter(RDR.ch + 1); };
+  document.getElementById('fSmall').onclick = () => bumpFont(-1);
+  document.getElementById('fBig').onclick = () => bumpFont(1);
+  document.getElementById('lTight').onclick = () => bumpLine(-0.1);
+  document.getElementById('lLoose').onclick = () => bumpLine(0.1);
+  document.getElementById('togglePaged').onclick = togglePaged;
   document.getElementById('closeBook').onclick = () => { saveReadPos(); resetBook(); renderReader(); };
-  if (!RDR.restoring) view.scrollTop = 0;
+  if (RDR.paged) {
+    layoutPages(RDR.pendingRatio != null ? RDR.pendingRatio : 0);
+    RDR.pendingRatio = null;
+  } else if (!RDR.restoring) view.scrollTop = 0;
   bindFlipGestures(view, {
-    prev: () => gotoChapter(RDR.ch - 1),
-    next: () => gotoChapter(RDR.ch + 1),
+    prev: () => { if (!flipPage(-1)) gotoChapter(RDR.ch - 1); },
+    next: () => { if (!flipPage(1)) gotoChapter(RDR.ch + 1); },
     middle: toggleTools,
   });
   flipHintOnce();
 }
 
-function gotoChapter(n) {
+function gotoChapter(n, at) {
   const b = RDR.book;
   if (!b) return;
   RDR.ch = Math.max(0, Math.min(b.chapters.length - 1, n));
+  RDR.pageIdx = 0;
   renderTextBook();
+  if (RDR.paged && at === 'last') {
+    RDR.pageIdx = Math.max(0, (RDR.pages || 1) - 1);
+    applyPageTransform();
+  }
+  RDR.restoring = true;
+  setTimeout(() => { RDR.restoring = false; }, 400);
   saveReadPos();
 }
 
@@ -2350,6 +2467,13 @@ function askFromSelection(t) {
 
 // ── 启动 ──────────────────────────────────────────────
 view.addEventListener('scroll', onViewScroll, { passive: true });
+
+window.addEventListener('resize', () => {
+  if (RDR.paged && RDR.book) {
+    const ratio = RDR.pages > 1 ? (RDR.pageIdx || 0) / (RDR.pages - 1) : 0;
+    layoutPages(ratio);
+  }
+});
 
 // 工具条上点了按钮就重新计时（正在缩放/翻页时不要自己收掉）
 document.addEventListener('click', (e) => {

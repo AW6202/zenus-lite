@@ -310,6 +310,8 @@ class CDP {
 
     // C. 选中弹框位置：中部选区在下方，底部选区翻到上方
     const bar = await probe('选中弹框', `
+      if (RDR.paged) togglePaged();                 // 分页模式下没有纵向滚动，这条要用滚动模式测
+      await new Promise(r => setTimeout(r, 400));
       const ps = [...document.querySelectorAll('.bookText p')].filter(p => p.textContent.trim().length > 3);
       const probe = async (el, block) => {
         el.scrollIntoView({ block });
@@ -430,6 +432,35 @@ class CDP {
       return { cmapOk: res.ok && buf && buf.byteLength > 1000, cmapBytes: buf ? buf.byteLength : 0, sfOk: sf.ok };
     `);
     check('PDF 的 CMap 与标准字体在线上可取', !!cmap.cmapOk && !!cmap.sfOk, cmap);
+
+    // E2. 真分页（B）：长文本要分成多页，翻页改 transform，能切回滚动
+    const paged = await probe('分页模式', `
+      if (!RDR.paged) togglePaged();          // 上一条检查可能把模式切走了
+      await new Promise(r => setTimeout(r, 300));
+      const b = await (await fetch('${base}smoke-gbk.txt')).blob();
+      await openTextBook(new File([b], 'smoke-gbk.txt'));
+      await new Promise(r => setTimeout(r, 700));
+      const out = { paged: RDR.paged, pages: RDR.pages, label0: document.getElementById('pageLabel').textContent };
+      const t0 = document.getElementById('bookText').style.transform;
+      flipPage(1);
+      await new Promise(r => setTimeout(r, 300));
+      out.label1 = document.getElementById('pageLabel').textContent;
+      out.moved = document.getElementById('bookText').style.transform !== t0;
+      RDR.toolsVisible = true; syncTools();
+      bumpFont(2);
+      await new Promise(r => setTimeout(r, 300));
+      out.fontSize = getComputedStyle(document.getElementById('bookText')).fontSize;
+      out.pagesAfterFont = RDR.pages;
+      togglePaged();
+      await new Promise(r => setTimeout(r, 300));
+      out.scrollMode = !RDR.paged && !document.getElementById('pageViewport')
+        && view.scrollHeight > view.clientHeight;
+      return out;
+    `);
+    check('长文本按屏分页 + 翻页位移', paged.paged === true && paged.pages > 3
+      && paged.label0 === '1 / ' + paged.pages && paged.moved === true, paged);
+    check('字号可调且会重新分页', paged.fontSize !== '16px' && paged.pagesAfterFont > 0, paged);
+    check('能一键切回滚动模式', paged.scrollMode === true, paged);
 
     // H. 关书释放 blob URL
     const clean = await probe('关书释放', `
