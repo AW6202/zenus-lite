@@ -1,7 +1,7 @@
 // 学习机 Lite — 静态 PWA：内容来自 pack.json，进度存本地，AI 直连 OpenAI 兼容接口
 'use strict';
 
-const BUILD = '2026-10-29.27';
+const BUILD = '2026-10-29.28';
 
 const LS = {
   progress: 'zenus.progress.v1',
@@ -82,13 +82,23 @@ function pickVoice(lang) {
 function speak(text, lang = 'en-US') {
   if (!text) return;
   if (!('speechSynthesis' in window)) { toast('这台设备不支持朗读'); return; }
-  window.speechSynthesis.cancel();
-  const u = new SpeechSynthesisUtterance(String(text));
-  u.lang = lang;
-  u.rate = Number(settings.ttsRate) || 0.9;
-  const v = pickVoice(lang);
-  if (v) u.voice = v;
-  window.speechSynthesis.speak(u);
+  const synth = window.speechSynthesis;
+  synth.cancel();
+  const say = () => {
+    const u = new SpeechSynthesisUtterance(String(text));
+    u.lang = lang;
+    u.rate = Number(settings.ttsRate) || 0.9;
+    const v = pickVoice(lang);
+    if (v) u.voice = v;
+    u.onerror = (ev) => {
+      const why = (ev && ev.error) || '';
+      if (why === 'canceled' || why === 'interrupted') return;   // 自己 cancel() 触发的，不算失败
+      toast('朗读失败（' + (why || '未知') + '）：' + u.text.slice(0, 12) + '…');
+    };
+    synth.speak(u);
+  };
+  // 部分 Android WebView 里 cancel() 后立刻 speak() 会被丢掉，隔一拍再播
+  setTimeout(say, 60);
 }
 
 // 把一句话拆成可点的词：#每个词单独成 span，点哪个读哪个
@@ -348,8 +358,9 @@ function renderReview() {
     }
     if (!state.revealed && !isQuiz) { state.revealed = true; renderReview(); }
   };
-  const spk = view.querySelector('.spk');
-  if (spk) spk.onclick = (ev) => { ev.stopPropagation(); speak(spk.dataset.full, lang); };
+  view.querySelectorAll('.spk').forEach((b) => {
+    b.onclick = (ev) => { ev.stopPropagation(); speak(b.dataset.full, lang); };
+  });
   const rv = $('#reveal');
   if (rv) rv.onclick = () => { state.revealed = true; renderReview(); };
   view.querySelectorAll('.opts button').forEach((b) => {

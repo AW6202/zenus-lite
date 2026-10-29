@@ -843,6 +843,30 @@ class CDP {
     check('离线词典：加载并从 gzip 解出词条、UI 能查到',
       dic.count > 100000 && dic.phon.length > 0 && dic.tr.length > 0 && dic.miss === 0 && dic.ui === 1, dic);
 
+    // T. 卡片上「单词」和「例句」两个喇叭都要能读
+    const spk = await probe('朗读按钮', `
+      state.tab = 'review'; render();
+      const spoken = [];
+      window.speechSynthesis.speak = function (u) { spoken.push(String(u.text)); };
+      window.speechSynthesis.cancel = function () {};
+      const card = allCards().find(function (c) { return c.example; });
+      if (!card) return { error: 'no card with example' };
+      state.queue = [card]; state.current = card; state.revealed = true;
+      renderReview();
+      await new Promise(function (r) { setTimeout(r, 120); });
+      const btns = [...document.querySelectorAll('.spk')];
+      if (btns[1]) btns[1].click();
+      await new Promise(function (r) { setTimeout(r, 300); });
+      const afterExample = spoken.slice();
+      if (btns[0]) btns[0].click();
+      await new Promise(function (r) { setTimeout(r, 300); });
+      return { count: btns.length, afterExample: afterExample, all: spoken,
+               example: card.example, front: card.front };
+    `);
+    check('卡片上的单词喇叭和例句喇叭都能朗读',
+      spk.count === 2 && spk.afterExample.length === 1 && spk.afterExample[0] === spk.example
+      && spk.all.length === 2 && spk.all[1] === spk.front, spk);
+
     // H. 关书释放 blob URL
     const clean = await probe('关书释放', `
       const b = await (await fetch('${base}smoke.epub')).blob();
