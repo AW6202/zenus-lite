@@ -638,6 +638,17 @@ class CDP {
       `);
       check('关闭 PDF 能回到选文件页',
         closed.btn !== false && closed.pdf === false && closed.picker === true, closed);
+
+      // 关掉 PDF 后底部菜单栏必须还在视口里（用户报过它整个消失）
+      const tab = await probe('底部菜单', `
+        const t = document.querySelector('.tabbar');
+        const r = t.getBoundingClientRect();
+        return { display: getComputedStyle(t).display, top: Math.round(r.top),
+                 bottom: Math.round(r.bottom), h: Math.round(r.height), vh: innerHeight,
+                 bodyOverflow: getComputedStyle(document.body).overflow };
+      `);
+      check('关闭 PDF 后底部菜单仍在视口内',
+        tab.display === 'flex' && tab.h > 30 && tab.bottom <= tab.vh + 1, tab);
     } else {
       console.log('SKIP  PDF 回归（要验就加 --pdf <某个真实PDF>）');
     }

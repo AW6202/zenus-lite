@@ -1,7 +1,7 @@
 // 学习机 Lite — 静态 PWA：内容来自 pack.json，进度存本地，AI 直连 OpenAI 兼容接口
 'use strict';
 
-const BUILD = '2026-10-29.13';
+const BUILD = '2026-10-29.14';
 
 const LS = {
   progress: 'zenus.progress.v1',
@@ -1289,6 +1289,8 @@ function resetBook() {
   RDR.textLines = [];
   RDR.textMode = false;
   RDR.key = null;
+  if (RDR.scrollIO) { try { RDR.scrollIO.disconnect(); } catch { /* 已断开 */ } RDR.scrollIO = null; }
+  if (view) { view.onscroll = null; view.scrollTop = 0; }
   RDR.kpCache = {};
 }
 
