@@ -94,11 +94,15 @@ def build_en(src):
         if w in out:
             continue
         tr = r['translation'].replace('\\n', '；').replace('\n', '；').strip()[:160]
-        item = [clean_phonetic(r.get('phonetic')), tr]
-        if r.get('pos'):
-            item.append(r['pos'][:20])
-        if r.get('tag'):
-            item.append(r['tag'].strip()[:40])
+        frq = r.get('frq') or ''
+        # 固定 5 元组：音标 / 释义 / 词性 / 考试标签 / 词频（前端按下标取值，长度必须恒定）
+        item = [
+            clean_phonetic(r.get('phonetic')),
+            tr,
+            (r.get('pos') or '').strip()[:20],
+            (r.get('tag') or '').strip()[:40],
+            int(frq) if frq.isdigit() else 0,
+        ]
         out[w] = item
     write_gz(os.path.join(OUT_DIR, 'en.json.gz'), out)
 

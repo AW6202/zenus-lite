@@ -195,6 +195,27 @@ def ipa_core(x):
     return vowel_part, cons_part
 
 
+def check_level(card, cid, c_id, en_dict):
+    """级别必须有出处：levelSrc 写了来源，就必须能用同一套规则重算出来。"""
+    src = str(card.get("levelSrc") or "")
+    lvl = card.get("level")
+    if not src:
+        return
+    if src == "原估值":
+        note(f"{cid}: {c_id} 《{card.get('front')}》级别无出处（保持原估值）")
+        return
+    entry = en_dict.get(str(card.get("front") or "").lower()) or en_dict.get(str(card.get("front") or ""))
+    if not entry:
+        warn(f"{cid}: {c_id} levelSrc 说有出处，但词典里查不到这个词")
+        return
+    from set_levels import derive
+    want, want_src = derive(entry)
+    if want != lvl:
+        fail(f"{cid}: {c_id} 级别与推导不一致 {card.get('front')}: 卡片 {lvl} 推导 {want}")
+    elif want_src != src:
+        warn(f"{cid}: {c_id} 级别来源标注不一致 {card.get('front')}: 卡片 {src} 推导 {want_src}")
+
+
 def check_phonetic(card, cid, c_id):
     hint = str(card.get("hint") or "")
     word = str(card.get("front") or "").strip()
@@ -256,9 +277,25 @@ def main(path="pack.json"):
                 if bad:
                     warn(f"{cid}: {c_id} 音标里有非 IPA 字符 {bad} —— {hint}")
             check_phonetic(card, cid, c_id)
+            if cid.startswith("en"):
+                check_level(card, cid, c_id, load_en_dict())
             lvl = card.get("level")
             if lvl not in (None, "", "A1", "A2", "B1", "B2", "C1", "C2"):
                 fail(f"{cid}: {c_id} level 取值异常 {lvl}")
+    # 课程名里的级别（B1/B2/C1）和卡片实际级别是否相符
+    for c in pack.get("courses", []):
+        cid = str(c.get("id", ""))
+        if not cid.startswith("en"):
+            continue
+        title = str(c.get("title") or "")
+        claimed = set(re.findall(r"(A1|A2|B1|B2|C1|C2)", title))
+        if not claimed:
+            continue
+        lv = [card.get("level") for card in c.get("cards", []) if card.get("level")]
+        if lv:
+            common = max(set(lv), key=lv.count)
+            if common not in claimed:
+                note(f"{cid}: 课程名标 {'/'.join(sorted(claimed))}，但卡片实际级别多为 {common}")
     print(f"共 {total} 张卡、{len(pack.get('courses', []))} 门课")
     for w in WARN:
         print("WARN ", w)

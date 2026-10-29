@@ -1,7 +1,7 @@
 // 学习机 Lite — 静态 PWA：内容来自 pack.json，进度存本地，AI 直连 OpenAI 兼容接口
 'use strict';
 
-const BUILD = '2026-10-29.24';
+const BUILD = '2026-10-29.25';
 
 const LS = {
   progress: 'zenus.progress.v1',
@@ -2553,7 +2553,8 @@ function renderLookup(prefill) {
     '<div class="meta"><span>查词</span><span>离线词典</span></div>'
     + '<div class="row" style="margin:6px 0"><input class="t" id="lkQ" placeholder="英文单词 或 日语假名/汉字" value="' + esc(prefill || '') + '">'
     + '<button class="btn primary" id="lkGo" style="width:80px">查</button></div>'
-    + '<div class="hint">英汉 6 万词（ECDICT，MIT）· 日英 3.8 万条（JMdict，CC-BY-SA）。首次查词下载约 2MB，之后离线可用。</div>'
+    + '<div class="hint">英汉 12 万词（ECDICT，MIT）· 日英 3.8 万条（JMdict，CC-BY-SA）。首次查词下载约 3MB，之后离线可用。'
+    + ' 要看权威释义（牛津/柯林斯）点<a href="https://dict.eudic.net/dicts/en/" target="_blank" rel="noopener" style="color:var(--acc)">欧路词典</a>。</div>'
     + '<div id="lkResult" style="margin-top:10px"></div>'
     + '<div class="row" style="margin-top:14px"><button class="btn ghost" id="lkBack">← 回阅读</button></div>';
   const go = () => doLookup();
