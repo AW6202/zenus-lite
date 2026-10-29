@@ -1,7 +1,7 @@
 // 学习机 Lite — 静态 PWA：内容来自 pack.json，进度存本地，AI 直连 OpenAI 兼容接口
 'use strict';
 
-const BUILD = '2026-10-29.33';
+const BUILD = '2026-10-29.34';
 
 const LS = {
   progress: 'zenus.progress.v1',
@@ -602,25 +602,34 @@ function renderSettings() {
   const cu = $('#checkUpdate');
   if (cu) cu.onclick = async () => {
     try {
-      // —— 诊断条：只在带参数进入 / 被 APK 拉起时显示，方便定位"为什么没导入" ——
-  (function diagnose() {
-    let qs = '';
-    try { qs = location.search || ''; } catch { qs = ''; }
-    const ua = navigator.userAgent || '';
-    const fromApp = /; wv\)|Version\/\d+\.\d+.*Chrome/.test(ua) || qs.length > 0;
-    if (!fromApp) return;
-    const bar = document.createElement('div');
-    bar.id = 'diagBar';
-    bar.style.cssText = 'position:fixed;left:0;right:0;top:0;z-index:999;background:#2a2113;color:#e0a13a;'
-      + 'font:11px/1.5 monospace;padding:6px 8px;word-break:break-all;max-height:40vh;overflow:auto';
-    bar.textContent = 'BUILD ' + BUILD + ' | href=' + location.href.slice(0, 160) + ' | qs=' + (qs || '(空)');
-    bar.onclick = () => bar.remove();
-    document.body.appendChild(bar);
-  })();
+      // —— 诊断条 + APK 拉起处理 ——
+  let apkImport = '';
+  try {
+    const q = new URLSearchParams(location.search);
+    apkImport = q.get('import') || '';
+    if (q.get('apk') === '1') {
+      // APK 回显的 intent 信息：直接摊在屏幕上，一眼看出微信到底传了什么
+      const bar = document.createElement('div');
+      bar.id = 'diagBar';
+      bar.style.cssText = 'position:fixed;left:0;right:0;top:0;z-index:999;background:#2a2113;color:#e0a13a;'
+        + 'font:11px/1.55 monospace;padding:8px;word-break:break-all;max-height:45vh;overflow:auto';
+      const rows = [
+        'BUILD ' + BUILD,
+        'action=' + (q.get('act') || '(空)'),
+        'data=' + (q.get('data') || '(空)'),
+        'extra=' + (q.get('extra') || '(空)'),
+        'subject=' + (q.get('subject') || '(空)'),
+        'import=' + (apkImport ? apkImport.slice(0, 120) : '(空)'),
+      ];
+      bar.innerHTML = rows.map((r) => '<div>' + esc(r) + '</div>').join('')
+        + '<div style="margin-top:6px;color:#fff">↑ 截图发给 Claude；点这里关闭</div>';
+      bar.onclick = () => bar.remove();
+      document.body.appendChild(bar);
+    }
+  } catch { /* 参数解析失败就当没有 */ }
 
   // APK（TWA）把「用其他应用打开 / 分享」的链接转成 ?import=xxx 传进来
-  let incoming = '';
-  try { incoming = new URLSearchParams(location.search).get('import') || ''; } catch { incoming = ''; }
+  const incoming = apkImport;
   if (incoming) {
     history.replaceState(null, '', location.pathname);   // 用完清掉，刷新不会重复导入
     state.tab = 'reader';
