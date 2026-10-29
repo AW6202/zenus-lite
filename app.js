@@ -1,7 +1,7 @@
 // 学习机 Lite — 静态 PWA：内容来自 pack.json，进度存本地，AI 直连 OpenAI 兼容接口
 'use strict';
 
-const BUILD = '2026-10-29.32';
+const BUILD = '2026-10-29.33';
 
 const LS = {
   progress: 'zenus.progress.v1',
@@ -602,7 +602,23 @@ function renderSettings() {
   const cu = $('#checkUpdate');
   if (cu) cu.onclick = async () => {
     try {
-      // APK（TWA）把「用其他应用打开 / 分享」的链接转成 ?import=xxx 传进来
+      // —— 诊断条：只在带参数进入 / 被 APK 拉起时显示，方便定位"为什么没导入" ——
+  (function diagnose() {
+    let qs = '';
+    try { qs = location.search || ''; } catch { qs = ''; }
+    const ua = navigator.userAgent || '';
+    const fromApp = /; wv\)|Version\/\d+\.\d+.*Chrome/.test(ua) || qs.length > 0;
+    if (!fromApp) return;
+    const bar = document.createElement('div');
+    bar.id = 'diagBar';
+    bar.style.cssText = 'position:fixed;left:0;right:0;top:0;z-index:999;background:#2a2113;color:#e0a13a;'
+      + 'font:11px/1.5 monospace;padding:6px 8px;word-break:break-all;max-height:40vh;overflow:auto';
+    bar.textContent = 'BUILD ' + BUILD + ' | href=' + location.href.slice(0, 160) + ' | qs=' + (qs || '(空)');
+    bar.onclick = () => bar.remove();
+    document.body.appendChild(bar);
+  })();
+
+  // APK（TWA）把「用其他应用打开 / 分享」的链接转成 ?import=xxx 传进来
   let incoming = '';
   try { incoming = new URLSearchParams(location.search).get('import') || ''; } catch { incoming = ''; }
   if (incoming) {
