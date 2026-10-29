@@ -1,7 +1,7 @@
 // 学习机 Lite — 静态 PWA：内容来自 pack.json，进度存本地，AI 直连 OpenAI 兼容接口
 'use strict';
 
-const BUILD = '2026-10-29.14';
+const BUILD = '2026-10-29.15';
 
 const LS = {
   progress: 'zenus.progress.v1',
@@ -2296,6 +2296,110 @@ async function ocrCurrentPage() {
   }
 }
 
+// ── 抓正文：多通道逐级降级 ────────────────────────────────
+// 浏览器能不能读到跨域正文，取决于对方有没有开 CORS（跟翻不翻墙是两回事）。
+// 所以按「最可能成功」的顺序挨个试，并在界面上标出这条材料是走哪条通道拿到的：
+//   ① 维基类 → 官方 API 加 origin=*（维基显式允许跨域）
+//   ② jina 阅读代理 → 把任意网页转成 markdown，响应放开了 CORS
+//   ③ 直连 → GitHub raw、RFC、博查这类本身开了 CORS 的站
+// 全失败就返回 null：那条材料只能当「仅摘要」，不许冒充正文。
+
+const FULLTEXT_MIN = 400;      // 少于这个字数当没抓到
+
+function wikiApiUrl(url) {
+  try {
+    const u = new URL(url);
+    const m = /^\/wiki\/(.+)$/.exec(u.pathname);
+    if (!m) return null;
+    const title = decodeURIComponent(m[1]);
+    const host = u.hostname;
+    if (/wikipedia\.org$/.test(host)) {
+      return host.replace(/^[a-z-]+\./, 'zh.') === host
+        ? 'https://' + host + '/w/api.php?action=query&prop=extracts&explaintext=1&redirects=1&format=json&origin=*&titles=' + encodeURIComponent(title)
+        : null;
+    }
+    if (/wikisource\.org$/.test(host)) {
+      return 'https://' + host + '/w/api.php?action=parse&prop=text&format=json&origin=*&page=' + encodeURIComponent(title);
+    }
+  } catch { /* 不是合法 URL */ }
+  return null;
+}
+
+function htmlToReadableText(html) {
+  const doc = new DOMParser().parseFromString(html, 'text/html');
+  doc.querySelectorAll('script,style,nav,header,footer,aside,form,iframe,noscript,svg').forEach((n) => n.remove());
+  // 粗暴正文提取：取文字最多的那个块（比整页 innerText 干净得多）
+  let best = doc.body;
+  let bestLen = 0;
+  doc.querySelectorAll('article, main, #content, .content, #main, .post, .article').forEach((el) => {
+    const len = (el.textContent || '').length;
+    if (len > bestLen) { bestLen = len; best = el; }
+  });
+  const text = (best ? best.textContent : doc.body ? doc.body.textContent : '')
+    .replace(/[ \t ]+/g, ' ')
+    .replace(/\n\s*\n\s*\n+/g, '\n\n');
+  return text.trim();
+}
+
+async function fetchWindow(url, timeoutMs, opts) {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+  try {
+    const res = await fetch(url, Object.assign({ signal: ctrl.signal }, opts || {}));
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    return await res.text();
+  } finally { clearTimeout(timer); }
+}
+
+async function tryWikiApi(url) {
+  const api = wikiApiUrl(url);
+  if (!api) return null;
+  const raw = await fetchWindow(api, 12000);
+  const j = JSON.parse(raw);
+  if (j.query && j.query.pages) {
+    const p = Object.values(j.query.pages)[0];
+    if (p && p.extract && p.extract.length > FULLTEXT_MIN) return { text: p.extract, via: '维基 API' };
+    return null;
+  }
+  if (j.parse && j.parse.text && j.parse.text['*']) {
+    const t = htmlToReadableText(j.parse.text['*']);
+    if (t.length > FULLTEXT_MIN) return { text: t, via: '维基文库 API' };
+  }
+  return null;
+}
+
+async function tryJina(url) {
+  const raw = await fetchWindow('https://r.jina.ai/' + url, 12000);
+  // jina 会在开头加 Title / URL Source / Markdown Content 几行
+  const t = raw.replace(/^(Title|URL Source|Published Time|Markdown Content):[^\n]*\n/gm, '').trim();
+  if (t.length > FULLTEXT_MIN) return { text: t, via: '阅读代理' };
+  return null;
+}
+
+async function tryDirect(url) {
+  const raw = await fetchWindow(url, 9000);
+  const isHtml = /<\/html>|<\/body>/i.test(raw.slice(0, 4000));
+  const t = isHtml ? htmlToReadableText(raw) : raw.trim();
+  if (t.length > FULLTEXT_MIN) return { text: t, via: '直连' };
+  return null;
+}
+
+async function fetchFullText(url) {
+  // 顺序讲成本：直连最快（CORS 没开就立刻失败），阅读代理最慢（要绕一圈转发）
+  const channels = [
+    ['维基 API', () => tryWikiApi(url)],
+    ['直连', () => tryDirect(url)],
+    ['阅读代理', () => tryJina(url)],
+  ];
+  for (const [name, run] of channels) {
+    try {
+      const r = await run();
+      if (r) return r;
+    } catch { /* 换下一条通道 */ }
+  }
+  return null;
+}
+
 // ── G：找网络教材 ────────────────────────────────────────
 // 两条通道：
 //   ① 开放书源白名单（公有领域/免费公开）→ 直接给搜索链接，用系统浏览器打开
@@ -2420,19 +2524,32 @@ function renderFind() {
     renderFind();
   };
   const imp = document.getElementById('findImport');
-  if (imp) imp.onclick = () => {
+  if (imp) imp.onclick = async () => {
     const picks = [...view.querySelectorAll('[data-pick]')].filter((c) => c.checked)
       .map((c) => FIND.items[Number(c.dataset.pick)]).filter(Boolean);
     if (!picks.length) return toast('先勾几条');
-    importAsText(picks, FIND.query);
+    imp.disabled = true;
+    let full = 0;
+    for (let i = 0; i < picks.length; i++) {
+      imp.textContent = '正在抓正文 ' + (i + 1) + '/' + picks.length + '…';
+      const got = await fetchFullText(picks[i].url);
+      if (got) { picks[i].full = got.text; picks[i].via = got.via; full++; }
+    }
+    imp.disabled = false;
+    importAsText(picks, FIND.query, full);
   };
 }
 
-function importAsText(items, query) {
-  const body = items.map((it) => '## ' + it.name + '\n\n'
-    + (it.summary || it.snippet || '（没有摘要）') + '\n\n来源：' + it.url).join('\n\n');
+function importAsText(items, query, fullCount) {
+  const NL = String.fromCharCode(10);
+  const body = items.map((it) => '## ' + it.name + NL + NL
+    + (it.full
+      ? it.full + NL + NL + '> 全文经「' + it.via + '」通道抓取'
+      : '> ⚠️ 没抓到正文（跨域限制），下面只是搜索摘要，不要当教材。' + NL + NL
+        + (it.summary || it.snippet || '（没有摘要）'))
+    + NL + NL + '来源：' + it.url).join(NL + NL);
   const name = '找教材：' + (query || '未命名');
-  RDR.kind = 'md';                            // 用 markdown 渲染，标题才不会顶着一个 ## 出现在正文里
+  RDR.kind = 'md';
   RDR.pdf = null;
   RDR.book = { name: name, chapters: mdChapters(body) };
   RDR.ch = 0;
@@ -2440,7 +2557,8 @@ function importAsText(items, query) {
   RDR.key = name + '|' + body.length;
   RDR.textLines = [];
   renderReader();
-  toast('已导入 ' + items.length + ' 条');
+  const n = fullCount == null ? items.filter((i) => i.full).length : fullCount;
+  toast('导入 ' + items.length + ' 条：全文 ' + n + ' 条' + (n < items.length ? '，其余只有摘要' : ''));
 }
 
 // ── C：整章提知识点（只喂当前这一章，整本塞不进去）────────────

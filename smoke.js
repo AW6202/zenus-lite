@@ -513,8 +513,11 @@ class CDP {
       document.getElementById('findGo').click();
       await new Promise(r => setTimeout(r, 600));
       const picks = view.querySelectorAll('[data-pick]').length;
+      const origFT = fetchFullText;
+      fetchFullText = async () => null;        // 这条测导入流程，抓正文另有专门用例
       document.getElementById('findImport').click();
-      await new Promise(r => setTimeout(r, 500));
+      await new Promise(r => setTimeout(r, 900));
+      fetchFullText = origFT;                  // 复原，别污染后面的用例
       return { links, picks, kind: RDR.kind, chapters: RDR.book ? RDR.book.chapters.length : 0,
                name: RDR.book ? RDR.book.name : '', heading: !!view.querySelector('#bookText h2, #bookText h3') };
     `);
@@ -548,6 +551,29 @@ class CDP {
     } else {
       console.log('SKIP  OCR 真识别（要验就加 --pdf-scan <扫描件.pdf>）');
     }
+
+    // L. 抓正文：开了 CORS 的站能拿到全文，没开的老实降级（不打网络就过了）
+    const ft = await probe('抓正文', `
+      const t0 = performance.now();
+      const got = await fetchFullText('https://raw.githubusercontent.com/mozilla/pdf.js/master/README.md');
+      return { via: got && got.via, chars: got ? got.text.length : 0,
+               ms: Math.round(performance.now() - t0) };
+    `);
+    check('抓正文：CORS 开放的站能拿到全文（直连通道）',
+      ft.via === '直连' && ft.chars > 1000, ft);
+
+    const lab = await probe('正文/摘要标注', `
+      importAsText([
+        { name: 'A', url: 'https://a.example', full: '正文内容'.repeat(60), via: '直连' },
+        { name: 'B', url: 'https://b.example', summary: '这是书籍简介' },
+      ], '标注测试', 1);
+      await new Promise(r => setTimeout(r, 300));
+      const t = RDR.book.chapters.map((c) => c.text).join('');
+      return { hasFull: t.indexOf('全文经') >= 0, hasWarn: t.indexOf('没抓到正文') >= 0,
+               chapters: RDR.book.chapters.length };
+    `);
+    check('导入时标明哪些是全文、哪些只是摘要',
+      lab.hasFull === true && lab.hasWarn === true && lab.chapters === 2, lab);
 
     // H. 关书释放 blob URL
     const clean = await probe('关书释放', `
