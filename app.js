@@ -1,7 +1,7 @@
 // 学习机 Lite — 静态 PWA：内容来自 pack.json，进度存本地，AI 直连 OpenAI 兼容接口
 'use strict';
 
-const BUILD = '2026-10-29.4';
+const BUILD = '2026-10-29.5';
 
 const LS = {
   progress: 'zenus.progress.v1',
@@ -1205,6 +1205,8 @@ function resetBook() {
   if (RDR.srcUrl) { try { URL.revokeObjectURL(RDR.srcUrl); } catch { /* 已释放 */ } }
   RDR.srcUrl = null;
   RDR.fontRisk = false;
+  RDR.textLines = [];
+  RDR.textMode = false;
 }
 
 async function ensureJSZip() {
@@ -1577,6 +1579,281 @@ function pdfFontRisk(buf) {
   } catch { return false; }
 }
 
+// ── E：缺字体 PDF 的文字重建 ─────────────────────────────
+// 有些 PDF 把文字直接写成 UTF-16BE（UniGB-UCS2-H 这类中文 CID 编码），但字体没嵌入：
+// pdf.js 既画不出字形，也取不到文字（getTextContent 里中文是空串）。
+// 这里自己解压内容流、按文本操作符还原成「行」，做成可读的文字视图（能读/能选中/能存卡）。
+// 只处理顶层 stream + 常见文本操作符，够对付发票、公文这类文件；不追求版式。
+
+async function inflateBytes(u8) {
+  if (typeof DecompressionStream === 'undefined') return null;
+  // endstream 前面常带换行符，留着会让解压直接失败
+  let end = u8.length;
+  while (end > 0 && (u8[end - 1] === 10 || u8[end - 1] === 13 || u8[end - 1] === 9 || u8[end - 1] === 32)) end--;
+  const body = u8.subarray(0, end);
+  for (const fmt of (body[0] === 0x78 ? ['deflate', 'deflate-raw'] : ['deflate-raw', 'deflate'])) {
+    try {
+      const stream = new Blob([body]).stream().pipeThrough(new DecompressionStream(fmt));
+      return new Uint8Array(await new Response(stream).arrayBuffer());
+    } catch { /* 换一种格式再试 */ }
+  }
+  return null;
+}
+
+// 在原始字节里切出每个 "stream … endstream"（latin1 视角下 PDF 结构是纯 ASCII）
+function pdfRawStreams(bytes) {
+  const s = new TextDecoder('latin1').decode(bytes);
+  const out = [];
+  let pos = 0;
+  while (pos < s.length) {
+    const end = s.indexOf('endstream', pos);
+    if (end < 0) break;
+    const st = s.lastIndexOf('stream', end);
+    if (st < 0) break;
+    let start = st + 6;
+    if (s[start] === '\r') start++;
+    if (s[start] === '\n') start++;
+    if (start < end) out.push(bytes.subarray(start, end));
+    pos = end + 9;
+  }
+  return out;
+}
+
+function decodeUtf16be(u8) {
+  let s = '';
+  for (let i = 0; i + 1 < u8.length; i += 2) s += String.fromCharCode((u8[i] << 8) | u8[i + 1]);
+  return s;
+}
+
+// 一段字节到底是 UTF-16BE 还是 GBK？用「可读字符得多少分」投票，别猜编码
+function textScore(s) {
+  let score = 0;
+  for (const ch of s) {
+    const c = ch.codePointAt(0);
+    if (c >= 0x4e00 && c <= 0x9fff) score += 3;
+    else if (c >= 0x20 && c < 0x7f) score += 1;
+    else if (ch === '�') score -= 6;
+    else if (c < 0x20) score -= 3;
+    else score += 0.5;
+  }
+  return score;
+}
+
+function bestDecode(u8) {
+  if (!u8 || !u8.length) return '';
+  const cands = [];
+  if (u8.length % 2 === 0) cands.push(decodeUtf16be(u8));
+  try { cands.push(new TextDecoder('gb18030').decode(u8)); } catch { /* 老浏览器 */ }
+  cands.push(new TextDecoder('latin1').decode(u8));
+  let best = '';
+  let bestScore = -Infinity;
+  for (const s of cands) {
+    const sc = textScore(s);
+    if (sc > bestScore) { bestScore = sc; best = s; }
+  }
+  return best;
+}
+
+// PDF 内容流 → 行数组（按 y 变化断行，按 x 间隙决定要不要补空格）
+function pdfContentLines(src) {
+  const lines = [];
+  let cur = '';
+  let x = 0;
+  let y = 0;
+  let curY = null;
+  let fontSize = 12;
+  let lastEndX = null;
+  const stack = [];
+
+  const estWidth = (t, fs) => {
+    let w = 0;
+    for (const ch of t) w += ch.codePointAt(0) > 0x2e80 ? fs : fs * 0.52;
+    return w;
+  };
+  const flush = () => {
+    const t = cur.replace(/[ \t]+/g, ' ').trim();
+    if (t) lines.push(t);
+    cur = '';
+    lastEndX = null;
+  };
+  const maybeBreak = () => {
+    if (curY === null) { curY = y; return; }
+    if (Math.abs(y - curY) > Math.max(1.5, fontSize * 0.5)) { flush(); curY = y; }
+  };
+  const show = (u8) => {
+    const t = bestDecode(u8);
+    if (!t) return;
+    if (lastEndX !== null && x - lastEndX > Math.max(1.2, fontSize * 0.28)) cur += ' ';
+    cur += t;
+    lastEndX = x + estWidth(t, fontSize);
+    x = lastEndX;
+  };
+  const nums = () => stack.splice(0, stack.length).filter((a) => a.t === 'num').map((a) => a.v);
+
+  let i = 0;
+  const n = src.length;
+  while (i < n) {
+    const ch = src[i];
+    if (ch === '%') { while (i < n && src[i] !== '\n') i++; continue; }
+    if (ch === ' ' || ch === '\n' || ch === '\r' || ch === '\t' || ch === '\f' || ch === '\0') { i++; continue; }
+
+    if (ch === '(') {
+      const out = [];
+      let depth = 1;
+      let j = i + 1;
+      while (j < n && depth > 0) {
+        const c = src[j];
+        if (c === '\\') {
+          const nx = src[j + 1];
+          if (nx === 'n') out.push(10);
+          else if (nx === 'r') out.push(13);
+          else if (nx === 't') out.push(9);
+          else if (nx === '(' || nx === ')' || nx === '\\') out.push(nx.charCodeAt(0));
+          else if (nx >= '0' && nx <= '7') {
+            let oct = nx;
+            let k = j + 2;
+            while (k < n && oct.length < 3 && src[k] >= '0' && src[k] <= '7') { oct += src[k]; k++; }
+            out.push(parseInt(oct, 8) & 0xff);
+            j = k - 2;
+          } else out.push(nx ? nx.charCodeAt(0) : 0);
+          j += 2;
+          continue;
+        }
+        if (c === '(') depth++;
+        if (c === ')') { depth--; if (!depth) break; }
+        out.push(c.charCodeAt(0) & 0xff);
+        j++;
+      }
+      stack.push({ t: 'str', v: new Uint8Array(out) });
+      i = j + 1;
+      continue;
+    }
+    if (ch === '<' && src[i + 1] === '<') { i += 2; continue; }
+    if (ch === '>' && src[i + 1] === '>') { i += 2; continue; }
+    if (ch === '<') {
+      const end = src.indexOf('>', i);
+      if (end < 0) break;
+      const hex = src.slice(i + 1, end).replace(/[^0-9A-Fa-f]/g, '');
+      const b = new Uint8Array(hex.length >> 1);
+      for (let k = 0; k < b.length; k++) b[k] = parseInt(hex.substr(k * 2, 2), 16);
+      stack.push({ t: 'str', v: b });
+      i = end + 1;
+      continue;
+    }
+    if (ch === '[') { stack.push({ t: 'arr', v: [] }); i++; continue; }
+    if (ch === ']') {
+      const items = [];
+      while (stack.length && stack[stack.length - 1].t !== 'arr') items.unshift(stack.pop());
+      if (stack.length) stack.pop();
+      stack.push({ t: 'arr', v: items });
+      i++;
+      continue;
+    }
+    if (ch === '/') {
+      let j = i + 1;
+      while (j < n && !/[\s\/\[\]<>()%{}]/.test(src[j])) j++;
+      stack.push({ t: 'name', v: src.slice(i + 1, j) });
+      i = j;
+      continue;
+    }
+    if (/[0-9+\-.]/.test(ch)) {
+      let j = i;
+      while (j < n && /[0-9+\-.]/.test(src[j])) j++;
+      const v = parseFloat(src.slice(i, j));
+      stack.push({ t: 'num', v: isFinite(v) ? v : 0 });
+      i = j;
+      continue;
+    }
+
+    let j = i;
+    while (j < n && /[A-Za-z'"*]/.test(src[j])) j++;
+    if (j === i) { i++; continue; }
+    const op = src.slice(i, j);
+    i = j;
+
+    if (op === 'BT') { x = 0; y = 0; curY = null; flush(); }
+    else if (op === 'Tf') {
+      const a = nums();
+      const size = a.length ? Math.abs(a[a.length - 1]) : 0;
+      if (size > 0) fontSize = size;
+    } else if (op === 'Td' || op === 'TD') {
+      const a = nums();
+      x += a[0] || 0;
+      y += a[1] || 0;
+      maybeBreak();
+    } else if (op === 'Tm') {
+      const a = nums();
+      x = a[4] || 0;
+      y = a[5] || 0;
+      maybeBreak();
+    } else if (op === 'T*') {
+      flush();
+      curY = null;
+    } else if (op === 'Tj' || op === "'" || op === '"') {
+      if (op !== 'Tj') { flush(); curY = null; }
+      const args = stack.splice(0, stack.length);
+      const s = args.filter((a) => a.t === 'str').pop();
+      if (s) show(s.v);
+    } else if (op === 'TJ') {
+      const args = stack.splice(0, stack.length);
+      const arr = args.filter((a) => a.t === 'arr').pop();
+      if (arr) {
+        for (const item of arr.v) {
+          if (item.t === 'str') show(item.v);
+          else if (item.t === 'num' && item.v < -180) { if (cur && !cur.endsWith(' ')) cur += ' '; }
+        }
+      }
+    } else {
+      stack.length = 0;
+    }
+  }
+  flush();
+  return lines;
+}
+
+async function extractPdfText(buf) {
+  const bytes = new Uint8Array(buf);
+  if (bytes.length > 60 * 1024 * 1024) return [];       // 太大会卡，直接放弃
+  const out = [];
+  for (const raw of pdfRawStreams(bytes)) {
+    let src = null;
+    const inflated = await inflateBytes(raw);
+    if (inflated) src = new TextDecoder('latin1').decode(inflated);
+    else src = new TextDecoder('latin1').decode(raw);
+    if (src.indexOf('BT') < 0) continue;                // 不是内容流（图片/字体/元数据）
+    const lines = pdfContentLines(src);
+    // 图像等二进制里也偶有 "BT"：解出来的行如果几乎不可读，就当噪声丢掉
+    // 过滤：乱码（CJK 扩展区 A 多半是解错了编码）和几乎不可读的行
+    const good = lines.filter((l) => {
+      if (textScore(l) <= l.length * 0.6) return false;
+      let weird = 0;
+      for (const ch of l) { const c = ch.codePointAt(0); if (c >= 0x3400 && c <= 0x4dbf) weird++; }
+      return weird * 2 <= l.length;
+    });
+    if (good.length) out.push(...good);
+  }
+  return mergeFragments(out);
+}
+
+// 印章/日期/金额这类文字在原文件里是一个字一个定位，按 y 解出来就成了「一列单字」。
+// 连着几个短行就拼回一行，读起来才像话（宁可挤，也不能一个字一行占满屏幕）。
+function mergeFragments(lines) {
+  const out = [];
+  let buf = '';
+  const flush = () => { if (buf) { out.push(buf); buf = ''; } };
+  for (const line of lines) {
+    if (line.length <= 2) {                    // 只有「单字/两字」这种碎片才拼
+      if (buf.length + line.length > 16) flush();
+      buf += line;
+    } else {
+      flush();
+      out.push(line);
+    }
+  }
+  flush();
+  return out;
+}
+
 async function openPdfFile(f) {
   view.innerHTML = '<div class="empty">正在打开 PDF…</div>';
   try {
@@ -1585,6 +1862,13 @@ async function openPdfFile(f) {
     const buf = await f.arrayBuffer();
     RDR.fontRisk = pdfFontRisk(buf);
     RDR.srcUrl = URL.createObjectURL(new Blob([buf], { type: 'application/pdf' }));
+    RDR.textLines = [];
+    RDR.textMode = false;
+    if (RDR.fontRisk) {
+      // 字体没嵌入时 pdf.js 取不到字，但我们能从内容流里自己解（见 extractPdfText）
+      try { RDR.textLines = await extractPdfText(buf); } catch { RDR.textLines = []; }
+      RDR.textMode = RDR.textLines.length > 0;
+    }
     // cMaps + 标准字体必须给：中文/日文 PDF 常用 CID 字体（GBK-EUC-H / Identity-H），
     // 没有 cMaps 时这类字体整块渲染成空白——2026-10-29 用户报「发票有的字不显示」。
     RDR.pdf = await pdfjsLib.getDocument({
@@ -1603,8 +1887,40 @@ async function openPdfFile(f) {
   }
 }
 
+// 文字视图：字体缺失时把内容流里解出来的文字排成可读的一段段
+function renderPdfText() {
+  const lines = RDR.textLines || [];
+  view.innerHTML =
+    '<div class="meta"><span>' + esc(RDR.name) + '</span><span>文字视图</span></div>'
+    + '<div class="notice" id="pdfFontWarn">这份 PDF 的字体没嵌入，原样渲染是空白。下面是直接从文件里解出来的文字：'
+    + '能读、能选中、能存卡，但版式（表格线、盖章位置）会丢。'
+    + '<div class="row" style="margin-top:8px">'
+    + '<button class="btn ghost" id="showCanvas" style="padding:7px 10px;font-size:13px">看原图</button>'
+    + '<button class="btn ghost" id="openSys" style="padding:7px 10px;font-size:13px">用系统阅读器打开</button>'
+    + '</div></div>'
+    + '<div class="bookText plain" id="pdfTextBox">' + lines.map((l) => '<p>' + esc(l) + '</p>').join('') + '</div>'
+    + '<div class="row" style="margin-top:4px"><button class="btn ghost" id="closePdf">关闭这份 PDF</button></div>';
+  document.getElementById('showCanvas').onclick = () => { RDR.textMode = false; renderReader(); };
+  document.getElementById('closePdf').onclick = () => { resetBook(); renderReader(); };
+  const sys = document.getElementById('openSys');
+  if (sys) sys.onclick = () => openWithSystemReader();
+  view.scrollTop = 0;
+}
+
+function openWithSystemReader() {
+  if (!RDR.srcUrl) return;
+  const a = document.createElement('a');
+  a.href = RDR.srcUrl;
+  a.target = '_blank';
+  a.rel = 'noopener';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+}
+
 function renderReader() {
   if (RDR.kind === 'epub' || RDR.kind === 'text' || RDR.kind === 'md' || RDR.kind === 'docx') return renderTextBook();
+  if (RDR.textMode && RDR.textLines && RDR.textLines.length) return renderPdfText();
   if (!RDR.pdf && !RDR.book) {
     view.innerHTML = '<div class="empty">选一本书，直接在页面里读。<br>'
       + '<span class="sub">选中任意文字 → 朗读 / 存卡 / 问 AI。文件不上传，全在本机解析。</span>'
@@ -1626,19 +1942,18 @@ function renderReader() {
     + '<div class="pager">'
     + '<button id="prevPage">◀</button><button id="zoomOut">－</button><button id="zoomIn">＋</button><button id="nextPage">▶</button>'
     + '</div>'
-    + '<div class="row" style="margin-top:4px"><button class="btn ghost" id="closePdf">关闭这份 PDF</button></div>';
+    + '<div class="row" style="margin-top:4px">'
+    + (RDR.textLines && RDR.textLines.length ? '<button class="btn ghost" id="showText">文字视图</button>' : '')
+    + '<button class="btn ghost" id="closePdf">关闭这份 PDF</button></div>';
+  const st = document.getElementById('showText');
+  if (st) st.onclick = () => { RDR.textMode = true; renderReader(); };
   document.getElementById('prevPage').onclick = () => gotoPage(RDR.page - 1);
   document.getElementById('nextPage').onclick = () => gotoPage(RDR.page + 1);
   document.getElementById('zoomIn').onclick = () => { RDR.scale = Math.min(3, RDR.scale * 1.2); drawPage(); };
   document.getElementById('zoomOut').onclick = () => { RDR.scale = Math.max(0.5, RDR.scale / 1.2); drawPage(); };
   document.getElementById('closePdf').onclick = () => { resetBook(); renderReader(); };
   const sysBtn = document.getElementById('openSys');
-  if (sysBtn) sysBtn.onclick = () => {
-    if (!RDR.srcUrl) return;
-    const a = document.createElement('a');
-    a.href = RDR.srcUrl; a.target = '_blank'; a.rel = 'noopener';
-    document.body.appendChild(a); a.click(); a.remove();
-  };
+  if (sysBtn) sysBtn.onclick = openWithSystemReader;
   const dis = document.getElementById('dismissWarn');
   if (dis) dis.onclick = () => { const w = document.getElementById('pdfFontWarn'); if (w) w.remove(); };
   drawPage();

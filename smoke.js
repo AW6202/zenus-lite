@@ -380,6 +380,20 @@ class CDP {
     check('缺字体的 PDF 被识别并给出「用系统阅读器打开」',
       nofont.risk === true && nofont.warn === true && nofont.sys === true, nofont);
 
+    // F2b. 缺字体 PDF 要能自己把文字解出来（文字视图）
+    const ptext = await probe('缺字体 PDF 文字重建', `
+      const b = await (await fetch('${base}smoke-nofont.pdf')).blob();
+      await openPdfFile(new File([b], 'nofont.pdf'));
+      await new Promise(r => setTimeout(r, 1200));
+      const box = document.getElementById('pdfTextBox');
+      return { mode: RDR.textMode, lines: (RDR.textLines || []).length,
+               box: !!box, text: box ? box.textContent : '',
+               canToggle: !!document.getElementById('showCanvas') };
+    `);
+    check('缺字体 PDF 能解出文字并切到文字视图',
+      ptext.mode === true && ptext.lines > 0 && ptext.box === true
+      && ptext.text.indexOf('中文') >= 0 && ptext.canToggle === true, ptext);
+
     // F3. 脚本全局丢失时能自愈（缓存里存过坏响应的场景）
     const heal = await probe('依赖自愈', `
       await ensureJSZip();
