@@ -1,0 +1,42 @@
+apply plugin: 'com.android.application'
+
+def ksPath = new File('C:/android-build/zenus.keystore')
+def ksPass = new File('C:/android-build/keystore.pw').text.trim()
+
+android {
+    namespace 'io.github.aw6202.zenus'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId "io.github.aw6202.zenus"
+        minSdk 21
+        targetSdk 34
+        versionCode 1
+        versionName "1.0.0"
+    }
+
+    signingConfigs {
+        release {
+            storeFile ksPath
+            storePassword ksPass
+            keyAlias 'zenus'
+            keyPassword ksPass
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            signingConfig signingConfigs.release
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
+
+dependencies {
+    implementation 'com.google.androidbrowserhelper:androidbrowserhelper:2.5.0'
+}
