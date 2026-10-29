@@ -665,6 +665,51 @@ class CDP {
     check('扫描版目录：OCR 文本能抽成目录条目',
       toc.parsed === 3 && toc.hasOcrDraft === true, toc);
 
+    // O. 文字书也支持目录/双页；工具条在右侧竖排；打开不落在封面
+    const bookTools = await probe('文字书目录与双页', `
+      state.tab = 'reader'; render();
+      if (!RDR.paged) { togglePaged(); await new Promise(r => setTimeout(r, 400)); }  // 前面用例可能切到滚动
+      const b = await (await fetch('${base}smoke-gbk.txt')).blob();
+      await openTextBook(new File([b], 'smoke-gbk.txt'));
+      await new Promise(r => setTimeout(r, 700));
+      const single = { pages: RDR.pages, colW: Math.round(RDR.colW || 0) };
+      RDR.toolsVisible = true; syncTools();
+      await new Promise(r => setTimeout(r, 150));
+      const bar = document.getElementById('bookTools');
+      const cs = getComputedStyle(bar);
+      const br = bar.getBoundingClientRect();
+      const barInfo = { dir: cs.flexDirection, rightGap: Math.round(innerWidth - br.right),
+                        buttons: [...bar.querySelectorAll('button')].length };
+      toggleSpread();
+      await new Promise(r => setTimeout(r, 600));
+      const spread = { pages: RDR.pages, colW: Math.round(RDR.colW || 0) };
+      toggleSpread();
+      await new Promise(r => setTimeout(r, 400));
+      showBookToc();
+      await new Promise(r => setTimeout(r, 300));
+      const items = [...document.querySelectorAll('.tocItem')];
+      return { single, spread, barInfo, tocItems: items.length,
+               tocFirst: items[0] ? items[0].textContent.trim() : '',
+               curHighlighted: !!document.querySelector('.tocItem.on') };
+    `);
+    check('文字书也有目录（章列表 + 高亮当前章）',
+      bookTools.tocItems >= 1 && bookTools.curHighlighted === true, bookTools);
+    // 双页 = 一屏两栏（每栏半宽），总内容不变，所以页数应基本持平（允许 ±40% 的换行损耗）
+    check('文字书双页：栏宽减半、页数基本持平',
+      bookTools.spread.colW <= bookTools.single.colW * 0.6
+      && Math.abs(bookTools.spread.pages - bookTools.single.pages) <= bookTools.single.pages * 0.4, bookTools);
+    check('工具条改成右侧竖排', bookTools.barInfo.dir === 'column' && bookTools.barInfo.rightGap <= 12
+      && bookTools.barInfo.buttons >= 10, bookTools.barInfo);
+
+    const cover = await probe('打开不落在封面', `
+      state.tab = 'reader'; render();
+      const b = await (await fetch('${base}smoke.epub')).blob();
+      await openEpubBook(new File([b], 'smoke.epub'));
+      await new Promise(r => setTimeout(r, 600));
+      return { ch: RDR.ch, textLen: (RDR.book.chapters[RDR.ch].text || '').trim().length };
+    `);
+    check('打开书不落在封面页（停在有正文的那章）', cover.textLen > 50, cover);
+
     // H. 关书释放 blob URL
     const clean = await probe('关书释放', `
       const b = await (await fetch('${base}smoke.epub')).blob();

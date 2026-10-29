@@ -1,7 +1,7 @@
 // 学习机 Lite — 静态 PWA：内容来自 pack.json，进度存本地，AI 直连 OpenAI 兼容接口
 'use strict';
 
-const BUILD = '2026-10-29.17';
+const BUILD = '2026-10-29.18';
 
 const LS = {
   progress: 'zenus.progress.v1',
@@ -1259,7 +1259,7 @@ async function openEpubBook(f) {
     RDR.pdf = null;
     RDR.book = { name: f.name, chapters: chapters };
     RDR.key = docKey(f);
-    RDR.ch = 0;
+    RDR.ch = firstReadableChapter(chapters);
     const ratio = applyReadPos();
     renderReader();
     if (ratio) requestAnimationFrame(() => scrollToRatio(ratio));
@@ -1269,6 +1269,14 @@ async function openEpubBook(f) {
 }
 
 // 换书 / 关书：把上一本生成的图片 blob URL 释放掉，否则内存只涨不落
+// 打开时跳到第一段有正文的章（封面/扉页只有图，停在上面像打不开）
+function firstReadableChapter(chapters) {
+  for (let i = 0; i < chapters.length; i++) {
+    if ((chapters[i].text || '').trim().length > 50) return i;
+  }
+  return 0;
+}
+
 function resetBook() {
   // 注意：PDF 也必须在这里清掉。之前只清 book/kind，导致「关闭这份 PDF」按钮点了没反应
   // （renderReader 看到 RDR.pdf 还在，又渲染回 PDF 视图）——2026-10-29 用户报的 bug G。
@@ -1515,7 +1523,7 @@ async function openDocxBook(f) {
     RDR.pdf = null;
     RDR.book = { name: f.name, chapters: chapters };
     RDR.key = docKey(f);
-    RDR.ch = 0;
+    RDR.ch = firstReadableChapter(chapters);
     const ratio = applyReadPos();
     renderReader();
     if (ratio) requestAnimationFrame(() => scrollToRatio(ratio));
@@ -2718,16 +2726,21 @@ function layoutPages(keepRatio) {
   const lh = Math.max(16, (settings.readFont || 16) * (settings.readLine || 1.8));
   const h = Math.max(240, Math.floor((view.clientHeight - 34) / lh) * lh);
   const gap = 28;
+  const spread = !!RDR.spread;
+  const colW = spread ? Math.max(160, (w - gap) / 2) : w;
   vp.style.width = w + 'px';
   vp.style.height = h + 'px';
   box.style.height = h + 'px';
-  box.style.columnWidth = w + 'px';
+  box.style.columnWidth = colW + 'px';
   box.style.columnGap = gap + 'px';
   box.style.fontSize = settings.readFont + 'px';
   box.style.lineHeight = String(settings.readLine);
   RDR.pageW = w;
   RDR.pageGap = gap;
-  RDR.pages = Math.max(1, Math.round((box.scrollWidth + gap) / (w + gap)));
+  RDR.colW = colW;
+  const cols = Math.max(1, Math.round((box.scrollWidth + gap) / (colW + gap)));
+  RDR.cols = cols;
+  RDR.pages = spread ? Math.max(1, Math.ceil(cols / 2)) : cols;
   if (keepRatio && RDR.pages > 1) {
     RDR.pageIdx = Math.min(RDR.pages - 1, Math.round(keepRatio * (RDR.pages - 1)));
   }
@@ -2804,8 +2817,12 @@ function renderTextBook() {
     + (RDR.paged ? '<div id="pageViewport">' + box + '</div>' : box)
     + '<div class="floating pager' + (RDR.toolsVisible ? ' show' : '') + '" id="bookTools">'
     + '<button id="prevCh">◀</button><button id="nextCh">▶</button>'
-    + '<button id="fSmall" title="字号">A-</button><button id="fBig" title="字号">A+</button>'
-    + '<button id="lTight" title="行距">行-</button><button id="lLoose" title="行距">行+</button>'
+    + '<button id="tocBtn">目录</button>'
+    + '<div class="sep"></div>'
+    + '<button id="fBig" title="字号">A+</button><button id="fSmall" title="字号">A-</button>'
+    + '<button id="lLoose" title="行距">行+</button><button id="lTight" title="行距">行-</button>'
+    + '<button id="spreadBtn">' + (RDR.spread ? '单页' : '双页') + '</button>'
+    + '<div class="sep"></div>'
     + '<button id="kpBtn" class="t-close">知识点</button>'
     + '<button id="togglePaged" class="t-close">' + (RDR.paged ? '滚动' : '分页') + '</button>'
     + '<button id="closeBook" class="t-close">关闭</button></div>';
@@ -2818,6 +2835,8 @@ function renderTextBook() {
   document.getElementById('lTight').onclick = () => bumpLine(-0.1);
   document.getElementById('lLoose').onclick = () => bumpLine(0.1);
   document.getElementById('togglePaged').onclick = togglePaged;
+  document.getElementById('tocBtn').onclick = () => { hideTools(); showBookToc(); };
+  document.getElementById('spreadBtn').onclick = () => toggleSpread();
   const kpb = document.getElementById('kpBtn');
   if (kpb) kpb.onclick = () => { hideTools(); showPoints(); };
   document.getElementById('closeBook').onclick = () => { saveReadPos(); resetBook(); renderReader(); };
@@ -3039,10 +3058,39 @@ function renderOutlineDraft(items, rawLines) {
   view.scrollTop = 0;
 }
 
+// ── 文字书的目录（就是章列表）：跳章 + 高亮当前章 ────────────
+function showBookToc() {
+  const b = RDR.book;
+  if (!b) return;
+  hideTools();
+  const cur = RDR.ch;
+  view.innerHTML =
+    '<div class="meta"><span>目录</span><span>' + b.chapters.length + ' 节</span></div>'
+    + '<div class="row" style="margin:6px 0 10px"><button class="btn ghost" id="tocBack">← 回正文</button>'
+    + '<button class="btn ghost" id="tocJump">跳到第…节</button></div>'
+    + '<div class="list">' + b.chapters.map((c, i) =>
+      '<button class="tocItem' + (i === cur ? ' on' : '') + '" data-i="' + i + '">'
+      + '<span>' + esc(c.title || ('第 ' + (i + 1) + ' 节')) + '</span>'
+      + '<small>' + (i + 1) + '</small></button>').join('') + '</div>';
+  document.getElementById('tocBack').onclick = () => renderTextBook();
+  document.getElementById('tocJump').onclick = () => {
+    const n = Number(prompt('跳到第几节？（共 ' + b.chapters.length + ' 节）', String(cur + 1)));
+    if (n && n >= 1) { RDR.pageIdx = 0; gotoChapter(n - 1, 'first'); }
+  };
+  view.querySelectorAll('.tocItem').forEach((btn) => {
+    btn.onclick = () => { RDR.pageIdx = 0; gotoChapter(Number(btn.dataset.i), 'first'); };
+  });
+  view.scrollTop = 0;
+}
+
 // ── 单页 / 双页（横屏读教材更像书）──────────────────────
 function toggleSpread() {
   RDR.spread = !RDR.spread;
+  RDR.pageIdx = 0;
   renderReader();
+  if (RDR.book && RDR.paged) {
+    setTimeout(() => { layoutPages(0); applyPageTransform(); }, 30);
+  }
 }
 
 // ── PDF：滚动模式（连续纵向翻页）+ 尺寸自适应 ───────────────

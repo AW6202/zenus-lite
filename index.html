@@ -134,16 +134,19 @@ input.t{width:100%;background:var(--card);border:1px solid var(--line);color:var
 .textLayer span{color:transparent;position:absolute;white-space:pre;transform-origin:0 0;cursor:text}
 .pager{display:flex;align-items:center;gap:8px;justify-content:center;margin:10px 0}
 .pager button{background:#20242d;border:1px solid var(--line);color:var(--text);border-radius:9px;padding:8px 14px;font-size:14px}
-/* 浮动工具条：默认隐藏，点屏幕中间呼出（页面更满、手不挡字） */
-.floating{position:fixed;left:50%;transform:translateX(-50%) translateY(8px);
-  bottom:calc(58px + var(--safe-b));z-index:60;display:flex;gap:6px;align-items:center;
-  background:rgba(26,30,38,.96);border:1px solid var(--line);border-radius:999px;
-  padding:6px 8px;box-shadow:0 6px 20px rgba(0,0,0,.45);margin:0;
+/* 浮动工具条：改成右侧竖条（按钮多了，底部一行放不下）；点屏幕中间呼出 */
+.floating{position:fixed;right:6px;top:50%;transform:translate(6px,-50%);
+  z-index:60;display:flex;flex-direction:column;gap:4px;align-items:stretch;
+  background:rgba(26,30,38,.96);border:1px solid var(--line);border-radius:16px;
+  padding:6px;box-shadow:0 6px 20px rgba(0,0,0,.45);margin:0;
+  max-height:calc(100dvh - 140px);overflow-y:auto;overscroll-behavior:contain;
   opacity:0;pointer-events:none;transition:opacity .18s,transform .18s}
-.floating.show{opacity:1;pointer-events:auto;transform:translateX(-50%) translateY(0)}
-.floating button{background:none;border:0;color:var(--text);font-size:14px;padding:8px 12px;border-radius:999px}
+.floating.show{opacity:1;pointer-events:auto;transform:translate(0,-50%)}
+.floating button{background:none;border:0;color:var(--text);font-size:13px;
+  padding:9px 10px;border-radius:10px;white-space:nowrap;text-align:center;min-width:52px}
 .floating button:active{background:#3a4150}
-.floating .t-close{font-size:13px;color:var(--dim)}
+.floating .t-close{font-size:12px;color:var(--dim)}
+.floating .sep{height:1px;background:var(--line);margin:3px 2px}
 .pager .pg{font-size:13px;color:var(--dim);min-width:70px;text-align:center}
 #selTools{position:fixed;z-index:99;display:flex;gap:4px;background:#2a2f3a;border:1px solid var(--line);
   border-radius:999px;padding:4px 6px;box-shadow:0 6px 18px rgba(0,0,0,.5)}
