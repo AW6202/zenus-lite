@@ -923,6 +923,34 @@ class CDP {
     check('分享进来的内容能被接手且不重复消费',
       paste.sharedLen > 100 && paste.cleared === true, paste);
 
+    // W. 剪贴板里有链接时给一条可点的导入提示
+    const clip = await probe('剪贴板提示', `
+      state.tab = 'reader'; render();
+      Object.defineProperty(navigator, 'clipboard', {
+        configurable: true,
+        value: { readText: async () => 'https://mp.weixin.qq.com/s/AbCdEfG123' },
+      });
+      lastClipCheck = 0;
+      await checkClipboardHint();
+      await new Promise(r => setTimeout(r, 200));
+      const bar = document.getElementById('clipBar');
+      const out = { shown: !!bar, hasGo: !!document.getElementById('clipGo') };
+      const no = document.getElementById('clipNo');
+      if (no) no.click();
+      await new Promise(r => setTimeout(r, 150));
+      out.dismissed = !document.getElementById('clipBar');
+      Object.defineProperty(navigator, 'clipboard', {
+        configurable: true, value: { readText: async () => '一段普通文字，不是链接' },
+      });
+      lastClipCheck = 0;
+      await checkClipboardHint();
+      await new Promise(r => setTimeout(r, 150));
+      out.silentForText = !document.getElementById('clipBar');
+      return out;
+    `);
+    check('剪贴板有链接时提示导入，纯文字不打扰',
+      clip.shown === true && clip.hasGo === true && clip.dismissed === true && clip.silentForText === true, clip);
+
     // H. 关书释放 blob URL
     const clean = await probe('关书释放', `
       const b = await (await fetch('${base}smoke.epub')).blob();

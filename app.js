@@ -1,7 +1,7 @@
 // 学习机 Lite — 静态 PWA：内容来自 pack.json，进度存本地，AI 直连 OpenAI 兼容接口
 'use strict';
 
-const BUILD = '2026-10-29.30';
+const BUILD = '2026-10-29.31';
 
 const LS = {
   progress: 'zenus.progress.v1',
@@ -240,6 +240,12 @@ window.addEventListener('orientationchange', () => setTimeout(() => { if (RDR.pd
 // 工具条上点了按钮就重新计时（正在缩放/翻页时不要自己收掉）
 document.addEventListener('click', (e) => {
   if (RDR.toolsVisible && e.target.closest && e.target.closest('.floating')) scheduleHideTools();
+});
+
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && state.tab === 'reader' && !RDR.book && !RDR.pdf) {
+    setTimeout(checkClipboardHint, 400);
+  }
 });
 
 document.querySelectorAll('.tabbar button').forEach((b) => {
@@ -2643,11 +2649,36 @@ function renderPaste(prefill, note) {
   view.scrollTop = 0;
 }
 
+let lastClipCheck = 0;
+let lastImportedUrl = '';
+
+// 从别的 App 切回来时，若剪贴板里有链接，给一条可点的提示（读不到就静默，不打扰）
+async function checkClipboardHint() {
+  if (Date.now() - lastClipCheck < 60000) return;
+  if (!navigator.clipboard || !navigator.clipboard.readText) return;
+  try {
+    const t = (await navigator.clipboard.readText() || '').trim();
+    if (!looksLikeUrl(t) || t === lastImportedUrl) return;
+    lastClipCheck = Date.now();
+    if (document.getElementById('clipBar')) return;
+    const bar = document.createElement('div');
+    bar.id = 'clipBar';
+    bar.className = 'notice';
+    bar.innerHTML = '剪贴板里有链接：' + esc(t.slice(0, 48)) + (t.length > 48 ? '…' : '')
+      + '<div class="row" style="margin-top:8px">'
+      + '<button class="btn ghost" id="clipGo" style="padding:7px 10px;font-size:13px">导入这篇</button>'
+      + '<button class="btn ghost" id="clipNo" style="padding:7px 10px;font-size:13px">忽略</button></div>';
+    view.insertBefore(bar, view.firstChild);
+    document.getElementById('clipGo').onclick = () => { lastImportedUrl = t; bar.remove(); importFromText(t); };
+    document.getElementById('clipNo').onclick = () => bar.remove();
+  } catch { /* 没权限或需要手势：静默 */ }
+}
+
 async function pasteFromClipboard() {
   if (navigator.clipboard && navigator.clipboard.readText) {
     try {
       const t = await navigator.clipboard.readText();
-      if (t && t.trim()) return importFromText(t);
+      if (t && t.trim()) { lastImportedUrl = t.trim(); return importFromText(t); }
     } catch { /* 需要用户手势或权限，退到手动粘贴 */ }
   }
   renderPaste('', '');
@@ -4051,6 +4082,12 @@ window.addEventListener('orientationchange', () => setTimeout(() => { if (RDR.pd
 // 工具条上点了按钮就重新计时（正在缩放/翻页时不要自己收掉）
 document.addEventListener('click', (e) => {
   if (RDR.toolsVisible && e.target.closest && e.target.closest('.floating')) scheduleHideTools();
+});
+
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && state.tab === 'reader' && !RDR.book && !RDR.pdf) {
+    setTimeout(checkClipboardHint, 400);
+  }
 });
 
 document.querySelectorAll('.tabbar button').forEach((b) => {
