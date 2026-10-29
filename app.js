@@ -1,7 +1,7 @@
 // 学习机 Lite — 静态 PWA：内容来自 pack.json，进度存本地，AI 直连 OpenAI 兼容接口
 'use strict';
 
-const BUILD = '2026-10-29.16';
+const BUILD = '2026-10-29.17';
 
 const LS = {
   progress: 'zenus.progress.v1',
@@ -1053,7 +1053,7 @@ function scheduleSync() {
 const RDR = {
   pdf: null, page: 1, total: 0, name: '', scale: 1, rendering: false,
   kind: null, book: null, ch: 0, urls: [], assets: {}, toolsVisible: false,
-  paged: true, pageIdx: 0, pages: 1, pdfScroll: false,
+  paged: true, pageIdx: 0, pages: 1, pdfScroll: false, spread: false, outline: null,
 };
 
 const scriptOnce = {};
@@ -1290,6 +1290,7 @@ function resetBook() {
   RDR.fontRisk = false;
   RDR.textLines = [];
   RDR.textMode = false;
+  RDR.outline = null;
   RDR.key = null;
   if (RDR.scrollIO) { try { RDR.scrollIO.disconnect(); } catch { /* 已断开 */ } RDR.scrollIO = null; }
   if (view) { view.onscroll = null; view.scrollTop = 0; }
@@ -2190,6 +2191,8 @@ function renderReader() {
     + '<div id="readerWrap"><canvas id="pdfCanvas"></canvas><div class="textLayer" id="textLayer"></div></div>'
     + '<div class="floating pager' + (RDR.toolsVisible ? ' show' : '') + '" id="pdfTools">'
     + '<button id="prevPage">◀</button><button id="zoomOut">－</button><button id="zoomIn">＋</button><button id="nextPage">▶</button>'
+    + '<button id="tocBtn" class="t-close">目录</button>'
+    + '<button id="spreadBtn" class="t-close">' + (RDR.spread ? '单页' : '双页') + '</button>'
     + '<button id="ocrBtn" class="t-close">识别文字</button>'
     + '<button id="toggleScroll" class="t-close">滚动</button>'
     + '<button id="closePdf" class="t-close">关闭</button>'
@@ -2208,6 +2211,10 @@ function renderReader() {
   if (ocrb) ocrb.onclick = () => { hideTools(); ocrCurrentPage(); };
   const ts = document.getElementById('toggleScroll');
   if (ts) ts.onclick = () => { RDR.pdfScroll = true; renderReader(); };
+  const tb = document.getElementById('tocBtn');
+  if (tb) tb.onclick = () => showOutline();
+  const sb = document.getElementById('spreadBtn');
+  if (sb) sb.onclick = toggleSpread;
   const dis = document.getElementById('dismissWarn');
   if (dis) dis.onclick = () => { const w = document.getElementById('pdfFontWarn'); if (w) w.remove(); };
   drawPage();
@@ -2850,6 +2857,194 @@ function gotoPage(n) {
   saveReadPos();
 }
 
+// ── 目录导航（PDF 自带书签）+ 单/双页 ─────────────────────
+// 教材类 PDF 一般带书签（pdf.js 的 getOutline 直接能读），几百页的书没目录根本没法翻。
+
+async function outlinePageNo(dest) {
+  try {
+    let d = dest;
+    if (typeof dest === 'string') d = await RDR.pdf.getDestination(dest);
+    if (!Array.isArray(d) || !d.length) return null;
+    const idx = await RDR.pdf.getPageIndex(d[0]);
+    return idx + 1;
+  } catch { return null; }
+}
+
+async function buildOutline(items, depth, out) {
+  for (const it of items) {
+    const page = await outlinePageNo(it.dest);
+    out.push({ title: (it.title || '').trim() || '(未命名)', page: page, depth: depth });
+    if (it.items && it.items.length) await buildOutline(it.items, depth + 1, out);
+  }
+  return out;
+}
+
+async function pdfOutline() {
+  if (RDR.outline) return RDR.outline;
+  let raw = null;
+  try { raw = await RDR.pdf.getOutline(); } catch { raw = null; }
+  RDR.outline = raw && raw.length ? await buildOutline(raw, 0, []) : [];
+  return RDR.outline;
+}
+
+async function showOutline() {
+  if (!RDR.pdf) return;
+  hideTools();
+  view.innerHTML = '<div class="empty"><span class="spin"></span> 正在读书签…</div>';
+  const items = await pdfOutline();
+  const cur = RDR.page;
+  let html = '<div class="meta"><span>目录</span><span>' + (items.length ? items.length + ' 条' : '没有书签') + '</span></div>'
+    + '<div class="row" style="margin:6px 0 10px"><button class="btn ghost" id="ocBack">← 回阅读</button>'
+    + '<button class="btn ghost" id="ocPage">跳到第…页</button>'
+    + (items.length ? '' : '<button class="btn ghost" id="ocOcr">OCR 生成目录</button>')
+    + '</div>';
+  if (items.length) {
+    // 高亮「当前页之前最后一条」= 正在读的章节
+    let active = -1;
+    items.forEach((it, i) => { if (it.page && it.page <= cur) active = i; });
+    html += '<div class="list">' + items.map((it, i) =>
+      '<button class="tocItem' + (i === active ? ' on' : '') + '" data-i="' + i + '" style="padding-left:' + (12 + it.depth * 14) + 'px">'
+      + '<span>' + esc(it.title) + '</span><small>' + (it.page ? 'p.' + it.page : '') + '</small></button>').join('') + '</div>';
+  } else {
+    html += '<div class="hint">这份 PDF 没有书签（常见于扫描件）。可以用「跳到第…页」，或者用「OCR 生成目录」：'
+      + '把目录页 OCR 出来，自动整理成可点的目录草案。</div>';
+  }
+  view.innerHTML = html;
+  document.getElementById('ocBack').onclick = () => renderReader();
+  document.getElementById('ocPage').onclick = () => {
+    const n = Number(prompt('跳到第几页？（共 ' + RDR.total + ' 页）', String(RDR.page)));
+    if (n && n >= 1) { goToPageEverywhere(n); }
+  };
+  const ocrBtn = document.getElementById('ocOcr');
+  if (ocrBtn) ocrBtn.onclick = () => ocrOutlineDraft();
+  view.querySelectorAll('.tocItem').forEach((b) => {
+    b.onclick = () => {
+      const it = items[Number(b.dataset.i)];
+      if (it.page) goToPageEverywhere(it.page);
+    };
+  });
+  view.scrollTop = 0;
+}
+
+// 跳出目录页后回到阅读并定位
+function goToPageEverywhere(n) {
+  const p = Math.max(1, Math.min(RDR.total || 1, n));
+  RDR.page = p;
+  if (RDR.pdfScroll) {
+    renderReader();
+    setTimeout(() => scrollToPdfPage(p), 120);
+  } else {
+    renderReader();
+    drawPage();
+  }
+  saveReadPos();
+}
+
+// 扫描版没有书签：把「目录页」OCR 出来，抽成可点的目录草案
+function parseTocLines(lines, total) {
+  const out = [];
+  const seen = new Set();
+  for (const raw of lines) {
+    const line = String(raw).replace(/\s+/g, ' ').trim();
+    if (line.length < 4 || line.length > 60) continue;
+    const m = /^(.*?)[\s.·…•\-]{1,}(\d{1,4})$/.exec(line);
+    if (m && m[1].trim().length >= 2) {
+      const p = Number(m[2]);
+      if (p >= 1 && p <= Math.max(total, 2000)) {
+        const title = m[1].trim();
+        if (!seen.has(title)) { seen.add(title); out.push({ title: title, page: p }); }
+        continue;
+      }
+    }
+    if (/^(第\s*[一二三四五六七八九十百\d]+\s*[章节讲篇部]|\d+(\.\d+)+)/.test(line)) {
+      if (!seen.has(line)) { seen.add(line); out.push({ title: line, page: null }); }
+    }
+  }
+  return out;
+}
+
+async function ocrPageToLines(worker, n) {
+  const page = await RDR.pdf.getPage(n);
+  const base = page.getViewport({ scale: 1 });
+  const scale = Math.max(1.5, Math.min(4, 1800 / base.width));
+  const vp = page.getViewport({ scale: scale });
+  const c = document.createElement('canvas');
+  c.width = Math.floor(vp.width);
+  c.height = Math.floor(vp.height);
+  await page.render({ canvasContext: c.getContext('2d'), viewport: vp }).promise;
+  const { data } = await worker.recognize(c);
+  return String(data.text || '').split('\n').map((s) => s.trim()).filter(Boolean);
+}
+
+async function ocrOutlineDraft() {
+  if (!RDR.pdf) return;
+  const def = '1-' + Math.min(8, RDR.total);
+  const range = prompt('目录通常在前面几页。OCR 哪几页？（共 ' + RDR.total + ' 页，格式 1-8）', def);
+  if (!range) return;
+  const m = /^(\d+)\s*[-~到]\s*(\d+)$/.exec(range.trim()) || /^(\d+)$/.exec(range.trim());
+  if (!m) return toast('格式不对，像这样：1-8');
+  const from = Math.max(1, Number(m[1]));
+  const to = Math.min(RDR.total, Number(m[2] || m[1]));
+  if (to < from) return toast('页码范围不对');
+  if (to - from + 1 > 20) return toast('一次最多 20 页（OCR 很慢）');
+
+  view.innerHTML = '<div class="empty"><span class="spin"></span> <span id="ocrTocTip">准备 OCR…</span></div>';
+  try {
+    const T = await ensureTesseract();
+    const worker = await T.createWorker(['chi_sim', 'eng'], 1, {
+      workerPath: 'vendor/ocr/worker.min.js',
+      corePath: 'vendor/ocr/tesseract-core-simd-lstm.wasm.js',
+      langPath: 'vendor/ocr/',
+    });
+    const all = [];
+    try {
+      for (let n = from; n <= to; n++) {
+        const tip = document.getElementById('ocrTocTip');
+        if (tip) tip.textContent = '正在识别第 ' + n + ' / ' + to + ' 页…（每页十几秒）';
+        try { all.push(...(await ocrPageToLines(worker, n))); } catch { /* 单页失败跳过 */ }
+      }
+    } finally {
+      try { await worker.terminate(); } catch { /* 已结束 */ }
+    }
+    const items = parseTocLines(all, RDR.total);
+    RDR.outline = items;
+    renderOutlineDraft(items, all);
+  } catch (err) {
+    view.innerHTML = '<div class="empty">OCR 失败：' + esc(err.message)
+      + '<div class="row" style="margin-top:12px"><button class="btn ghost" id="ocBack2">← 回阅读</button></div></div>';
+    const b = document.getElementById('ocBack2');
+    if (b) b.onclick = () => renderReader();
+  }
+}
+
+function renderOutlineDraft(items, rawLines) {
+  view.innerHTML =
+    '<div class="meta"><span>目录草案（OCR）</span><span>' + items.length + ' 条</span></div>'
+    + '<div class="row" style="margin:6px 0 10px"><button class="btn ghost" id="ocBack">← 回阅读</button></div>'
+    + (items.length
+      ? '<div class="hint">带页码的可以点；没页码的只列出来（OCR 没认到行尾数字）。条目不准属于正常，OCR 认表格和点线本来就弱。</div>'
+        + '<div class="list">' + items.map((it, i) =>
+          '<button class="tocItem" data-i="' + i + '"><span>' + esc(it.title) + '</span><small>'
+          + (it.page ? 'p.' + it.page : '—') + '</small></button>').join('') + '</div>'
+      : '<div class="hint">这几页没认出目录行。可以换个页码范围再试，或者直接用「跳到第…页」。</div>'
+        + '<div class="bookText plain" style="font-size:13px">' + rawLines.slice(0, 40).map((l) => '<p>' + esc(l) + '</p>').join('') + '</div>');
+  const back = document.getElementById('ocBack');
+  if (back) back.onclick = () => renderReader();
+  view.querySelectorAll('.tocItem').forEach((b) => {
+    b.onclick = () => {
+      const it = items[Number(b.dataset.i)];
+      if (it && it.page) goToPageEverywhere(it.page);
+    };
+  });
+  view.scrollTop = 0;
+}
+
+// ── 单页 / 双页（横屏读教材更像书）──────────────────────
+function toggleSpread() {
+  RDR.spread = !RDR.spread;
+  renderReader();
+}
+
 // ── PDF：滚动模式（连续纵向翻页）+ 尺寸自适应 ───────────────
 // 扫描件往往比 A4 长，逐页翻看不方便；给一个「滚动」模式：所有页纵向排开，滚到哪画到哪。
 
@@ -2895,6 +3090,8 @@ function renderPdfScroll() {
     + '<button id="prevPage">▲</button><button id="nextPage">▼</button>'
     + '<button id="zoomOut">－</button><button id="zoomIn">＋</button>'
     + '<button id="toggleScroll" class="t-close">翻页</button>'
+    + '<button id="tocBtn" class="t-close">目录</button>'
+    + '<button id="spreadBtn" class="t-close">' + (RDR.spread ? '单页' : '双页') + '</button>'
     + '<button id="ocrBtn" class="t-close">识别文字</button>'
     + '<button id="toggleScroll" class="t-close">滚动</button>'
     + '<button id="closePdf" class="t-close">关闭</button>'
@@ -2926,11 +3123,17 @@ function renderPdfScroll() {
   document.getElementById('zoomOut').onclick = () => { RDR.scale = Math.max(0.6, RDR.scale / 1.15); relayoutPdf(); };
   document.getElementById('zoomIn').onclick = () => { RDR.scale = Math.min(3, RDR.scale * 1.15); relayoutPdf(); };
   document.getElementById('toggleScroll').onclick = () => { RDR.pdfScroll = false; renderReader(); };
+  const tb2 = document.getElementById('tocBtn');
+  if (tb2) tb2.onclick = () => showOutline();
   document.getElementById('closePdf').onclick = () => { saveReadPos(); resetBook(); renderReader(); };
   const ocrb = document.getElementById('ocrBtn');
   if (ocrb) ocrb.onclick = () => { hideTools(); ocrCurrentPage(); };
   const ts = document.getElementById('toggleScroll');
   if (ts) ts.onclick = () => { RDR.pdfScroll = true; renderReader(); };
+  const tb = document.getElementById('tocBtn');
+  if (tb) tb.onclick = () => showOutline();
+  const sb = document.getElementById('spreadBtn');
+  if (sb) sb.onclick = toggleSpread;
   const st = document.getElementById('showText');
   if (st) st.onclick = () => { RDR.textMode = true; renderReader(); };
   bindFlipGestures(view, {
@@ -2963,53 +3166,73 @@ function relayoutPdf() {
   }
 }
 
+// 渲染单个 PDF 页（自己管画布 + 文字层），双页模式就是并排渲染两页
+async function renderPdfPage(n, canvasId, layerId, maxWidth) {
+  const canvas = document.getElementById(canvasId);
+  const tl = document.getElementById(layerId);
+  if (!canvas) return;
+  const page = await RDR.pdf.getPage(n);
+  const base = page.getViewport({ scale: 1 });
+  const scale = (Math.max(120, maxWidth) / base.width) * RDR.scale;
+  const vp = page.getViewport({ scale: scale });
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = Math.floor(vp.width * dpr);
+  canvas.height = Math.floor(vp.height * dpr);
+  canvas.style.width = vp.width + 'px';
+  canvas.style.height = vp.height + 'px';
+  await page.render({
+    canvasContext: canvas.getContext('2d'),
+    viewport: vp,
+    transform: dpr !== 1 ? [dpr, 0, 0, dpr, 0, 0] : null,
+  }).promise;
+  if (!tl) return;
+  tl.innerHTML = '';
+  tl.style.width = vp.width + 'px';
+  tl.style.height = vp.height + 'px';
+  tl.style.setProperty('--scale-factor', String(vp.scale));
+  const tc = await page.getTextContent();
+  await pdfjsLib.renderTextLayer({
+    textContentSource: tc,
+    textContent: tc,
+    container: tl,
+    viewport: vp,
+    textDivs: [],
+  }).promise;
+  // 结构检测可能误报（字体藏在压缩对象流里）：真取到中文就把提示撤掉
+  if (RDR.fontRisk && tc.items.some((it) => /[㐀-鿿]/.test(it.str))) {
+    RDR.fontRisk = false;
+    const w = document.getElementById('pdfFontWarn');
+    if (w) w.remove();
+  }
+}
+
 async function drawPage() {
   if (!RDR.pdf || RDR.rendering) return;
   RDR.rendering = true;
-  const canvas = document.getElementById('pdfCanvas');
-  const tl = document.getElementById('textLayer');
-  if (!canvas || !tl) { RDR.rendering = false; return; }
+  const wrap = document.getElementById('readerWrap');
+  if (!wrap) { RDR.rendering = false; return; }
   try {
-    const page = await RDR.pdf.getPage(RDR.page);
-    const base = page.getViewport({ scale: 1 });
-    const avail = (view.clientWidth || 360) - 28;
-    const scale = (avail / base.width) * RDR.scale;
-    const vp = page.getViewport({ scale });
-    const dpr = window.devicePixelRatio || 1;
-    canvas.width = Math.floor(vp.width * dpr);
-    canvas.height = Math.floor(vp.height * dpr);
-    canvas.style.width = vp.width + 'px';
-    canvas.style.height = vp.height + 'px';
-    await page.render({
-      canvasContext: canvas.getContext('2d'),
-      viewport: vp,
-      transform: dpr !== 1 ? [dpr, 0, 0, dpr, 0, 0] : null,
-    }).promise;
-
-    tl.innerHTML = '';
-    tl.style.width = vp.width + 'px';
-    tl.style.height = vp.height + 'px';
-    tl.style.setProperty('--scale-factor', String(vp.scale));
-    const tc = await page.getTextContent();
-    await pdfjsLib.renderTextLayer({
-      textContentSource: tc,
-      textContent: tc,
-      container: tl,
-      viewport: vp,
-      textDivs: [],
-    }).promise;
-    const lb = document.getElementById('pgLabel');
-    if (lb) lb.textContent = RDR.page + ' / ' + RDR.total;
-
-    // 结构检测可能误报（字体藏在压缩对象流里）：真取到中文了就把提示撤掉
-    if (RDR.fontRisk && tc.items.some((it) => /[㐀-鿿]/.test(it.str))) {
-      RDR.fontRisk = false;
-      const w = document.getElementById('pdfFontWarn');
-      if (w) w.remove();
+    const nums = [RDR.page];
+    if (RDR.spread && RDR.page + 1 <= RDR.total) nums.push(RDR.page + 1);
+    const key = nums.join(',');
+    if (wrap.dataset.pages !== key) {
+      wrap.dataset.pages = key;
+      wrap.classList.toggle('spread', nums.length > 1);
+      wrap.innerHTML = nums.map((n, i) =>
+        '<div class="pageSlot"><canvas id="' + (i === 0 ? 'pdfCanvas' : 'pdfCanvas' + i) + '"></canvas>'
+        + '<div class="textLayer" id="' + (i === 0 ? 'textLayer' : 'textLayer' + i) + '"></div></div>'
+      ).join('');
     }
+    const gap = 8;
+    const avail = (view.clientWidth || 360) - 28 - (nums.length - 1) * gap;
+    const wPer = avail / nums.length;
+    for (let i = 0; i < nums.length; i++) {
+      await renderPdfPage(nums[i], i === 0 ? 'pdfCanvas' : 'pdfCanvas' + i, i === 0 ? 'textLayer' : 'textLayer' + i, wPer);
+    }
+    const lb = document.getElementById('pgLabel');
+    if (lb) lb.textContent = (nums.length > 1 ? nums[0] + '-' + nums[nums.length - 1] : nums[0]) + ' / ' + RDR.total;
 
-    // 字体是异步注册的：手机上个别字（常用另一套子集字体）会晚到 → 画布上留下空白。
-    // 等 document.fonts 全部就绪后补画一次当前页；每份文档只补一次。
+    // 字体是异步注册的：手机上个别字晚到会留空白，等字体就绪后补画一次
     if (!RDR.fontFix && document.fonts && document.fonts.status === 'loading') {
       RDR.fontFix = true;
       document.fonts.ready.then(() => {

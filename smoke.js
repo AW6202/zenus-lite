@@ -128,9 +128,45 @@ ${filler}
   fs.writeFileSync(path.join(TMP, 'smoke.docx'), await dzip.generateAsync({ type: 'nodebuffer' }));
 
   fs.writeFileSync(path.join(TMP, 'smoke-nofont.pdf'), makeNoFontPdf());
+  fs.writeFileSync(path.join(TMP, 'smoke-outline.pdf'), makeOutlinePdf());
   if (pdfPath) fs.copyFileSync(pdfPath, path.join(TMP, 'smoke.pdf'));
   if (scanPath) fs.copyFileSync(scanPath, path.join(TMP, 'smoke-scan.pdf'));
 }
+
+// 造一个「带书签（outline）」的最小 PDF：用来验证目录导航
+function makeOutlinePdf() {
+  const NL = String.fromCharCode(10);
+  const page = (extra) => '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 200] '
+    + '/Resources << /Font << /F1 9 0 R >> >> ' + extra + ' >>';
+  const content1 = 'BT /F1 18 Tf 40 120 Td (Page One) Tj ET';
+  const content2 = 'BT /F1 18 Tf 40 120 Td (Page Two) Tj ET';
+  const objs = [
+    '<< /Type /Catalog /Pages 2 0 R /Outlines 5 0 R >>',
+    '<< /Type /Pages /Kids [3 0 R 4 0 R] /Count 2 >>',
+    page('/Contents 10 0 R'),
+    page('/Contents 11 0 R'),
+    '<< /Type /Outlines /First 6 0 R /Last 7 0 R /Count 2 >>',
+    '<< /Title (Chapter One) /Parent 5 0 R /Next 7 0 R /Dest [3 0 R /Fit] >>',
+    '<< /Title (Chapter Two) /Parent 5 0 R /Prev 6 0 R /Dest [4 0 R /Fit] >>',
+    '<< /Font /F1 9 0 R >>',
+    '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
+    '<< /Length ' + content1.length + ' >>' + NL + 'stream' + NL + content1 + NL + 'endstream',
+    '<< /Length ' + content2.length + ' >>' + NL + 'stream' + NL + content2 + NL + 'endstream',
+  ];
+  let out = '%PDF-1.7' + NL;
+  const offsets = [];
+  objs.forEach((body, i) => {
+    offsets.push(out.length);
+    out += (i + 1) + ' 0 obj' + NL + body + NL + 'endobj' + NL;
+  });
+  const xref = out.length;
+  out += 'xref' + NL + '0 ' + (objs.length + 1) + NL + '0000000000 65535 f' + NL;
+  for (const off of offsets) out += String(off).padStart(10, '0') + ' 00000 n' + NL;
+  out += 'trailer' + NL + '<< /Size ' + (objs.length + 1) + ' /Root 1 0 R >>' + NL;
+  out += 'startxref' + NL + xref + NL + '%%EOF' + NL;
+  return Buffer.from(out, 'latin1');
+}
+
 
 // 手搓最小 PDF：Type0 + CIDFontType2 + UniGB-UCS2-H，且不带 /FontFile（= 中文必然画不出来）
 function makeNoFontPdf() {
@@ -600,6 +636,34 @@ class CDP {
       img.markers === 2 && img.absOk === true && img.hasImg === true && img.noRef === true, img);
     check('文档分享站标「抓不到」且默认不勾',
       img.docUnchecked === true && img.normalChecked === true, img);
+
+    // N. 目录导航 / 单双页 / 扫描版目录草案
+    const toc = await probe('目录与双页', `
+      state.tab = 'reader'; render();
+      const b = await (await fetch('${base}smoke-outline.pdf')).blob();
+      await openPdfFile(new File([b], 'outline.pdf'));
+      await new Promise(r => setTimeout(r, 1800));
+      await showOutline();
+      await new Promise(r => setTimeout(r, 500));
+      const items = [...document.querySelectorAll('.tocItem')];
+      const list = items.map((e) => e.textContent.trim());
+      if (items[1]) items[1].click();
+      await new Promise(r => setTimeout(r, 1500));
+      const jumped = RDR.page;
+      RDR.page = 1; RDR.spread = true; renderReader();   // 这份夹具只有 2 页，回到第 1 页才有并排
+      await new Promise(r => setTimeout(r, 2000));
+      const canvases = document.querySelectorAll('#readerWrap canvas').length;
+      RDR.spread = false;
+      const parsed = parseTocLines(['第一章 集合 ............ 12', '第二章 三角函数 27',
+        '这是一段正文没有页码也没有章节号所以不该进目录', '第三章 数列 88'], 300);
+      return { items: list.length, list, jumped, canvases, parsed: parsed.length,
+               parsedFirst: parsed[0] && parsed[0].title, hasOcrDraft: typeof ocrOutlineDraft === 'function' };
+    `);
+    check('PDF 书签能读成目录并点击跳页',
+      toc.items === 2 && toc.jumped === 2 && toc.list[1].indexOf('p.2') >= 0, toc);
+    check('双页模式并排渲染两页', toc.canvases === 2, toc);
+    check('扫描版目录：OCR 文本能抽成目录条目',
+      toc.parsed === 3 && toc.hasOcrDraft === true, toc);
 
     // H. 关书释放 blob URL
     const clean = await probe('关书释放', `

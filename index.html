@@ -82,6 +82,13 @@ input.t{width:100%;background:var(--card);border:1px solid var(--line);color:var
 .tapw:active{color:var(--acc)}
 .spk{background:none;border:0;font-size:18px;padding:0 0 0 8px;opacity:.65;vertical-align:middle}
 #readerWrap{position:relative;margin:0 auto}
+#readerWrap.spread{display:flex;gap:8px;justify-content:center;align-items:flex-start}
+.pageSlot{position:relative;flex:1 1 0;min-width:0}
+.tocItem{display:flex;justify-content:space-between;gap:10px;width:100%;text-align:left;
+  background:var(--card);border:1px solid var(--line);border-radius:10px;color:var(--text);
+  padding:10px 12px;font-size:14px;margin-bottom:6px}
+.tocItem.on{border-color:var(--acc);background:#1d2740}
+.tocItem small{color:var(--dim);font-size:12px;white-space:nowrap}
 /* 书正文：EPUB 按原书结构渲染（标题/段落/列表/引用/图/表），TXT 保留原始换行 */
 .bookText{font-size:16px;line-height:1.8;word-break:break-word;overflow-wrap:anywhere}
 .bookText p{margin:0 0 .85em;text-align:left}
