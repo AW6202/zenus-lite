@@ -1,7 +1,7 @@
 // 学习机 Lite — 静态 PWA：内容来自 pack.json，进度存本地，AI 直连 OpenAI 兼容接口
 'use strict';
 
-const BUILD = '2026-10-29.15';
+const BUILD = '2026-10-29.16';
 
 const LS = {
   progress: 'zenus.progress.v1',
@@ -1152,6 +1152,8 @@ function mdToHtml(md) {
   const inline = (t) => {
     let x = esc(t);
     x = x.replace(/`([^`]+)`/g, '<code>$1</code>');
+    x = x.replace(/!\[([^\]]*)\]\((https?:\/\/[^)\s]+)[^)]*\)/g,
+      '<img src="$2" alt="$1" referrerpolicy="no-referrer" loading="lazy">');
     x = x.replace(/!\[([^\]]*)\]\([^)]*\)/g, '$1');
     x = x.replace(/\[([^\]]+)\]\([^)]*\)/g, '$1');
     x = x.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
@@ -2325,9 +2327,21 @@ function wikiApiUrl(url) {
   return null;
 }
 
-function htmlToReadableText(html) {
+function absolutize(src, base) {
+  try { return new URL(src, base).href; } catch { return ''; }
+}
+
+function htmlToReadableText(html, baseUrl) {
   const doc = new DOMParser().parseFromString(html, 'text/html');
   doc.querySelectorAll('script,style,nav,header,footer,aside,form,iframe,noscript,svg').forEach((n) => n.remove());
+  // 图片：换成 markdown 占位，不然"思维导图"这类材料抓完只剩空壳
+  doc.querySelectorAll('img').forEach((img) => {
+    const raw = img.getAttribute('src') || img.getAttribute('data-src') || img.getAttribute('data-original') || '';
+    const abs = raw ? absolutize(raw, baseUrl || doc.baseURI) : '';
+    const holder = doc.createElement('span');
+    holder.textContent = abs && /^https?:/i.test(abs) ? String.fromCharCode(10, 10) + '![](' + abs + ')' + String.fromCharCode(10, 10) : '';
+    img.replaceWith(holder);
+  });
   // 粗暴正文提取：取文字最多的那个块（比整页 innerText 干净得多）
   let best = doc.body;
   let bestLen = 0;
@@ -2362,8 +2376,8 @@ async function tryWikiApi(url) {
     return null;
   }
   if (j.parse && j.parse.text && j.parse.text['*']) {
-    const t = htmlToReadableText(j.parse.text['*']);
-    if (t.length > FULLTEXT_MIN) return { text: t, via: '维基文库 API' };
+    const t = htmlToReadableText(j.parse.text['*'], url);
+    if (t.length > FULLTEXT_MIN) return { text: t, via: '维基文库 API', imgs: 0 };
   }
   return null;
 }
@@ -2372,15 +2386,17 @@ async function tryJina(url) {
   const raw = await fetchWindow('https://r.jina.ai/' + url, 12000);
   // jina 会在开头加 Title / URL Source / Markdown Content 几行
   const t = raw.replace(/^(Title|URL Source|Published Time|Markdown Content):[^\n]*\n/gm, '').trim();
-  if (t.length > FULLTEXT_MIN) return { text: t, via: '阅读代理' };
+  const imgs = (t.match(/!\[[^\]]*\]\(https?:/g) || []).length;
+  if (t.length > FULLTEXT_MIN || imgs >= 2) return { text: t, via: '阅读代理', imgs: imgs };
   return null;
 }
 
 async function tryDirect(url) {
   const raw = await fetchWindow(url, 9000);
   const isHtml = /<\/html>|<\/body>/i.test(raw.slice(0, 4000));
-  const t = isHtml ? htmlToReadableText(raw) : raw.trim();
-  if (t.length > FULLTEXT_MIN) return { text: t, via: '直连' };
+  const t = isHtml ? htmlToReadableText(raw, url) : raw.trim();
+  const imgs = (t.match(/!\[[^\]]*\]\(https?:/g) || []).length;
+  if (t.length > FULLTEXT_MIN || imgs >= 2) return { text: t, via: '直连', imgs: imgs };
   return null;
 }
 
@@ -2417,6 +2433,10 @@ const OPEN_SOURCES = [
 ];
 
 const FIND = { query: '', items: [], busy: false, note: '', judged: false };
+
+// 这些站的正文是 JS 动态加载的图片切片 + 付费墙（道客巴巴/豆丁/淘豆/Book118/百度文库…），
+// 浏览器端抓不到，硬抓也涉及侵权 —— 在列表里直接标出来，别让用户白勾。
+const DOC_SITES = /doc88|docin|taodocs|book118|jinchutou|renrendoc|360doc|wenku[.]baidu|mbalib/i;
 
 async function bochaSearch(q) {
   const res = await fetch('https://api.bochaai.com/v1/web-search', {
@@ -2476,11 +2496,14 @@ function renderFind() {
   }).join('');
 
   const items = FIND.items.map((it, i) => {
-    const label = it.usable === true ? '✅ 适合' : it.usable === false ? '⛔ 不建议' : '📄 待判';
+    const docSite = DOC_SITES.test(it.url || '');
+    if (docSite) it.usable = false;
+    const label = docSite ? '🚫 文档站，抓不到正文'
+      : it.usable === true ? '✅ 适合' : it.usable === false ? '⛔ 不建议' : '📄 待判';
     const meta = [it.kind === 'tech' ? '技术类' : it.kind === 'language' ? '语言类' : '', it.level || ''].filter(Boolean).join(' · ');
     return '<div class="it" style="align-items:flex-start;flex-direction:column;gap:6px">'
       + '<label style="display:flex;gap:8px;align-items:flex-start;width:100%">'
-      + '<input type="checkbox" data-pick="' + i + '"' + (it.usable === false ? '' : ' checked') + ' style="margin-top:3px">'
+      + '<input type="checkbox" data-pick="' + i + '"' + (it.usable === false || docSite ? '' : ' checked') + ' style="margin-top:3px">'
       + '<span><b>' + esc(it.name) + '</b> <small>' + label + (meta ? ' · ' + esc(meta) : '') + '</small>'
       + '<div class="sub" style="margin-top:4px">' + esc((it.why || it.summary || it.snippet || '').slice(0, 180)) + '</div>'
       + '<a href="' + esc(it.url) + '" target="_blank" rel="noopener" style="color:var(--acc);font-size:12px">原网页</a>'

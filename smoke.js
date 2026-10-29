@@ -575,6 +575,32 @@ class CDP {
     check('导入时标明哪些是全文、哪些只是摘要',
       lab.hasFull === true && lab.hasWarn === true && lab.chapters === 2, lab);
 
+    // M. 抓正文要保住图片；文档站要标出来
+    const img = await probe('图片与文档站', `
+      const html = '<html><body><article><p>' + '正文段落内容。'.repeat(30) + '</p>'
+        + '<p><img src="/static/map1.png"><img data-src="https://cdn.example.com/map2.png"></p></article></body></html>';
+      const txt = htmlToReadableText(html, 'https://school.example.com/a/b.html');
+      const markers = txt.split('![](').length - 1;
+      const absOk = txt.indexOf('https://school.example.com/static/map1.png') >= 0;
+      const md = '文字' + String.fromCharCode(10, 10) + '![](https://cdn.example.com/map2.png)';
+      const out = mdToHtml(md);
+      settings.searchKey = 'stub'; settings.key = '';
+      FIND.items = [
+        { name: '淘豆网', url: 'https://www.taodocs.com/p-1.html', summary: 'x' },
+        { name: '博客', url: 'https://blog.example.com/a', summary: 'y' },
+      ];
+      renderFind();
+      const boxes = [...view.querySelectorAll('[data-pick]')];
+      return { markers, absOk, hasImg: out.indexOf('<img') >= 0,
+               noRef: out.indexOf('referrerpolicy="no-referrer"') >= 0,
+               docUnchecked: boxes[0] && boxes[0].checked === false,
+               normalChecked: boxes[1] && boxes[1].checked === true };
+    `);
+    check('抓正文保留图片（转绝对地址）且能渲染出来',
+      img.markers === 2 && img.absOk === true && img.hasImg === true && img.noRef === true, img);
+    check('文档分享站标「抓不到」且默认不勾',
+      img.docUnchecked === true && img.normalChecked === true, img);
+
     // H. 关书释放 blob URL
     const clean = await probe('关书释放', `
       const b = await (await fetch('${base}smoke.epub')).blob();
