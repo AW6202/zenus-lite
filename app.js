@@ -1,7 +1,7 @@
 // 学习机 Lite — 静态 PWA：内容来自 pack.json，进度存本地，AI 直连 OpenAI 兼容接口
 'use strict';
 
-const BUILD = '2026-10-29.34';
+const BUILD = '2026-10-29.35';
 
 const LS = {
   progress: 'zenus.progress.v1',
@@ -625,6 +625,8 @@ function renderSettings() {
         + '<div style="margin-top:6px;color:#fff">↑ 截图发给 Claude；点这里关闭</div>';
       bar.onclick = () => bar.remove();
       document.body.appendChild(bar);
+      // 页面可能很快被跳转冲掉：同步存一份，下次打开还能看
+      try { localStorage.setItem('zenus.diag.last', JSON.stringify({ at: Date.now(), rows: rows })); } catch { /* 存不下算了 */ }
     }
   } catch { /* 参数解析失败就当没有 */ }
 
@@ -636,6 +638,20 @@ function renderSettings() {
     render();
     setTimeout(() => importFromText(incoming), 300);
   }
+  let lastDiag = null;
+  try { lastDiag = JSON.parse(localStorage.getItem('zenus.diag.last') || 'null'); } catch { lastDiag = null; }
+  if (lastDiag && Date.now() - (lastDiag.at || 0) < 10 * 60 * 1000 && !document.getElementById('diagBar')) {
+    const bar = document.createElement('div');
+    bar.id = 'diagBar';
+    bar.style.cssText = 'position:fixed;left:0;right:0;top:0;z-index:999;background:#2a2113;color:#e0a13a;'
+      + 'font:11px/1.55 monospace;padding:8px;word-break:break-all;max-height:45vh;overflow:auto';
+    bar.innerHTML = '<div style="color:#fff">上次从微信进来的记录：</div>'
+      + (lastDiag.rows || []).map((r) => '<div>' + esc(r) + '</div>').join('')
+      + '<div style="margin-top:6px;color:#fff">↑ 截图发我；点这里关闭</div>';
+    bar.onclick = () => { bar.remove(); try { localStorage.removeItem('zenus.diag.last'); } catch { /* 忽略 */ } };
+    document.body.appendChild(bar);
+  }
+
   const shared = checkShared();
   if (shared) {
     state.tab = 'reader';
@@ -4136,6 +4152,20 @@ document.querySelectorAll('.tabbar button').forEach((b) => {
   } catch (err) {
     view.innerHTML = `<div class="empty">内容包加载失败<br><span class="sub">${esc(err.message)}</span></div>`;
   }
+  let lastDiag = null;
+  try { lastDiag = JSON.parse(localStorage.getItem('zenus.diag.last') || 'null'); } catch { lastDiag = null; }
+  if (lastDiag && Date.now() - (lastDiag.at || 0) < 10 * 60 * 1000 && !document.getElementById('diagBar')) {
+    const bar = document.createElement('div');
+    bar.id = 'diagBar';
+    bar.style.cssText = 'position:fixed;left:0;right:0;top:0;z-index:999;background:#2a2113;color:#e0a13a;'
+      + 'font:11px/1.55 monospace;padding:8px;word-break:break-all;max-height:45vh;overflow:auto';
+    bar.innerHTML = '<div style="color:#fff">上次从微信进来的记录：</div>'
+      + (lastDiag.rows || []).map((r) => '<div>' + esc(r) + '</div>').join('')
+      + '<div style="margin-top:6px;color:#fff">↑ 截图发我；点这里关闭</div>';
+    bar.onclick = () => { bar.remove(); try { localStorage.removeItem('zenus.diag.last'); } catch { /* 忽略 */ } };
+    document.body.appendChild(bar);
+  }
+
   const shared = checkShared();
   if (shared) {
     state.tab = 'reader';

@@ -19,10 +19,11 @@
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{margin:0;height:100%}
+html{height:100%}
 body{
   background:var(--bg);color:var(--text);
   font:16px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
-  display:flex;flex-direction:column;height:100dvh;overflow:hidden;
+  display:flex;flex-direction:column;height:100%;min-height:0;overflow:hidden;
 }
 body.reader-mode header{display:none}
 header{padding:calc(8px + env(safe-area-inset-top,0px)) 14px 8px;display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--line)}
@@ -31,7 +32,7 @@ header .sp{flex:1}
 header select{background:var(--card);color:var(--text);border:1px solid var(--line);border-radius:9px;padding:6px 8px;font-size:13px;max-width:52vw}
 main{flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:14px 14px 8px}
 .tabbar{display:flex;flex:0 0 auto;position:relative;z-index:20;border-top:1px solid var(--line);
-  padding-bottom:var(--safe-b);background:var(--bg)}
+  padding-bottom:max(6px, env(safe-area-inset-bottom, 0px));background:var(--bg)}
 .tabbar button{flex:1;background:none;border:0;color:var(--dim);padding:8px 0 9px;font-size:10px;display:flex;flex-direction:column;align-items:center;gap:3px}
 .tabbar button.on{color:var(--acc)}
 .tabbar svg{width:19px;height:19px;stroke:currentColor;fill:none;stroke-width:1.7}
