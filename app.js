@@ -1,7 +1,7 @@
 // 学习机 Lite — 静态 PWA：内容来自 pack.json，进度存本地，AI 直连 OpenAI 兼容接口
 'use strict';
 
-const BUILD = '2026-10-29.7';
+const BUILD = '2026-10-29.8';
 
 const LS = {
   progress: 'zenus.progress.v1',
@@ -200,6 +200,11 @@ function renderHeader() {
 function render() {
   if (!state.pack) return;
   view.addEventListener('scroll', onViewScroll, { passive: true });
+
+// 工具条上点了按钮就重新计时（正在缩放/翻页时不要自己收掉）
+document.addEventListener('click', (e) => {
+  if (RDR.toolsVisible && e.target.closest && e.target.closest('.floating')) scheduleHideTools();
+});
 
 document.querySelectorAll('.tabbar button').forEach((b) => {
     b.classList.toggle('on', b.dataset.tab === state.tab);
@@ -1972,36 +1977,52 @@ function bindFlipGestures(container, handlers) {
   const isInteractive = (target) => !!(target && target.closest
     && target.closest('button, a, input, select, textarea, #selTools'));
 
-  container.addEventListener('pointerdown', (e) => {
-    if (e.pointerType === 'mouse' && e.button !== 0) return;
-    sx = e.clientX; sy = e.clientY; st = Date.now(); down = true;
-  }, { passive: true });
-
-  container.addEventListener('pointerup', (e) => {
+  const onDown = (x, y) => { sx = x; sy = y; st = Date.now(); down = true; };
+  const onUp = (x, y, target) => {
     if (!down) return;
     down = false;
     const h = RDR.handle;                    // 用当前这次渲染的处理函数
     if (!h) return;
     if (Date.now() - st > 700) return;                       // 长按（选字）不翻页
-    if (isInteractive(e.target)) return;
+    if (isInteractive(target)) return;
     const sel = window.getSelection();
     if (sel && String(sel).trim()) return;                    // 有选区 → 这是取词，不翻页
-    const dx = e.clientX - sx;
-    const dy = e.clientY - sy;
+    const dx = x - sx;
+    const dy = y - sy;
 
     if (Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy) * 1.4) {   // 横滑
       if (dx < 0) h.next(); else h.prev();
       return;
     }
     if (Math.abs(dx) < 12 && Math.abs(dy) < 12) {                   // 轻点
-      const x = e.clientX / window.innerWidth;
+      const x0 = sx + dx;
+      const x = x0 / window.innerWidth;
       if (x < 0.28) h.prev();
       else if (x > 0.72) h.next();
       else h.middle();
     }
-  }, { passive: true });
+  };
 
-  container.addEventListener('pointercancel', () => { down = false; }, { passive: true });
+  // 触屏：pointer 事件在可滚动容器里会被浏览器 cancel 掉（横滑永远判不出来），改用 touch
+  if ('ontouchstart' in window) {
+    container.addEventListener('touchstart', (e) => {
+      if (e.touches.length !== 1) { down = false; return; }
+      onDown(e.touches[0].clientX, e.touches[0].clientY);
+    }, { passive: true });
+    container.addEventListener('touchend', (e) => {
+      const t = e.changedTouches && e.changedTouches[0];
+      if (!t) { down = false; return; }
+      onUp(t.clientX, t.clientY, e.target);
+    }, { passive: true });
+    container.addEventListener('touchcancel', () => { down = false; }, { passive: true });
+  } else {
+    container.addEventListener('pointerdown', (e) => {
+      if (e.button !== 0) return;
+      onDown(e.clientX, e.clientY);
+    }, { passive: true });
+    container.addEventListener('pointerup', (e) => onUp(e.clientX, e.clientY, e.target), { passive: true });
+    container.addEventListener('pointercancel', () => { down = false; }, { passive: true });
+  }
 }
 
 function flipHintOnce() {
@@ -2010,9 +2031,24 @@ function flipHintOnce() {
   toast('点屏幕左右两边翻页，点中间显示工具条');
 }
 
+let toolsTimer = null;
+function syncTools() {
+  document.querySelectorAll('.floating').forEach((el) => el.classList.toggle('show', !!RDR.toolsVisible));
+}
+function hideTools() {
+  RDR.toolsVisible = false;
+  syncTools();
+  clearTimeout(toolsTimer);
+}
+function scheduleHideTools() {
+  clearTimeout(toolsTimer);
+  toolsTimer = setTimeout(hideTools, 3500);      // 弹出来不点就自己收，别赖在屏幕上
+}
 function toggleTools() {
   RDR.toolsVisible = !RDR.toolsVisible;
-  document.querySelectorAll('.floating').forEach((el) => el.classList.toggle('show', RDR.toolsVisible));
+  syncTools();
+  if (RDR.toolsVisible) scheduleHideTools();
+  else clearTimeout(toolsTimer);
 }
 
 // 文字视图：字体缺失时把内容流里解出来的文字排成可读的一段段
@@ -2314,6 +2350,11 @@ function askFromSelection(t) {
 
 // ── 启动 ──────────────────────────────────────────────
 view.addEventListener('scroll', onViewScroll, { passive: true });
+
+// 工具条上点了按钮就重新计时（正在缩放/翻页时不要自己收掉）
+document.addEventListener('click', (e) => {
+  if (RDR.toolsVisible && e.target.closest && e.target.closest('.floating')) scheduleHideTools();
+});
 
 document.querySelectorAll('.tabbar button').forEach((b) => {
   b.onclick = () => { state.tab = b.dataset.tab; render(); };

@@ -217,6 +217,7 @@ class CDP {
     await this.send('Runtime.enable', {}, sessionId);
     await this.send('Emulation.setDeviceMetricsOverride',
       { width, height, deviceScaleFactor: 2, mobile: true }, sessionId);
+    await this.send('Emulation.setTouchEmulationEnabled', { enabled: true }, sessionId);
     await this.send('Page.navigate', { url }, sessionId);
     await sleep(1500);
   }
@@ -456,10 +457,13 @@ class CDP {
       // A：翻页手势与浮动工具条
       const flip = await probe('翻页手势', `
         const el = document.getElementById('view');
-        const tap = (x) => {
-          el.dispatchEvent(new PointerEvent('pointerdown', { clientX: x, clientY: 400, pointerType: 'touch', bubbles: true }));
-          el.dispatchEvent(new PointerEvent('pointerup', { clientX: x, clientY: 400, pointerType: 'touch', bubbles: true }));
+        const t = (type, x, y) => {
+          const tt = new Touch({ identifier: 1, target: el, clientX: x, clientY: y });
+          el.dispatchEvent(new TouchEvent(type, { bubbles: true, cancelable: true,
+            touches: type === 'touchend' ? [] : [tt], changedTouches: [tt] }));
         };
+        const tap = (x) => { t('touchstart', x, 400); t('touchend', x, 400); };
+        const swipe = (x1, x2) => { t('touchstart', x1, 400); t('touchend', x2, 402); };
         const before = RDR.page;
         tap(370);
         await new Promise(r => setTimeout(r, 900));
@@ -467,13 +471,20 @@ class CDP {
         tap(20);
         await new Promise(r => setTimeout(r, 900));
         const afterLeft = RDR.page;
+        swipe(320, 60);
+        await new Promise(r => setTimeout(r, 900));
+        const afterSwipe = RDR.page;
         tap(195);
         await new Promise(r => setTimeout(r, 200));
         const tools = document.getElementById('pdfTools');
-        return { before, afterRight, afterLeft, toolsShown: !!tools && tools.classList.contains('show') };
+        const shown = !!tools && tools.classList.contains('show');
+        await new Promise(r => setTimeout(r, 3900));
+        return { before, afterRight, afterLeft, afterSwipe, shown,
+                 autoHidden: !!tools && !tools.classList.contains('show') };
       `);
-      check('左/右边缘点击翻页 + 中间点击出工具条',
-        flip.afterRight === flip.before + 1 && flip.afterLeft === flip.before && flip.toolsShown === true, flip);
+      check('左右边缘点击 + 横滑都能翻页', flip.afterRight === flip.before + 1
+        && flip.afterLeft === flip.before && flip.afterSwipe === flip.before + 1, flip);
+      check('点中间出工具条，且 3.5 秒后自动收起', flip.shown === true && flip.autoHidden === true, flip);
 
       // 「关闭这份 PDF」必须真的回到选文件页（2026-10-29 回归：按钮点了没反应）
       const closed = await probe('关闭 PDF', `
