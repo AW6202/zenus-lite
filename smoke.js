@@ -933,6 +933,16 @@ class CDP {
     srv.close();
   }
 
+  // 内容包自检（数学题重算 / 五十音 / 选择题唯一答案）
+  try {
+    const out = require('child_process').execFileSync('python', ['check_pack.py', 'pack.json'],
+      { cwd: ROOT, encoding: 'utf8', env: Object.assign({}, process.env, { PYTHONIOENCODING: 'utf-8' }) });
+    const summary = (out || '').trim().split(String.fromCharCode(10)).pop();
+    check('内容包自检（check_pack.py）通过', /PASS/.test(summary || ''), { summary });
+  } catch (e) {
+    check('内容包自检（check_pack.py）通过', false, { err: (e.stdout || e.message || '').slice(-300) });
+  }
+
   const bad = results.filter((r) => !r.ok);
   console.log(`\n${results.length - bad.length}/${results.length} 通过`);
   if (bad.length) { console.log('失败项：' + bad.map((b) => b.name).join('；')); process.exit(1); }
