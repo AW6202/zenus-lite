@@ -462,6 +462,41 @@ class CDP {
     check('字号可调且会重新分页', paged.fontSize !== '16px' && paged.pagesAfterFont > 0, paged);
     check('能一键切回滚动模式', paged.scrollMode === true, paged);
 
+    // I. 整章提知识点（用桩函数，不花钱）
+    const kp = await probe('知识点', `
+      state.tab = 'reader'; render();
+      const b = await (await fetch('${base}smoke.epub')).blob();
+      await openEpubBook(new File([b], 'smoke.epub'));
+      await new Promise(r => setTimeout(r, 500));
+      settings.key = 'stub';
+      askPoints = async () => ({ kind: 'language', summary: '概括', points: ['要点一', '要点二'],
+        words: [{ w: 'alpha', cn: '甲' }],
+        quiz: [{ q: '题干', options: ['错的', '对的'], a: 1, why: '解析' }] });
+      RDR.kpCache = {};
+      await showPoints();
+      await new Promise(r => setTimeout(r, 300));
+      const out = { points: view.querySelectorAll('.kplist li').length,
+                    quiz: view.querySelectorAll('.kpq').length,
+                    words: view.querySelectorAll('.list .it').length };
+      const before = userCards.length;
+      view.querySelector('[data-w="0"]').click();
+      out.added = userCards.length - before;
+      const q = view.querySelector('.kpq');
+      q.querySelectorAll('button[data-o]')[0].click();
+      out.marked = q.querySelector('button[data-o="0"]').classList.contains('wrong');
+      document.getElementById('kpBack').click();
+      await new Promise(r => setTimeout(r, 300));
+      out.back = !!document.getElementById('bookText');
+      state.tab = 'settings'; render();
+      out.installBtn = !!document.getElementById('btnInstall');
+      out.fullBtn = !!document.getElementById('btnFull');
+      return out;
+    `);
+    check('整章提知识点：要点/生词入库/自测判对错/返回正文',
+      kp.points === 2 && kp.quiz === 1 && kp.words === 1 && kp.added === 1
+      && kp.marked === true && kp.back === true, kp);
+    check('设置页有「安装到主屏幕」「全屏」入口', kp.installBtn === true && kp.fullBtn === true, kp);
+
     // H. 关书释放 blob URL
     const clean = await probe('关书释放', `
       const b = await (await fetch('${base}smoke.epub')).blob();

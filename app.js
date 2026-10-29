@@ -1,7 +1,7 @@
 // 学习机 Lite — 静态 PWA：内容来自 pack.json，进度存本地，AI 直连 OpenAI 兼容接口
 'use strict';
 
-const BUILD = '2026-10-29.9';
+const BUILD = '2026-10-29.10';
 
 const LS = {
   progress: 'zenus.progress.v1',
@@ -41,6 +41,11 @@ const state = {
 };
 
 const $ = (s) => document.querySelector(s);
+
+// 安装到主屏幕：浏览器给出提示时先接住，之后由设置页的按钮显式触发
+let installEvent = null;
+window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); installEvent = e; });
+window.addEventListener('appinstalled', () => { installEvent = null; toast('已安装到主屏幕'); });
 const view = $('#view');
 
 // ── 存储 ──────────────────────────────────────────────
@@ -467,6 +472,14 @@ function renderSettings() {
     </div>
     <input type="file" id="fileProg" accept="application/json" style="display:none">
 
+    <h2>显示</h2>
+    <div class="hint">加到主屏幕后是全屏运行（没有地址栏）。想让状态栏也收起来，用下面的全屏按钮。</div>
+    <div class="row" style="margin-top:8px">
+      <button class="btn" id="btnInstall">安装到主屏幕</button>
+      <button class="btn" id="btnFull">全屏</button>
+    </div>
+    <div class="hint" id="installHint"></div>
+
     <h2>关于</h2>
     <div class="row" style="margin-bottom:8px"><button class="btn" id="checkUpdate">检查更新</button></div>
     <div class="row" style="margin-bottom:8px">
@@ -485,6 +498,38 @@ function renderSettings() {
     saveJSON(LS.settings, settings);
     toast('设置已保存');
   };
+  const bi = $('#btnInstall');
+  const ih = $('#installHint');
+  if (bi && ih) {
+    const standalone = window.matchMedia('(display-mode: standalone)').matches
+      || window.matchMedia('(display-mode: fullscreen)').matches
+      || navigator.standalone;
+    if (standalone) {
+      ih.textContent = '已经在独立窗口里运行了。';
+      bi.style.display = 'none';
+    } else if (installEvent) {
+      ih.textContent = '点上面的按钮，浏览器会弹安装确认。';
+      bi.onclick = async () => {
+        const ev = installEvent;
+        installEvent = null;
+        ev.prompt();
+        const r = await ev.userChoice;
+        ih.textContent = r && r.outcome === 'accepted' ? '装好了，回桌面找「学习机」图标。' : '取消了安装。';
+      };
+    } else {
+      bi.onclick = () => {
+        ih.textContent = 'Edge：右下角「…」→ 添加到手机 → 安装。Chrome：右上角「⋮」→ 添加到主屏幕。';
+      };
+    }
+  }
+  const bf = $('#btnFull');
+  if (bf) bf.onclick = async () => {
+    try {
+      if (document.fullscreenElement) await document.exitFullscreen();
+      else await document.documentElement.requestFullscreen();
+    } catch (err) { toast('这个浏览器不支持全屏：' + err.message); }
+  };
+
   const tst = $('#testSpeak');
   if (tst) tst.onclick = () => {
     settings.ctxMsgs = Math.max(0, Math.min(40, Number($('#s-ctx').value) || 0));
@@ -1232,6 +1277,7 @@ function resetBook() {
   RDR.textLines = [];
   RDR.textMode = false;
   RDR.key = null;
+  RDR.kpCache = {};
 }
 
 function scrollToRatio(ratio) {
@@ -2153,6 +2199,120 @@ function plainToHtml(text) {
   return String(text || '').split(/\n{2,}/).map((p) => '<p>' + esc(p.replace(/\n+$/, '')) + '</p>').join('');
 }
 
+// ── C：整章提知识点（只喂当前这一章，整本塞不进去）────────────
+// 输出：一句话概括 + 要点 + 生词/搭配（可一键进「我的生词」）+ 3~5 道自测题
+
+function chapterText() {
+  const ch = RDR.book && RDR.book.chapters[RDR.ch];
+  if (!ch) return null;
+  return { title: ch.title || ('第 ' + (RDR.ch + 1) + ' 节'), text: (ch.text || '').slice(0, 9000) };
+}
+
+async function askPoints(text) {
+  const sys = '你在帮学习者把材料变成可复习的知识点。只输出 JSON，不要解释。'
+    + '先判断材料类型：语言类（记叙/散文/新闻/对话）重点提生词和固定搭配；'
+    + '技术类（规则/公式/步骤/流程）重点提要点、规则和公式。';
+  const user = '材料：\n' + text + '\n\n'
+    + '返回 JSON：{"kind":"language 或 tech","summary":"一句话概括这段材料",'
+    + '"points":["要点，最多 8 条"],'
+    + '"words":[{"w":"原词或搭配","cn":"中文释义","note":"用法/搭配要点"}],'
+    + '"quiz":[{"q":"题干","options":["选项1","选项2","选项3","选项4"],"a":0,"why":"为什么是这个答案"}]}'
+    + '。quiz 出 3 到 5 题，a 是正确选项的下标（从 0 开始）。语言类的 words 至少 6 条，技术类可以少。';
+  const res = await fetch(settings.apiBase + '/chat/completions', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + settings.key },
+    body: JSON.stringify({
+      model: settings.model,
+      messages: [{ role: 'system', content: sys }, { role: 'user', content: user }],
+      response_format: { type: 'json_object' },
+      temperature: 0.4,
+    }),
+  });
+  if (!res.ok) throw new Error('HTTP ' + res.status);
+  const j = await res.json();
+  return JSON.parse(j.choices[0].message.content);
+}
+
+function kpKey() { return (RDR.key || '') + '#' + RDR.ch; }
+
+async function showPoints() {
+  const ch = chapterText();
+  if (!ch) return;
+  if (!settings.key) { toast('先在「设置」里填 AI Key'); state.tab = 'settings'; return render(); }
+  RDR.kpCache = RDR.kpCache || {};
+  if (RDR.kpCache[kpKey()]) return renderPoints(RDR.kpCache[kpKey()], ch);
+  renderPoints({ loading: true }, ch);
+  try {
+    const data = await askPoints(ch.text);
+    RDR.kpCache[kpKey()] = data;
+    renderPoints(data, ch);
+  } catch (err) {
+    renderPoints({ error: err.message }, ch);
+  }
+}
+
+function renderPoints(kp, ch) {
+  const back = '<div class="row" style="margin:6px 0 12px"><button class="btn ghost" id="kpBack">← 回到正文</button></div>';
+  if (kp.loading) {
+    view.innerHTML = '<div class="meta"><span>' + esc(ch.title) + '</span><span>知识点</span></div>' + back
+      + '<div class="empty"><span class="spin"></span> 正在读这一章…</div>';
+    document.getElementById('kpBack').onclick = () => { RDR.kp = null; renderTextBook(); };
+    return;
+  }
+  if (kp.error) {
+    view.innerHTML = '<div class="meta"><span>' + esc(ch.title) + '</span><span>知识点</span></div>' + back
+      + '<div class="empty">没取到：' + esc(kp.error) + '</div>';
+    document.getElementById('kpBack').onclick = () => { RDR.kp = null; renderTextBook(); };
+    return;
+  }
+  const kindLabel = kp.kind === 'tech' ? '技术类' : '语言类';
+  const points = (kp.points || []).map((p) => '<li>' + esc(p) + '</li>').join('');
+  const words = (kp.words || []).map((w, i) =>
+    '<div class="it"><div><b>' + esc(w.w) + '</b> <span class="sub">' + esc(w.cn || '') + '</span>'
+    + (w.note ? '<div class="sub">' + esc(w.note) + '</div>' : '') + '</div>'
+    + '<button class="btn ghost" style="width:auto;padding:6px 10px;font-size:12px" data-w="' + i + '">＋卡</button></div>').join('');
+  const quiz = (kp.quiz || []).map((q, qi) =>
+    '<div class="kpq" data-q="' + qi + '"><div style="margin:10px 0 6px">' + (qi + 1) + '. ' + esc(q.q) + '</div>'
+    + '<div class="opts">' + (q.options || []).map((o, oi) =>
+      '<button data-o="' + oi + '">' + esc(o) + '</button>').join('') + '</div>'
+    + '<div class="sub kpwhy" style="display:none;margin-top:6px"></div></div>').join('');
+
+  view.innerHTML =
+    '<div class="meta"><span>' + esc(ch.title) + '</span><span>' + kindLabel + '</span></div>'
+    + back
+    + (kp.summary ? '<div class="card" style="min-height:0;padding:14px;margin-bottom:12px"><div style="text-align:left">' + esc(kp.summary) + '</div></div>' : '')
+    + (points ? '<h2>要点</h2><ul class="kplist">' + points + '</ul>' : '')
+    + (words ? '<h2>生词 / 搭配</h2><div class="list">' + words + '</div>' : '')
+    + (quiz ? '<h2>自测</h2>' + quiz : '')
+    + '<div class="hint" style="margin-top:14px">只用了当前这一章的内容。换一章再点「知识点」会重新提取。</div>';
+
+  document.getElementById('kpBack').onclick = () => { RDR.kp = null; renderTextBook(); };
+  view.querySelectorAll('[data-w]').forEach((b) => {
+    b.onclick = () => {
+      const w = kp.words[Number(b.dataset.w)];
+      addCardFromSelection(w.w);
+      b.textContent = '已加入';
+      b.disabled = true;
+    };
+  });
+  view.querySelectorAll('.kpq').forEach((box) => {
+    const qi = Number(box.dataset.q);
+    const q = kp.quiz[qi];
+    box.querySelectorAll('button[data-o]').forEach((btn) => {
+      btn.onclick = () => {
+        const oi = Number(btn.dataset.o);
+        box.querySelectorAll('button[data-o]').forEach((x) => { x.classList.remove('right', 'wrong', 'sel'); });
+        btn.classList.add(oi === q.a ? 'right' : 'wrong');
+        if (oi !== q.a) box.querySelector('button[data-o="' + q.a + '"]').classList.add('right');
+        const why = box.querySelector('.kpwhy');
+        why.style.display = 'block';
+        why.textContent = (oi === q.a ? '对。' : '答案是「' + (q.options || [])[q.a] + '」。') + (q.why || '');
+      };
+    });
+  });
+  view.scrollTop = 0;
+}
+
 // ── B：真分页（CSS 多栏 = 一屏一页）+ 字号/行距 ─────────────
 // 思路跟 Koodo 一样：把整章内容排成"栏宽 = 屏宽"的多栏，横向平移一栏就是一页。
 // 不用自己量段落高度，浏览器排版，翻页只是 transform。
@@ -2254,6 +2414,7 @@ function renderTextBook() {
     + '<button id="prevCh">◀</button><button id="nextCh">▶</button>'
     + '<button id="fSmall" title="字号">A-</button><button id="fBig" title="字号">A+</button>'
     + '<button id="lTight" title="行距">行-</button><button id="lLoose" title="行距">行+</button>'
+    + '<button id="kpBtn" class="t-close">知识点</button>'
     + '<button id="togglePaged" class="t-close">' + (RDR.paged ? '滚动' : '分页') + '</button>'
     + '<button id="closeBook" class="t-close">关闭</button></div>';
   // 远程图挂了就把位置收起来，别留一个破图标
@@ -2265,6 +2426,8 @@ function renderTextBook() {
   document.getElementById('lTight').onclick = () => bumpLine(-0.1);
   document.getElementById('lLoose').onclick = () => bumpLine(0.1);
   document.getElementById('togglePaged').onclick = togglePaged;
+  const kpb = document.getElementById('kpBtn');
+  if (kpb) kpb.onclick = () => { hideTools(); showPoints(); };
   document.getElementById('closeBook').onclick = () => { saveReadPos(); resetBook(); renderReader(); };
   if (RDR.paged) {
     layoutPages(RDR.pendingRatio != null ? RDR.pendingRatio : 0);
