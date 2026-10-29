@@ -77,16 +77,45 @@ input.t{width:100%;background:var(--card);border:1px solid var(--line);color:var
 .tapw:active{color:var(--acc)}
 .spk{background:none;border:0;font-size:18px;padding:0 0 0 8px;opacity:.65;vertical-align:middle}
 #readerWrap{position:relative;margin:0 auto}
-.bookText p{margin:0 0 12px;line-height:1.75;text-align:left}
+/* 书正文：EPUB 按原书结构渲染（标题/段落/列表/引用/图/表），TXT 保留原始换行 */
+.bookText{font-size:16px;line-height:1.8;word-break:break-word;overflow-wrap:anywhere}
+.bookText p{margin:0 0 .85em;text-align:left}
+.bookText.plain p{white-space:pre-wrap}
+.bookText h1,.bookText h2,.bookText h3,.bookText h4,.bookText h5,.bookText h6{
+  color:var(--text);font-weight:600;line-height:1.4;margin:1.1em 0 .55em;letter-spacing:0}
+.bookText h1{font-size:20px;margin-top:.2em}
+.bookText h2{font-size:17px}
+.bookText h3,.bookText h4,.bookText h5,.bookText h6{font-size:16px}
+.bookText em,.bookText i{font-style:italic}
+.bookText strong,.bookText b{font-weight:700;color:#fff}
+.bookText ul,.bookText ol{margin:0 0 .9em;padding-left:1.4em}
+.bookText li{margin:.15em 0}
+.bookText blockquote{margin:0 0 1em;padding:.45em .8em;border-left:3px solid var(--acc);
+  background:#171a21;border-radius:0 8px 8px 0;color:var(--dim)}
+.bookText img{display:block;max-width:100%;height:auto;margin:.7em auto;border-radius:8px}
+.bookText figure{margin:.9em 0}
+.bookText figcaption{font-size:12px;color:var(--dim);text-align:center}
+.bookText table{width:100%;border-collapse:collapse;margin:0 0 1em;font-size:14px}
+.bookText th,.bookText td{border:1px solid var(--line);padding:6px 8px;text-align:left;vertical-align:top}
+.bookText code{background:#20242d;border-radius:5px;padding:1px 5px;font-size:14px;font-family:ui-monospace,Consolas,monospace}
+.bookText pre{background:#20242d;border:1px solid var(--line);border-radius:9px;padding:10px;
+  overflow-x:auto;font-size:13px;line-height:1.6;margin:0 0 1em}
+.bookText pre code{background:none;padding:0}
+.bookText hr{border:0;border-top:1px solid var(--line);margin:1.3em 0}
+.bookText sup,.bookText sub{font-size:11px;line-height:0}
+.bookText sup{vertical-align:super}
+.bookText sub{vertical-align:sub}
+.chTitle{margin:6px 2px 10px;color:var(--text);font-size:15px;font-weight:600}
 #readerWrap canvas{display:block;width:100%;height:auto;border-radius:8px;background:#fff}
 .textLayer{position:absolute;left:0;top:0;right:0;bottom:0;overflow:hidden;opacity:.25;line-height:1}
 .textLayer span{color:transparent;position:absolute;white-space:pre;transform-origin:0 0;cursor:text}
 .pager{display:flex;align-items:center;gap:8px;justify-content:center;margin:10px 0}
 .pager button{background:#20242d;border:1px solid var(--line);color:var(--text);border-radius:9px;padding:8px 14px;font-size:14px}
 .pager .pg{font-size:13px;color:var(--dim);min-width:70px;text-align:center}
-#selTools{position:fixed;z-index:99;display:flex;gap:6px;background:#2a2f3a;border:1px solid var(--line);
-  border-radius:999px;padding:6px 8px;box-shadow:0 4px 14px rgba(0,0,0,.4)}
-#selTools button{background:none;border:0;color:#fff;font-size:14px;padding:2px 6px}
+#selTools{position:fixed;z-index:99;display:flex;gap:4px;background:#2a2f3a;border:1px solid var(--line);
+  border-radius:999px;padding:4px 6px;box-shadow:0 6px 18px rgba(0,0,0,.5)}
+#selTools button{background:none;border:0;color:#fff;font-size:14px;padding:7px 10px;border-radius:999px}
+#selTools button:active{background:#3a4150}
 #speakFab{position:fixed;z-index:98;background:#2a2f3a;color:#fff;border:1px solid var(--line);
   border-radius:999px;padding:8px 14px;font-size:14px;box-shadow:0 4px 14px rgba(0,0,0,.35)}
 </style>

@@ -24,8 +24,17 @@ app.js                逻辑：调度 / 渲染 / AI 流式对话
 pack.json             内容包 ← 要改内容就改这个
 manifest.webmanifest  PWA 清单（可加到主屏幕）
 sw.js                 Service Worker：外壳缓存、内容包网络优先
+smoke.js              阅读器冒烟（真 Edge headless 跑 DOM 断言，改阅读器必跑）
 icons/                图标
 ```
+
+## 阅读器
+
+- **PDF**：pdf.js 渲染画布 + 文字层，选中即取词；可缩放翻页
+- **EPUB**：JSZip 解压按 spine 顺序读，每章**按原结构渲染**（标题/列表/引用/表格/图片/脚注），图片从 zip 里取出
+- **Markdown**：按一级标题切章，渲染标题/列表/引用/代码块
+- **TXT**：自动识别 UTF-8 / GB18030；空行分段，没有空行按行分段
+- 选中文字 → 弹框（🔊 朗读 / ＋卡 存生词 / 问AI）出现在选区**下方**（上方会被手机 Edge 自带菜单盖住）
 
 ## 五个页签
 
@@ -63,6 +72,7 @@ icons/                图标
 ## 发版
 
 ```bash
+node smoke.js --pdf 某文件.pdf   # 改过阅读器/解析才需要跑；全绿再发
 git add -A && git commit -m "content: xxx" && git push
 ```
 

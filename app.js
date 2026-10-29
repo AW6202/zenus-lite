@@ -1,7 +1,7 @@
 // 学习机 Lite — 静态 PWA：内容来自 pack.json，进度存本地，AI 直连 OpenAI 兼容接口
 'use strict';
 
-const BUILD = '2026-10-28.10';
+const BUILD = '2026-10-29.1';
 
 const LS = {
   progress: 'zenus.progress.v1',
@@ -976,7 +976,10 @@ function scheduleSync() {
 
 
 // ── 阅读器（pdf.js，本地解析，文件不上传）────────────
-const RDR = { pdf: null, page: 1, total: 0, name: '', scale: 1, rendering: false };
+const RDR = {
+  pdf: null, page: 1, total: 0, name: '', scale: 1, rendering: false,
+  kind: null, book: null, ch: 0, urls: [], assets: {},
+};
 
 function loadScript(src) {
   return new Promise((res, rej) => {
@@ -1003,31 +1006,154 @@ async function openBookFile(ev) {
 }
 
 async function openTextBook(f) {
-  const txt = await f.text();
-  RDR.kind = 'text';
+  resetBook();
+  const txt = decodeText(await f.arrayBuffer());
   RDR.pdf = null;
-  RDR.book = { name: f.name, chapters: chunkText(txt, 6000) };
+  if (/\.md$/i.test(f.name)) {
+    RDR.kind = 'md';
+    RDR.book = { name: f.name, chapters: mdChapters(txt) };
+  } else {
+    RDR.kind = 'text';
+    RDR.book = { name: f.name, chapters: chunkText(txt, 6000) };
+  }
   RDR.ch = 0;
   renderReader();
 }
 
-// 按段落把纯文本切成「章」
-function chunkText(txt, size) {
-  const paras = txt.split(/\n\s*\n/).map((x) => x.trim()).filter(Boolean);
-  const out = [];
-  let cur = '';
-  for (const p of paras) {
-    if (cur.length + p.length > size && cur) { out.push(cur); cur = ''; }
-    cur += p + '\n\n';
+// Markdown：按一级标题切章（没有 h1 退到 h1/h2，再没有就按长度切）；每章渲染成 HTML
+function mdChapters(txt, size = 6000) {
+  const t = String(txt).replace(/\r\n?/g, '\n');
+  // 先按一级标题切（一篇笔记一章）；没有 h1 再退到 h1/h2；都没有就按长度切
+  let sections = t.split(/\n(?=#[ \t])/).map((x) => x.trim()).filter(Boolean);
+  if (sections.length <= 1) sections = t.split(/\n(?=#{1,2}[ \t])/).map((x) => x.trim()).filter(Boolean);
+  if (sections.length <= 1) sections = chunkText(t, size).map((c) => c.text);
+  const chapters = [];
+  for (const sec of sections) {
+    const head = /^#{1,2}[ \t]+(.+)$/m.exec(sec);
+    const pieces = sec.length > size * 1.5 ? chunkText(sec, size).map((c) => c.text) : [sec];
+    for (const piece of pieces) {
+      const html = mdToHtml(piece);
+      chapters.push({
+        title: head ? head[1].trim().slice(0, 40) : ('第 ' + (chapters.length + 1) + ' 节'),
+        text: htmlToText(html),
+        html: html,
+      });
+    }
   }
-  if (cur.trim()) out.push(cur);
-  return out.map((t, i) => ({ title: '第 ' + (i + 1) + ' 段', text: t }));
+  return chapters.length ? chapters
+    : chunkText(t, size).map((c) => ({ title: c.title, text: c.text, html: mdToHtml(c.text) }));
+}
+
+// 只做「读得下去」所需的那一层 Markdown：标题/段落/列表/引用/代码/强调/分隔线。
+// 链接和图片只留文字——离线取词场景里点不动也加载不了。
+function mdToHtml(md) {
+  const fences = [];
+  let s = String(md).replace(/\r\n?/g, '\n').replace(/```[^\n]*\n([\s\S]*?)```/g, (m, code) => {
+    fences.push(code.replace(/\n$/, ''));
+    return '\u0000F' + (fences.length - 1) + '\u0000';
+  });
+
+  const inline = (t) => {
+    let x = esc(t);
+    x = x.replace(/`([^`]+)`/g, '<code>$1</code>');
+    x = x.replace(/!\[([^\]]*)\]\([^)]*\)/g, '$1');
+    x = x.replace(/\[([^\]]+)\]\([^)]*\)/g, '$1');
+    x = x.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+    x = x.replace(/(^|[^*])\*([^*\n]+)\*/g, '$1<em>$2</em>');
+    x = x.replace(/(^|\W)_([^_\n]+)_(?=\W|$)/g, '$1<em>$2</em>');
+    return x;
+  };
+
+  const out = [];
+  let list = null;
+  const closeList = () => { if (list) { out.push('</' + list + '>'); list = null; } };
+  const lines = s.split('\n');
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const fence = /^\u0000F(\d+)\u0000\s*$/.exec(line.trim());
+    if (fence) { closeList(); out.push('<pre><code>' + esc(fences[+fence[1]]) + '</code></pre>'); continue; }
+    if (!line.trim()) { closeList(); continue; }
+
+    const h = /^(#{1,6})[ \t]+(.*)$/.exec(line);
+    if (h) {
+      closeList();
+      const n = Math.min(6, h[1].length);
+      out.push('<h' + n + '>' + inline(h[2]) + '</h' + n + '>');
+      continue;
+    }
+    if (/^\s*([-*_])(\s*\1){2,}\s*$/.test(line)) { closeList(); out.push('<hr>'); continue; }
+
+    if (/^\s*>/.test(line)) {
+      closeList();
+      const buf = [];
+      while (i < lines.length && /^\s*>/.test(lines[i])) { buf.push(lines[i].replace(/^\s*>\s?/, '')); i++; }
+      i--;
+      out.push('<blockquote>' + inline(buf.join(' ')) + '</blockquote>');
+      continue;
+    }
+
+    const ul = /^\s*[-*+]\s+(.*)$/.exec(line);
+    const ol = /^\s*\d+[.)]\s+(.*)$/.exec(line);
+    if (ul || ol) {
+      const want = ul ? 'ul' : 'ol';
+      if (list !== want) { closeList(); out.push('<' + want + '>'); list = want; }
+      out.push('<li>' + inline((ul || ol)[1]) + '</li>');
+      continue;
+    }
+
+    closeList();
+    out.push('<p>' + inline(line) + '</p>');   // md 一行一段（中文笔记几乎都是这么写的）
+  }
+  closeList();
+  return out.join('\n');
+}
+
+// 纯文本解码：UTF-8 失败就按 GB18030 再试（中文 txt 小说大量是 GBK），UTF-16 靠 BOM
+function decodeText(buf) {
+  const b = new Uint8Array(buf);
+  if (b.length > 1 && b[0] === 0xff && b[1] === 0xfe) return new TextDecoder('utf-16le').decode(buf);
+  if (b.length > 1 && b[0] === 0xfe && b[1] === 0xff) return new TextDecoder('utf-16be').decode(buf);
+  try {
+    return new TextDecoder('utf-8', { fatal: true }).decode(buf);
+  } catch {
+    try { return new TextDecoder('gb18030').decode(buf); } catch { /* 老浏览器没有 */ }
+    return new TextDecoder('utf-8').decode(buf);
+  }
+}
+
+// 按段落把纯文本切成「章」：空行分段；没有空行的（txt 小说常见）按行分段；超长段硬切
+function chunkText(txt, size) {
+  const t = String(txt).replace(/\r\n?/g, '\n').replace(/ /g, ' ');
+  let paras = t.split(/\n[ \t]*\n/).map((x) => x.trim()).filter(Boolean);
+  if (paras.length <= 2) paras = t.split('\n').map((x) => x.trim()).filter(Boolean);
+
+  const chapters = [];
+  let cur = [];
+  let len = 0;
+  const flush = () => { if (cur.length) { chapters.push(cur); cur = []; len = 0; } };
+  for (let p of paras) {
+    while (p.length > size) {          // 一整块没有分段的超长文本
+      flush();
+      chapters.push([p.slice(0, size)]);
+      p = p.slice(size);
+    }
+    if (len + p.length > size) flush();
+    cur.push(p);
+    len += p.length;
+  }
+  flush();
+  return chapters.map((ps, i) => {
+    const head = ps[0].split('\n')[0].trim();
+    const title = head && head.length <= 30 ? head : '第 ' + (i + 1) + ' 段';
+    return { title: title, text: ps.join('\n\n') };
+  });
 }
 
 async function openEpubBook(f) {
   view.innerHTML = '<div class="empty">正在解析 EPUB…</div>';
   try {
     await ensureJSZip();
+    resetBook();
     const zip = await JSZip.loadAsync(await f.arrayBuffer());
     const chapters = await parseEpub(zip);
     if (!chapters.length) throw new Error('没找到可读的章节');
@@ -1039,6 +1165,15 @@ async function openEpubBook(f) {
   } catch (err) {
     view.innerHTML = '<div class="empty">打不开这个 EPUB<br><span class="sub">' + esc(err.message) + '</span></div>';
   }
+}
+
+// 换书 / 关书：把上一本生成的图片 blob URL 释放掉，否则内存只涨不落
+function resetBook() {
+  (RDR.urls || []).forEach((u) => { try { URL.revokeObjectURL(u); } catch { /* 已释放 */ } });
+  RDR.urls = [];
+  RDR.assets = {};
+  RDR.book = null;
+  RDR.kind = null;
 }
 
 async function ensureJSZip() {
@@ -1094,21 +1229,98 @@ async function parseEpub(zip) {
 
   const chapters = [];
   for (const href of order) {
-    const path = decodeURIComponent(baseDir + href.split('#')[0]);
+    const path = zipPath(baseDir, href);
     const f = zip.file(path);
     if (!f) continue;
-    const html = await f.async('string');
-    const text = htmlToText(html);
-    if (text.length < 60) continue;
-    chapters.push({ title: firstHeading(html) || ('第 ' + (chapters.length + 1) + ' 节'), text: text });
+    const raw = await f.async('string');
+    const ch = await epubChapter(raw, zip, baseDir);
+    // 只丢「彻底空的页」（封面/空白页）。原来是 <60 字就丢——会把短章节静默吞掉。
+    if (!ch || (ch.text.length < 10 && !ch.imgs)) continue;
+    chapters.push({
+      title: firstHeading(raw) || ('第 ' + (chapters.length + 1) + ' 节'),
+      text: ch.text,
+      html: ch.html,
+    });
   }
   return chapters;
+}
+
+// 一章 XHTML → 可渲染的干净 HTML + 纯文本
+async function epubChapter(rawHtml, zip, baseDir) {
+  const doc = new DOMParser().parseFromString(rawHtml, 'text/html');
+  const body = doc.body;
+  if (!body) return null;
+  body.querySelectorAll('script,style,head,title,link,meta,iframe,object,embed,form,noscript,audio,video')
+    .forEach((n) => n.remove());
+
+  // 图片：书里的相对路径去 zip 里捞，转成本地 blob URL；取不到就删掉，别留破图
+  for (const img of [...body.querySelectorAll('img')]) {
+    const url = await epubAsset(img.getAttribute('src'), zip, baseDir);
+    if (!url) { img.remove(); continue; }
+    img.setAttribute('src', url);
+    if (!img.getAttribute('alt')) img.setAttribute('alt', '');
+  }
+
+  // 只留结构：去掉书自带的 class/id/style、事件属性、尺寸属性
+  const drop = ['class', 'id', 'style', 'srcset', 'width', 'height', 'align', 'bgcolor', 'border', 'cellpadding', 'cellspacing'];
+  for (const el of body.querySelectorAll('*')) {
+    for (const a of [...el.attributes]) {
+      const n = a.name.toLowerCase();
+      const v = String(a.value || '');
+      if (drop.includes(n) || /^on[a-z]+$/.test(n)) el.removeAttribute(a.name);
+      else if ((n === 'href' || n === 'src') && /^\s*(javascript|vbscript)/i.test(v)) el.removeAttribute(a.name);
+    }
+    if (el.tagName === 'A') { el.removeAttribute('href'); el.removeAttribute('target'); } // 站内链接点不走，留文字
+    if (el.tagName === 'SVG') el.remove();
+  }
+
+  const html = body.innerHTML.trim();
+  const text = htmlToText(html);
+  return { html: html, text: text, imgs: body.querySelectorAll('img').length };
+}
+
+// "EPUB/Images/a b.png" 这类相对路径 → zip 内的规范路径（处理 ../ 与 %20）
+function zipPath(baseDir, src) {
+  const clean = String(src || '').split(/[?#]/)[0];
+  if (!clean) return '';
+  let p = clean;
+  try { p = decodeURIComponent(clean); } catch { /* % 编码不合法，按原样找 */ }
+  const out = [];
+  for (const seg of (baseDir + p).split('/')) {
+    if (seg === '..') out.pop();
+    else if (seg && seg !== '.') out.push(seg);
+  }
+  return out.join('/');
+}
+
+const IMG_MIME = {
+  png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif',
+  webp: 'image/webp', svg: 'image/svg+xml', bmp: 'image/bmp',
+};
+
+async function epubAsset(src, zip, baseDir) {
+  if (!src) return null;
+  if (/^data:/i.test(src)) return src;
+  if (/^(https?:)?\/\//i.test(src)) return src;      // 远程图交给浏览器，挂了会被隐藏
+  const path = zipPath(baseDir, src);
+  if (!path) return null;
+  if (RDR.assets[path]) return RDR.assets[path];
+  const f = zip.file(path);
+  if (!f) return null;
+  const type = IMG_MIME[(path.split('.').pop() || '').toLowerCase()];
+  if (!type) return null;                             // 只认位图，字体/CSS 一律跳过
+  const u8 = await f.async('uint8array');
+  const url = URL.createObjectURL(new Blob([u8], { type: type }));
+  RDR.assets[path] = url;
+  RDR.urls.push(url);
+  return url;
 }
 
 async function openPdfFile(f) {
   view.innerHTML = '<div class="empty">正在打开 PDF…</div>';
   try {
     await ensurePdfJs();
+    resetBook();
     const buf = await f.arrayBuffer();
     RDR.pdf = await pdfjsLib.getDocument({ data: buf }).promise;
     RDR.total = RDR.pdf.numPages;
@@ -1122,7 +1334,7 @@ async function openPdfFile(f) {
 }
 
 function renderReader() {
-  if (RDR.kind === 'epub' || RDR.kind === 'text') return renderTextBook();
+  if (RDR.kind === 'epub' || RDR.kind === 'text' || RDR.kind === 'md') return renderTextBook();
   if (!RDR.pdf && !RDR.book) {
     view.innerHTML = '<div class="empty">选一本书，直接在页面里读。<br>'
       + '<span class="sub">选中任意文字 → 朗读 / 存卡 / 问 AI。文件不上传，全在本机解析。</span>'
@@ -1148,22 +1360,32 @@ function renderReader() {
   drawPage();
 }
 
+// EPUB / MD 走「结构渲染」；TXT 走「段落 + 保留换行」
+function plainToHtml(text) {
+  return String(text || '').split(/\n{2,}/).map((p) => '<p>' + esc(p.replace(/\n+$/, '')) + '</p>').join('');
+}
+
 function renderTextBook() {
   const b = RDR.book;
+  if (!b || !b.chapters || !b.chapters.length) { resetBook(); return renderReader(); }
+  RDR.ch = Math.max(0, Math.min(b.chapters.length - 1, RDR.ch));
   const ch = b.chapters[RDR.ch];
+  const isHtml = !!ch.html;
+  const html = isHtml ? ch.html : plainToHtml(ch.text);
+  // 书里自己就带标题（<h1> 开头）时，别再叠一行同样的标题
+  const ownHeading = /^\s*<h[1-4][\s>]/i.test(html);
   view.innerHTML =
     '<div class="meta"><span>' + esc(b.name) + '</span><span>' + (RDR.ch + 1) + ' / ' + b.chapters.length + '</span></div>'
-    + '<h2 style="margin:6px 2px 8px;color:var(--text);font-size:14px">' + esc(ch.title) + '</h2>'
-    + '<div class="bookText" id="bookText">'
-    + ch.text.split(/\n{2,}/).map((p) => '<p>' + esc(p.trim()) + '</p>').join('')
-    + '</div>'
+    + (ownHeading ? '' : '<h2 class="chTitle">' + esc(ch.title) + '</h2>')
+    + '<div class="bookText' + (isHtml ? '' : ' plain') + '" id="bookText">' + html + '</div>'
     + '<div class="pager"><button id="prevCh">◀</button><button id="nextCh">▶</button></div>'
     + '<div class="row" style="margin-top:4px"><button class="btn ghost" id="closeBook">关闭这本书</button></div>';
+  // 远程图挂了就把位置收起来，别留一个破图标
+  view.querySelectorAll('#bookText img').forEach((img) => img.addEventListener('error', () => img.remove()));
   document.getElementById('prevCh').onclick = () => gotoChapter(RDR.ch - 1);
   document.getElementById('nextCh').onclick = () => gotoChapter(RDR.ch + 1);
-  document.getElementById('closeBook').onclick = () => {
-    RDR.book = null; RDR.kind = null; RDR.pdf = null; renderReader();
-  };
+  document.getElementById('closeBook').onclick = () => { resetBook(); renderReader(); };
+  view.scrollTop = 0;
 }
 
 function gotoChapter(n) {
@@ -1171,7 +1393,6 @@ function gotoChapter(n) {
   if (!b) return;
   RDR.ch = Math.max(0, Math.min(b.chapters.length - 1, n));
   renderTextBook();
-  view.scrollTop = 0;
 }
 
 function gotoPage(n) {
@@ -1281,6 +1502,25 @@ function askFromSelection(t) {
 (function selectionTools() {
   let bar = null;
   const remove = () => { if (bar) { bar.remove(); bar = null; } };
+
+  // 弹框默认贴在被选文字的「下方」——手机 Edge 自带的选区菜单永远浮在上方，
+  // 放上方必被它盖住（2026-10-29 用户反馈）。只有下面真的没地方了才翻到上面。
+  function place(rect) {
+    const bw = bar.offsetWidth || 150;
+    const bh = bar.offsetHeight || 40;
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    const gap = 20;                       // 避开选区手柄
+    const roomBelow = vh - rect.bottom - gap;
+    const roomAbove = rect.top - gap;
+    let top = rect.bottom + gap;
+    if (roomBelow < bh + 8 && roomAbove > roomBelow) top = rect.top - bh - gap;
+    top = Math.max(8, Math.min(vh - bh - 10, top));
+    const left = Math.max(8, Math.min(vw - bw - 8, rect.left + rect.width / 2 - bw / 2));
+    bar.style.top = Math.round(top) + 'px';
+    bar.style.left = Math.round(left) + 'px';
+  }
+
   document.addEventListener('selectionchange', () => {
     const sel = window.getSelection();
     const text = sel && sel.toString().trim();
@@ -1305,8 +1545,7 @@ function askFromSelection(t) {
       document.body.appendChild(bar);
     }
     bar.dataset.text = text;
-    bar.style.left = Math.min(window.innerWidth - 160, Math.max(8, rect.left)) + 'px';
-    bar.style.top = Math.max(8, rect.top - 48) + 'px';
+    place(rect);
   });
   document.addEventListener('click', (e) => { if (!e.target.closest('#selTools')) remove(); });
 })();

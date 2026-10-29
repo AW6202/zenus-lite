@@ -1,0 +1,324 @@
+// smoke.js —— 阅读器冒烟 Gate：真浏览器（本机 Edge headless）+ 真文件，断言 DOM，不靠肉眼看。
+//
+// 用法：node smoke.js                 # 跑全部检查（PDF 一项自动跳过）
+//       node smoke.js --pdf x.pdf    # 额外验 PDF 回归
+// 退出码：0 全过 / 1 有失败 / 2 环境缺件（找不到 Edge）
+//
+// 为什么要有它：阅读器是「错了也看不出来」的那类代码——排版退化不会报错，
+// 只有把 DOM 断言出来才拦得住（2026-10-29 EPUB 退化成纯文本，就是这么漏掉的）。
+
+const fs = require('fs');
+const http = require('http');
+const path = require('path');
+const { spawn } = require('child_process');
+
+const ROOT = __dirname;
+const TMP = path.join(ROOT, '.scratch', 'smoke');
+const EDGE = process.env.EDGE || 'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe';
+const PORT = Number(process.env.PORT || 8799);
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+// ── 断言账本 ────────────────────────────────────────
+const results = [];
+function check(name, ok, detail) {
+  results.push({ name, ok: !!ok, detail });
+  console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${ok ? '' : '   ← ' + JSON.stringify(detail)}`);
+}
+
+// ── 静态服务器（不起 python，少一个依赖）──────────────
+const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.json': 'application/json',
+  '.webmanifest': 'application/manifest+json', '.png': 'image/png', '.epub': 'application/epub+zip',
+  '.md': 'text/markdown', '.txt': 'text/plain', '.pdf': 'application/pdf' };
+function serve() {
+  const srv = http.createServer((req, res) => {
+    const rel = decodeURIComponent(req.url.split('?')[0]).replace(/^\/+/, '') || 'index.html';
+    const file = path.join(ROOT, rel);
+    if (!file.startsWith(ROOT) || !fs.existsSync(file) || fs.statSync(file).isDirectory()) {
+      res.writeHead(404); return res.end('404');
+    }
+    res.writeHead(200, { 'Content-Type': MIME[path.extname(file)] || 'application/octet-stream' });
+    fs.createReadStream(file).pipe(res);
+  });
+  return new Promise((res) => srv.listen(PORT, '127.0.0.1', () => res(srv)));
+}
+
+// ── 测试用书：一本书要把「标题/段落/强调/列表/引用/图/表/脚注/换行」全放进去 ──
+async function makeFixtures(pdfPath) {
+  const JSZip = require(path.join(ROOT, 'vendor', 'jszip.min.js'));
+  fs.mkdirSync(TMP, { recursive: true });
+  const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
+
+  const ch1 = `<html><head><meta charset="utf-8"/><style>p{margin:0}</style>
+<script>console.log("SHOULD_BE_STRIPPED")</script></head><body>
+<h1>第一章　河流与铁桥</h1>
+<p class="calibre1">The river was <em>narrow</em> and the bridge <strong>old</strong>.</p>
+<div><div><p>被两层 div 包起来的段落。</p></div></div>
+<h2>小标题</h2><ul><li>列表一</li><li>列表二</li></ul>
+<blockquote>引用块</blockquote>
+<p><img src="images/pic.png" alt="示意图"/></p>
+<table><tr><td>词</td><td>释义</td></tr></table>
+<p onclick="alert(1)">短句。</p>
+</body></html>`;
+
+  // 这一章要够长才能滚到底——「选区贴底 → 弹框翻上」这条断言必须有可滚动的空间
+  const filler = Array.from({ length: 24 }, (_, i) => `<p>填充段落 ${i + 1}：用来把正文撑过一屏。</p>`).join('\n');
+  const ch2 = `<html><head><meta charset="utf-8"/></head><body>
+<h1>第二章　雨季</h1>
+<p>雨季来得比往年早。<br/>这一行必须换行。</p>
+<p>脚注<sup><a href="#fn1">1</a></sup>。<a href="ch1.xhtml">跨章链接</a></p>
+${filler}
+<p>最后一段，用来在视口底部验证弹框翻上。</p>
+</body></html>`;
+
+  const opf = `<package xmlns="http://www.idpf.org/2007/opf" version="3.0"><manifest>
+<item id="c1" href="ch1.xhtml" media-type="application/xhtml+xml"/>
+<item id="c2" href="ch2.xhtml" media-type="application/xhtml+xml"/>
+<item id="pic" href="images/pic.png" media-type="image/png"/></manifest>
+<spine><itemref idref="c1"/><itemref idref="c2"/></spine></package>`;
+
+  const zip = new JSZip();
+  zip.file('mimetype', 'application/epub+zip', { compression: 'STORE' });
+  zip.file('META-INF/container.xml',
+    `<container><rootfiles><rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/></rootfiles></container>`);
+  zip.file('OEBPS/content.opf', opf);
+  zip.file('OEBPS/ch1.xhtml', ch1);
+  zip.file('OEBPS/ch2.xhtml', ch2);
+  zip.file('OEBPS/images/pic.png', png);
+  fs.writeFileSync(path.join(TMP, 'smoke.epub'), await zip.generateAsync({ type: 'nodebuffer' }));
+
+  fs.writeFileSync(path.join(TMP, 'smoke.md'),
+    '# 读法笔记\n\n含 **粗体**、*斜体*、`code` 的一段。\n\n## 一、结论\n\n- 项一\n- 项二\n\n1. 步骤一\n2. 步骤二\n\n> 引用\n\n```js\nconst x = 1;\n```\n');
+
+  // GBK + 无空行（中文 txt 小说最典型的形态）
+  const lines = ['第一章 山雨'];
+  for (let i = 1; i <= 120; i++) lines.push(`第${i}行：整本书没有空行分隔，只靠换行。`);
+  fs.writeFileSync(path.join(TMP, 'smoke-gbk.txt'), encodeGbk(lines.join('\r\n')));
+  if (pdfPath) fs.copyFileSync(pdfPath, path.join(TMP, 'smoke.pdf'));
+}
+
+// Node 只能解 GBK、不能编 GBK：把解码器反过来用，造一张「字 → 字节」表
+function encodeGbk(str) {
+  const dec = new TextDecoder('gb18030');
+  const map = new Map();
+  for (let hi = 0x81; hi <= 0xfe; hi++) {
+    for (let lo = 0x40; lo <= 0xfe; lo++) {
+      if (lo === 0x7f) continue;
+      const s = dec.decode(Uint8Array.from([hi, lo]));
+      if (s.length === 1 && s !== '�' && !map.has(s)) map.set(s, [hi, lo]);
+    }
+  }
+  const out = [];
+  for (const ch of str) {
+    const code = ch.charCodeAt(0);
+    if (code < 0x80) { out.push(code); continue; }
+    const pair = map.get(ch);
+    if (!pair) throw new Error('GBK 表里没有这个字：' + ch);
+    out.push(pair[0], pair[1]);
+  }
+  return Buffer.from(out);
+}
+
+// ── 极简 CDP 客户端（node 24 自带 WebSocket）─────────
+class CDP {
+  constructor(ws) { this.ws = ws; this.id = 0; this.pend = new Map(); }
+  static async launch(profile) {
+    const proc = spawn(EDGE, ['--headless=new', '--remote-debugging-port=9339', `--user-data-dir=${profile}`,
+      '--no-first-run', '--no-default-browser-check', '--disable-gpu', 'about:blank'], { stdio: 'ignore' });
+    let ver = null;
+    for (let i = 0; i < 60 && !ver; i++) {
+      try { ver = await (await fetch('http://127.0.0.1:9339/json/version')).json(); }
+      catch { await sleep(250); }
+    }
+    if (!ver) { proc.kill(); throw new Error('ENV'); }
+    const ws = new WebSocket(ver.webSocketDebuggerUrl);
+    await new Promise((ok, no) => { ws.onopen = ok; ws.onerror = no; });
+    const c = new CDP(ws);
+    c.proc = proc;
+    ws.onmessage = (ev) => {
+      const m = JSON.parse(ev.data);
+      const p = m.id && c.pend.get(m.id);
+      if (!p) return;
+      c.pend.delete(m.id);
+      m.error ? p.no(new Error(m.error.message)) : p.ok(m.result);
+    };
+    return c;
+  }
+  send(method, params = {}, sid) {
+    const id = ++this.id;
+    this.ws.send(JSON.stringify(sid ? { id, method, params, sessionId: sid } : { id, method, params }));
+    return new Promise((ok, no) => this.pend.set(id, { ok, no }));
+  }
+  async page(url, { width = 390, height = 844 } = {}) {
+    const { targetId } = await this.send('Target.createTarget', { url: 'about:blank' });
+    const { sessionId } = await this.send('Target.attachToTarget', { targetId, flatten: true });
+    this.sid = sessionId;
+    await this.send('Page.enable', {}, sessionId);
+    await this.send('Runtime.enable', {}, sessionId);
+    await this.send('Emulation.setDeviceMetricsOverride',
+      { width, height, deviceScaleFactor: 2, mobile: true }, sessionId);
+    await this.send('Page.navigate', { url }, sessionId);
+    await sleep(1500);
+  }
+  async eval(body) {
+    const r = await this.send('Runtime.evaluate', {
+      expression: `(async () => { ${body} })()`, awaitPromise: true, returnByValue: true, userGesture: true,
+    }, this.sid);
+    if (r.exceptionDetails) throw new Error(r.exceptionDetails.exception?.description || r.exceptionDetails.text);
+    return r.result.value;
+  }
+  close() { try { this.proc.kill(); } catch { /* 已退出 */ } }
+}
+
+// ── 主流程 ──────────────────────────────────────────
+(async () => {
+  if (!fs.existsSync(EDGE)) {
+    console.log('SKIP  找不到 Edge：' + EDGE + '（设 EDGE 环境变量指向 msedge.exe）');
+    process.exit(2);
+  }
+  const pdfArg = process.argv.includes('--pdf') ? process.argv[process.argv.indexOf('--pdf') + 1] : null;
+  await makeFixtures(pdfArg);
+  const srv = await serve();
+  const base = `http://127.0.0.1:${PORT}/.scratch/smoke/`;
+  const prof = path.join(TMP, 'prof');
+  fs.rmSync(prof, { recursive: true, force: true });
+
+  const cdp = await CDP.launch(prof);
+  // 页面里抛错（element 不存在等）不能把整份冒烟崩掉：记一条 FAIL，接着跑下一项
+  const probe = async (label, js) => {
+    try { return await cdp.eval(js); }
+    catch (e) { check(label + ' → 页面执行失败', false, { err: e.message }); return {}; }
+  };
+  try {
+    await cdp.page(`http://127.0.0.1:${PORT}/index.html`);
+
+    // A. EPUB 结构渲染
+    const epub = await probe('EPUB 渲染', `
+      state.tab = 'reader'; render();
+      const b = await (await fetch('${base}smoke.epub')).blob();
+      await openEpubBook(new File([b], 'smoke.epub'));
+      await new Promise(r => setTimeout(r, 600));
+      const box = document.querySelector('.bookText');
+      const q = (s) => box.querySelectorAll(s).length;
+      const img = box.querySelector('img');
+      return {
+        kind: RDR.kind, h1: q('h1'), h2: q('h2'), li: q('li'), blockquote: q('blockquote'),
+        table: q('table'), em: q('em'), strong: q('strong'),
+        img: q('img'), imgLoaded: img ? img.naturalWidth : 0,
+        script: (document.body.innerHTML.match(/SHOULD_BE_STRIPPED/) || []).length,
+        taint: [/class=/, /style=/, /onclick=/, /javascript:/].filter(re => re.test(box.innerHTML)).length,
+        h1Bigger: (() => {
+          const fs_ = (s) => { const el = box.querySelector(s); return el ? parseFloat(getComputedStyle(el).fontSize) : 0; };
+          return fs_('h1') > fs_('p');
+        })(),
+      };
+    `);
+    check('EPUB 标题/列表/引用/表格/强调 都渲染出来了',
+      epub.h1 === 1 && epub.h2 === 1 && epub.li === 2 && epub.blockquote === 1 && epub.table === 1
+      && epub.em === 1 && epub.strong === 1, epub);
+    check('EPUB 标题字号大于正文', epub.h1Bigger, epub);
+    check('EPUB 图片从 zip 里取出并加载成功', epub.img === 1 && epub.imgLoaded > 0, epub);
+    check('EPUB 脚本/事件/样式被清掉', epub.script === 0 && epub.taint === 0, epub);
+
+    // B. 换行与脚注没丢
+    const ch2 = await probe('EPUB 章内结构', `
+      gotoChapter(1); await new Promise(r => setTimeout(r, 200));
+      const box = document.querySelector('.bookText');
+      return { br: box.querySelectorAll('br').length, sup: box.querySelectorAll('sup').length,
+               title: RDR.book.chapters[1].title };
+    `);
+    check('EPUB 章内 <br> 换行保留', ch2.br === 1, ch2);
+    check('EPUB 脚注上标保留', ch2.sup === 1, ch2);
+
+    // C. 选中弹框位置：中部选区在下方，底部选区翻到上方
+    const bar = await probe('选中弹框', `
+      const ps = [...document.querySelectorAll('.bookText p')].filter(p => p.textContent.trim().length > 3);
+      const probe = async (el, block) => {
+        el.scrollIntoView({ block });
+        await new Promise(r => setTimeout(r, 250));
+        const rg = document.createRange(); rg.selectNodeContents(el);
+        const sel = getSelection(); sel.removeAllRanges(); sel.addRange(rg);
+        await new Promise(r => setTimeout(r, 350));
+        const b = document.getElementById('selTools');
+        if (!b) return { shown: false };
+        const br = b.getBoundingClientRect(), sr = sel.getRangeAt(0).getBoundingClientRect();
+        return { shown: true,
+          below: br.top >= sr.bottom - 1, above: br.bottom <= sr.top + 1,
+          inViewport: br.top >= 0 && br.bottom <= innerHeight,
+          gap: Math.round(br.top - sr.bottom) };
+      };
+      const mid = await probe(ps[0], 'center');
+      const bottom = await probe(ps[ps.length - 1], 'end');
+      getSelection().removeAllRanges();
+      return { mid, bottom };
+    `);
+    const m = bar.mid || {}, bt = bar.bottom || {};
+    check('选区在页面中部时，弹框在文字下方', !!m.shown && !!m.below, m);
+    check('选区贴屏幕底部时，弹框翻到上方且不出界', !!bt.shown && !!bt.above && !!bt.inViewport, bt);
+
+    // D. Markdown
+    const md = await probe('Markdown', `
+      const b = await (await fetch('${base}smoke.md')).blob();
+      await openTextBook(new File([b], 'smoke.md'));
+      await new Promise(r => setTimeout(r, 400));
+      const titles = RDR.book.chapters.map(c => c.title);
+      gotoChapter(1); await new Promise(r => setTimeout(r, 150));
+      const box = document.querySelector('.bookText');
+      const q = (s) => box.querySelectorAll(s).length;
+      return { titles, ul: q('ul'), ol: q('ol'), pre: q('pre'), blockquote: q('blockquote'),
+               raw: /^\\s*(#{1,3}\\s|\\*\\*)/m.test(box.textContent) || /\\u0060{3}/.test(box.textContent) };
+    `);
+    check('MD 按一级标题切章', md.titles.length === 2 && md.titles[1] === '一、结论', md);
+    check('MD 列表/引用/代码块渲染出来', md.ul === 1 && md.ol === 1 && md.pre === 1 && md.blockquote === 1, md);
+    check('MD 没有残留原始标记', md.raw === false, md);
+
+    // E. GBK 纯文本
+    const txt = await probe('GBK 文本', `
+      const b = await (await fetch('${base}smoke-gbk.txt')).blob();
+      await openTextBook(new File([b], 'smoke-gbk.txt'));
+      await new Promise(r => setTimeout(r, 300));
+      const box = document.querySelector('.bookText');
+      return { kind: RDR.kind, ps: box.querySelectorAll('p').length,
+               mojibake: /\\uFFFD|锟斤拷/.test(box.textContent),
+               head: box.textContent.replace(/\\s+/g, ' ').slice(0, 30) };
+    `);
+    check('GBK txt 不乱码', txt.mojibake === false && txt.head.indexOf('第一章 山雨') === 0, txt);
+    check('无空行 txt 按行分段', txt.ps > 100, txt);
+
+    // F. 关书释放 blob URL
+    const clean = await probe('关书释放', `
+      const b = await (await fetch('${base}smoke.epub')).blob();
+      await openEpubBook(new File([b], 'smoke.epub'));
+      await new Promise(r => setTimeout(r, 500));
+      const before = RDR.urls.length;
+      document.getElementById('closeBook').click();
+      await new Promise(r => setTimeout(r, 100));
+      return { before, after: RDR.urls.length, book: !!RDR.book };
+    `);
+    check('关书释放图片 blob（内存不涨）', clean.before > 0 && clean.after === 0 && clean.book === false, clean);
+
+    // G. PDF 回归（可选）
+    if (pdfArg) {
+      const pdf = await probe('PDF', `
+        const b = await (await fetch('${base}smoke.pdf')).blob();
+        await openPdfFile(new File([b], 'smoke.pdf'));
+        await new Promise(r => setTimeout(r, 3000));
+        return { pages: RDR.total, spans: document.querySelectorAll('#textLayer span').length,
+                 canvas: (document.getElementById('pdfCanvas') || {}).width || 0 };
+      `);
+      check('PDF 仍能渲染（画布 + 文字层）', pdf.pages > 0 && pdf.canvas > 0 && pdf.spans > 0, pdf);
+    } else {
+      console.log('SKIP  PDF 回归（要验就加 --pdf <某个真实PDF>）');
+    }
+  } finally {
+    cdp.close();
+    srv.close();
+  }
+
+  const bad = results.filter((r) => !r.ok);
+  console.log(`\n${results.length - bad.length}/${results.length} 通过`);
+  if (bad.length) { console.log('失败项：' + bad.map((b) => b.name).join('；')); process.exit(1); }
+  process.exit(0);
+})().catch((e) => {
+  console.error('SMOKE 崩了：' + e.message);
+  process.exit(e.message === 'ENV' ? 2 : 1);
+});
