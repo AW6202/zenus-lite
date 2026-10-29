@@ -1,7 +1,7 @@
 // 学习机 Lite — 静态 PWA：内容来自 pack.json，进度存本地，AI 直连 OpenAI 兼容接口
 'use strict';
 
-const BUILD = '2026-10-29.20';
+const BUILD = '2026-10-29.21';
 
 const LS = {
   progress: 'zenus.progress.v1',
@@ -11,6 +11,7 @@ const LS = {
   known: 'zenus.known.v1',
   userCards: 'zenus.usercards.v1',
   readpos: 'zenus.readpos.v1',
+  kpoints: 'zenus.kpoints.v1',
 };
 
 const DEFAULT_SETTINGS = {
@@ -2705,6 +2706,7 @@ async function showVisionPoints(dataUrl, title) {
   renderPoints({ loading: true }, ch);
   try {
     const data = await askVision(dataUrl);
+    rememberPoints(data);
     renderPoints(data, ch);
   } catch (err) {
     renderPoints({ error: err.message }, ch);
@@ -2872,61 +2874,101 @@ async function askPoints(text) {
   return JSON.parse(j.choices[0].message.content);
 }
 
-function kpKey() { return (RDR.key || '') + '#' + RDR.ch; }
+function kpKey() {
+  const where = RDR.book ? 'c' + RDR.ch : 'p' + RDR.page;
+  return (RDR.key || '') + '#' + where;
+}
+
+let kpStore = loadJSON(LS.kpoints, {});
+
+function cachedPoints() {
+  const k = kpKey();
+  return (RDR.kpCache && RDR.kpCache[k]) || kpStore[k] || null;
+}
+
+function rememberPoints(data) {
+  const k = kpKey();
+  RDR.kpCache = RDR.kpCache || {};
+  RDR.kpCache[k] = data;
+  kpStore[k] = data;
+  const keys = Object.keys(kpStore);
+  if (keys.length > 120) {                      // 只留最近 120 条
+    keys.slice(0, keys.length - 120).forEach((x) => delete kpStore[x]);
+  }
+  saveJSON(LS.kpoints, kpStore);
+}
 
 async function showPoints() {
   const ch = await chapterText();
   if (!ch) return toast('这一页没有可读的文字（扫描件先点「识别文字」）');
   if (!settings.key) { toast('先在「设置」里填 AI Key'); state.tab = 'settings'; return render(); }
-  RDR.kpCache = RDR.kpCache || {};
-  if (RDR.kpCache[kpKey()]) return renderPoints(RDR.kpCache[kpKey()], ch);
+  const hit = cachedPoints();
+  if (hit) return renderPoints(hit, ch);
   renderPoints({ loading: true }, ch);
   try {
     const data = await askPoints(ch.text);
-    RDR.kpCache[kpKey()] = data;
+    rememberPoints(data);
     renderPoints(data, ch);
   } catch (err) {
     renderPoints({ error: err.message }, ch);
   }
 }
 
+function closePoints() {
+  const o = document.getElementById('kpOverlay');
+  if (o) o.remove();
+}
+
+// 知识点以「浮层抽屉」打开：阅读页不动，关掉就能接着读（原来整页被替换，位置就丢了）
 function renderPoints(kp, ch) {
-  const back = '<div class="row" style="margin:6px 0 12px"><button class="btn ghost" id="kpBack">← 回到正文</button></div>';
+  let body = '';
   if (kp.loading) {
-    view.innerHTML = '<div class="meta"><span>' + esc(ch.title) + '</span><span>知识点</span></div>' + back
-      + '<div class="empty"><span class="spin"></span> 正在读这一章…</div>';
-    document.getElementById('kpBack').onclick = () => { RDR.kp = null; renderTextBook(); };
-    return;
+    body = '<div class="empty"><span class="spin"></span> 正在读这一章…</div>';
+  } else if (kp.error) {
+    body = '<div class="empty">没取到：' + esc(kp.error)
+      + '<div class="row" style="margin-top:12px"><button class="btn ghost" id="kpRetry">重试</button></div></div>';
+  } else {
+    const kindLabel = kp.kind === 'tech' ? '技术类' : kp.kind === 'language' ? '语言类' : '';
+    const points = (kp.points || []).map((p) => '<li>' + esc(p) + '</li>').join('');
+    const words = (kp.words || []).map((w, i) =>
+      '<div class="it"><div><b>' + esc(w.w) + '</b> <span class="sub">' + esc(w.cn || '') + '</span>'
+      + (w.note ? '<div class="sub">' + esc(w.note) + '</div>' : '') + '</div>'
+      + '<button class="btn ghost" style="width:auto;padding:6px 10px;font-size:12px" data-w="' + i + '">＋卡</button></div>').join('');
+    const quiz = (kp.quiz || []).map((q, qi) =>
+      '<div class="kpq" data-q="' + qi + '"><div style="margin:10px 0 6px">' + (qi + 1) + '. ' + esc(q.q) + '</div>'
+      + '<div class="opts">' + (q.options || []).map((o, oi) =>
+        '<button data-o="' + oi + '">' + esc(o) + '</button>').join('') + '</div>'
+      + '<div class="sub kpwhy" style="display:none;margin-top:6px"></div></div>').join('');
+    body = (kindLabel ? '<div class="tag">' + kindLabel + '</div>' : '')
+      + (kp.summary ? '<div class="card" style="min-height:0;padding:14px;margin:8px 0 12px"><div style="text-align:left">' + esc(kp.summary) + '</div></div>' : '')
+      + (points ? '<h2>要点</h2><ul class="kplist">' + points + '</ul>' : '')
+      + (words ? '<h2>生词 / 搭配</h2><div class="list">' + words + '</div>' : '')
+      + (quiz ? '<h2>自测</h2>' + quiz : '')
+      + '<div class="hint" style="margin-top:14px">内容按「文件 + 这一章/这一页」缓存，再点开不再花钱。</div>';
   }
-  if (kp.error) {
-    view.innerHTML = '<div class="meta"><span>' + esc(ch.title) + '</span><span>知识点</span></div>' + back
-      + '<div class="empty">没取到：' + esc(kp.error) + '</div>';
-    document.getElementById('kpBack').onclick = () => { RDR.kp = null; renderTextBook(); };
-    return;
+
+  let o = document.getElementById('kpOverlay');
+  if (!o) {
+    o = document.createElement('div');
+    o.id = 'kpOverlay';
+    o.className = 'kpsheet';
+    document.body.appendChild(o);
   }
-  const kindLabel = kp.kind === 'tech' ? '技术类' : '语言类';
-  const points = (kp.points || []).map((p) => '<li>' + esc(p) + '</li>').join('');
-  const words = (kp.words || []).map((w, i) =>
-    '<div class="it"><div><b>' + esc(w.w) + '</b> <span class="sub">' + esc(w.cn || '') + '</span>'
-    + (w.note ? '<div class="sub">' + esc(w.note) + '</div>' : '') + '</div>'
-    + '<button class="btn ghost" style="width:auto;padding:6px 10px;font-size:12px" data-w="' + i + '">＋卡</button></div>').join('');
-  const quiz = (kp.quiz || []).map((q, qi) =>
-    '<div class="kpq" data-q="' + qi + '"><div style="margin:10px 0 6px">' + (qi + 1) + '. ' + esc(q.q) + '</div>'
-    + '<div class="opts">' + (q.options || []).map((o, oi) =>
-      '<button data-o="' + oi + '">' + esc(o) + '</button>').join('') + '</div>'
-    + '<div class="sub kpwhy" style="display:none;margin-top:6px"></div></div>').join('');
+  o.innerHTML = '<div class="kpPanel"><div class="kpHead"><span>' + esc(ch.title || '知识点')
+    + '</span><button id="kpClose">关闭</button></div><div class="kpBody">' + body + '</div></div>';
 
-  view.innerHTML =
-    '<div class="meta"><span>' + esc(ch.title) + '</span><span>' + kindLabel + '</span></div>'
-    + back
-    + (kp.summary ? '<div class="card" style="min-height:0;padding:14px;margin-bottom:12px"><div style="text-align:left">' + esc(kp.summary) + '</div></div>' : '')
-    + (points ? '<h2>要点</h2><ul class="kplist">' + points + '</ul>' : '')
-    + (words ? '<h2>生词 / 搭配</h2><div class="list">' + words + '</div>' : '')
-    + (quiz ? '<h2>自测</h2>' + quiz : '')
-    + '<div class="hint" style="margin-top:14px">只用了当前这一章的内容。换一章再点「知识点」会重新提取。</div>';
-
-  document.getElementById('kpBack').onclick = () => { RDR.kp = null; renderTextBook(); };
-  view.querySelectorAll('[data-w]').forEach((b) => {
+  document.getElementById('kpClose').onclick = closePoints;
+  o.onclick = (e) => { if (e.target === o) closePoints(); };
+  const retry = document.getElementById('kpRetry');
+  if (retry) retry.onclick = () => {
+    const k = kpKey();
+    delete kpStore[k];
+    if (RDR.kpCache) delete RDR.kpCache[k];
+    saveJSON(LS.kpoints, kpStore);
+    closePoints();
+    showPoints();
+  };
+  o.querySelectorAll('[data-w]').forEach((b) => {
     b.onclick = () => {
       const w = kp.words[Number(b.dataset.w)];
       addCardFromSelection(w.w);
@@ -2934,9 +2976,8 @@ function renderPoints(kp, ch) {
       b.disabled = true;
     };
   });
-  view.querySelectorAll('.kpq').forEach((box) => {
-    const qi = Number(box.dataset.q);
-    const q = kp.quiz[qi];
+  o.querySelectorAll('.kpq').forEach((box) => {
+    const q = kp.quiz[Number(box.dataset.q)];
     box.querySelectorAll('button[data-o]').forEach((btn) => {
       btn.onclick = () => {
         const oi = Number(btn.dataset.o);
@@ -2949,7 +2990,8 @@ function renderPoints(kp, ch) {
       };
     });
   });
-  view.scrollTop = 0;
+  const kb = o.querySelector('.kpBody');
+  if (kb) kb.scrollTop = 0;
 }
 
 // ── B：真分页（CSS 多栏 = 一屏一页）+ 字号/行距 ─────────────

@@ -127,6 +127,16 @@ input.t{width:100%;background:var(--card);border:1px solid var(--line);color:var
 #pageViewport .bookText p,.chTitle{margin-top:0}
 .kplist{margin:0 0 10px;padding-left:1.3em;font-size:14px;line-height:1.7}
 .kplist li{margin:0 0 6px}
+.kpsheet{position:fixed;inset:0;z-index:90;background:rgba(6,8,12,.62);
+  display:flex;align-items:flex-end;justify-content:center;padding:0}
+.kpPanel{width:100%;max-width:560px;max-height:88dvh;display:flex;flex-direction:column;
+  background:var(--bg);border:1px solid var(--line);border-radius:16px 16px 0 0;
+  padding:10px 14px calc(14px + var(--safe-b))}
+.kpHead{display:flex;align-items:center;gap:10px;padding:4px 0 8px;border-bottom:1px solid var(--line)}
+.kpHead span{flex:1;font-size:14px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.kpHead button{background:#20242d;border:1px solid var(--line);color:var(--text);
+  border-radius:9px;padding:6px 12px;font-size:13px}
+.kpBody{overflow-y:auto;overscroll-behavior:contain;padding-top:10px}
 .notice{margin:8px 0 10px;padding:10px 12px;border:1px solid #4a3a1a;background:#2a2113;
   border-radius:12px;font-size:13px;line-height:1.6;color:var(--warn)}
 #readerWrap canvas{display:block;width:100%;height:auto;border-radius:8px;background:#fff}

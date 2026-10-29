@@ -513,26 +513,38 @@ class CDP {
       RDR.kpCache = {};
       await showPoints();
       await new Promise(r => setTimeout(r, 300));
-      const out = { points: view.querySelectorAll('.kplist li').length,
-                    quiz: view.querySelectorAll('.kpq').length,
-                    words: view.querySelectorAll('.list .it').length };
+      const sheet = document.getElementById('kpOverlay');
+      const out = { points: sheet ? sheet.querySelectorAll('.kplist li').length : 0,
+                    quiz: sheet ? sheet.querySelectorAll('.kpq').length : 0,
+                    words: sheet ? sheet.querySelectorAll('.list .it').length : 0,
+                    readerAlive: !!document.getElementById('bookText') };
       const before = userCards.length;
-      view.querySelector('[data-w="0"]').click();
+      sheet.querySelector('[data-w="0"]').click();
       out.added = userCards.length - before;
-      const q = view.querySelector('.kpq');
+      const q = sheet.querySelector('.kpq');
       q.querySelectorAll('button[data-o]')[0].click();
       out.marked = q.querySelector('button[data-o="0"]').classList.contains('wrong');
-      document.getElementById('kpBack').click();
+      const chBefore = RDR.ch;
+      document.getElementById('kpClose').click();
       await new Promise(r => setTimeout(r, 300));
-      out.back = !!document.getElementById('bookText');
+      out.closed = !document.getElementById('kpOverlay');
+      out.back = !!document.getElementById('bookText') && RDR.ch === chBefore;
+      // 再点开应该命中缓存（不再调 AI）
+      let calls = 0;
+      askPoints = async () => { calls++; return { points: ['重算'] }; };
+      await showPoints();
+      await new Promise(r => setTimeout(r, 300));
+      out.fromCache = calls === 0 && !!document.getElementById('kpOverlay');
+      closePoints();
       state.tab = 'settings'; render();
       out.installBtn = !!document.getElementById('btnInstall');
       out.fullBtn = !!document.getElementById('btnFull');
       return out;
     `);
-    check('整章提知识点：要点/生词入库/自测判对错/返回正文',
-      kp.points === 2 && kp.quiz === 1 && kp.words === 1 && kp.added === 1
-      && kp.marked === true && kp.back === true, kp);
+    check('整章提知识点：浮层展示 + 生词入库 + 自测判对错',
+      kp.points === 2 && kp.quiz === 1 && kp.words === 1 && kp.added === 1 && kp.marked === true, kp);
+    check('知识点是浮层：关掉后阅读位置不变、再开命中缓存',
+      kp.readerAlive === true && kp.closed === true && kp.back === true && kp.fromCache === true, kp);
     check('设置页有「安装到主屏幕」「全屏」入口', kp.installBtn === true && kp.fullBtn === true, kp);
 
     // J. 找教材（搜索用桩，不打真网络）
@@ -729,7 +741,10 @@ class CDP {
       const textLen = t ? t.text.length : 0;
       await showPoints();
       await new Promise(r => setTimeout(r, 400));
-      return { imgState, textLen, points: view.querySelectorAll('.kplist li').length };
+      const sh = document.getElementById('kpOverlay');
+      const points = sh ? sh.querySelectorAll('.kplist li').length : 0;
+      closePoints();
+      return { imgState, textLen, points };
     `);
     check('图片能导入并给出识别/知识点入口',
       kp2.imgState.kind === 'image' && kp2.imgState.shown === true && kp2.imgState.tools >= 3, kp2);
@@ -764,8 +779,9 @@ class CDP {
       await visionFromImage();
       await new Promise(function (r) { setTimeout(r, 600); });
       window.fetch = orig;
-      return { sent: sent[0], points: view.querySelectorAll('.kplist li').length,
-               quiz: view.querySelectorAll('.kpq').length };
+      const sh = document.getElementById('kpOverlay');
+      return { sent: sent[0], points: sh ? sh.querySelectorAll('.kplist li').length : 0,
+               quiz: sh ? sh.querySelectorAll('.kpq').length : 0 };
     `);
     check('看图出题：按 OpenAI 兼容格式发图给视觉模型并渲染结果',
       viz.sent && viz.sent.types.join(',') === 'text,image_url' && viz.sent.isData === true
