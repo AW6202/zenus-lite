@@ -1,7 +1,7 @@
 // 学习机 Lite — 静态 PWA：内容来自 pack.json，进度存本地，AI 直连 OpenAI 兼容接口
 'use strict';
 
-const BUILD = '2026-10-29.3';
+const BUILD = '2026-10-29.4';
 
 const LS = {
   progress: 'zenus.progress.v1',
@@ -1187,6 +1187,15 @@ async function openEpubBook(f) {
 
 // 换书 / 关书：把上一本生成的图片 blob URL 释放掉，否则内存只涨不落
 function resetBook() {
+  // 注意：PDF 也必须在这里清掉。之前只清 book/kind，导致「关闭这份 PDF」按钮点了没反应
+  // （renderReader 看到 RDR.pdf 还在，又渲染回 PDF 视图）——2026-10-29 用户报的 bug G。
+  if (RDR.pdf && typeof RDR.pdf.destroy === 'function') {
+    try { RDR.pdf.destroy(); } catch { /* 已销毁 */ }
+  }
+  RDR.pdf = null;
+  RDR.page = 1;
+  RDR.total = 0;
+  RDR.rendering = false;
   (RDR.urls || []).forEach((u) => { try { URL.revokeObjectURL(u); } catch { /* 已释放 */ } });
   RDR.urls = [];
   RDR.assets = {};

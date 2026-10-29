@@ -421,6 +421,17 @@ class CDP {
                  canvas: (document.getElementById('pdfCanvas') || {}).width || 0 };
       `);
       check('PDF 仍能渲染（画布 + 文字层）', pdf.pages > 0 && pdf.canvas > 0 && pdf.spans > 0, pdf);
+
+      // 「关闭这份 PDF」必须真的回到选文件页（2026-10-29 回归：按钮点了没反应）
+      const closed = await probe('关闭 PDF', `
+        const btn = document.getElementById('closePdf');
+        if (!btn) return { btn: false };
+        btn.click();
+        await new Promise(r => setTimeout(r, 300));
+        return { pdf: !!RDR.pdf, kind: RDR.kind, picker: !!document.getElementById('pickPdf') };
+      `);
+      check('关闭 PDF 能回到选文件页',
+        closed.btn !== false && closed.pdf === false && closed.picker === true, closed);
     } else {
       console.log('SKIP  PDF 回归（要验就加 --pdf <某个真实PDF>）');
     }
