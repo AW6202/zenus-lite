@@ -1,7 +1,7 @@
 // 学习机 Lite — 静态 PWA：内容来自 pack.json，进度存本地，AI 直连 OpenAI 兼容接口
 'use strict';
 
-const BUILD = '2026-10-29.19';
+const BUILD = '2026-10-29.20';
 
 const LS = {
   progress: 'zenus.progress.v1',
@@ -25,6 +25,9 @@ const DEFAULT_SETTINGS = {
   syncDevice: '',
   ttsVoice: '',
   searchKey: '',
+  visionBase: 'https://api.siliconflow.cn/v1',
+  visionModel: 'Qwen/Qwen3-VL-8B-Instruct',
+  visionKey: '',
   readFont: 16,
   readLine: 1.8,
 };
@@ -446,6 +449,12 @@ function renderSettings() {
     <input class="t" id="s-model" value="${esc(settings.model)}" placeholder="deepseek-chat">
     <label class="f">API Key（只存在本机）</label>
     <input class="t" id="s-key" type="password" value="${esc(settings.key)}" placeholder="sk-...">
+    <label class="f">视觉模型 Base（用于「看图出题」，OpenAI 兼容即可）</label>
+    <input class="t" id="s-vbase" value="${esc(settings.visionBase || '')}" placeholder="https://api.siliconflow.cn/v1">
+    <label class="f">视觉模型名</label>
+    <input class="t" id="s-vmodel" value="${esc(settings.visionModel || '')}" placeholder="Qwen/Qwen3-VL-8B-Instruct">
+    <label class="f">视觉模型 Key（只存本机）</label>
+    <input class="t" id="s-vkey" type="password" value="${esc(settings.visionKey || '')}" placeholder="sk-...">
     <label class="f">搜索 API Key（博查 bochaai.com，用于「找教材」全网搜；只存本机）</label>
     <input class="t" id="s-bocha" type="password" value="${esc(settings.searchKey || '')}" placeholder="sk-...">
     <label class="f">每天新卡上限</label>
@@ -504,6 +513,9 @@ function renderSettings() {
     settings.model = $('#s-model').value.trim();
     settings.key = $('#s-key').value.trim();
     settings.searchKey = ($('#s-bocha') || {}).value ? $('#s-bocha').value.trim() : settings.searchKey;
+    if ($('#s-vbase')) settings.visionBase = $('#s-vbase').value.trim() || settings.visionBase;
+    if ($('#s-vmodel')) settings.visionModel = $('#s-vmodel').value.trim() || settings.visionModel;
+    if ($('#s-vkey')) settings.visionKey = $('#s-vkey').value.trim();
     settings.dailyNew = Math.max(0, Number($('#s-new').value) || 0);
     settings.ctxMsgs = Math.max(0, Math.min(40, Number($('#s-ctx').value) || 0));
     settings.ttsRate = Math.min(1.2, Math.max(0.5, Number($('#s-rate').value) || 0.9));
@@ -2205,6 +2217,7 @@ function renderReader() {
     + '<button id="spreadBtn" class="t-close">' + (RDR.spread ? '单页' : '双页') + '</button>'
     + '<button id="ocrBtn" class="t-close">识别文字</button>'
     + '<button id="kpBtn" class="t-close">知识点</button>'
+    + '<button id="vizBtn" class="t-close">看图出题</button>'
     + '<button id="toggleScroll" class="t-close">滚动</button>'
     + '<button id="closePdf" class="t-close">关闭</button>'
     + (RDR.textLines && RDR.textLines.length ? '<button id="showText" class="t-close">文字视图</button>' : '')
@@ -2228,6 +2241,8 @@ function renderReader() {
   if (sb) sb.onclick = toggleSpread;
   const kpb2 = document.getElementById('kpBtn');
   if (kpb2) kpb2.onclick = () => { hideTools(); showPoints(); };
+  const viz = document.getElementById('vizBtn');
+  if (viz) viz.onclick = () => { hideTools(); visionFromPdfPage(); };
   const dis = document.getElementById('dismissWarn');
   if (dis) dis.onclick = () => { const w = document.getElementById('pdfFontWarn'); if (w) w.remove(); };
   drawPage();
@@ -2604,6 +2619,113 @@ function importAsText(items, query, fullCount) {
   toast('导入 ' + items.length + ' 条：全文 ' + n + ' 条' + (n < items.length ? '，其余只有摘要' : ''));
 }
 
+// ── 视觉模型：真正"看懂图"（Qwen-VL / SiliconFlow，OpenAI 兼容接口）────
+// OCR 只认字；几何图形、函数图像、思维导图这种要靠视觉模型。
+
+const VISION_PROMPT = '这是一张学习材料的截图（可能是题目、教材页、图表或思维导图）。请：'
+  + '① 一句话说清它讲什么；'
+  + '② 提取要点——如果是几何/图表题，要说明图形与已知条件的关系，不要只抄文字；'
+  + '③ 语言材料列出生词和固定搭配，理科材料列出公式/定理；'
+  + '④ 出 3 道自测题（每题 4 个选项，给正确答案下标和解析）。'
+  + '只输出 JSON：{"summary":"","points":[""],"words":[{"w":"","cn":"","note":""}],'
+  + '"quiz":[{"q":"","options":["","","",""],"a":0,"why":""}]}';
+
+function visionReady() {
+  return !!(settings.visionKey && settings.visionBase && settings.visionModel);
+}
+
+// 从大模型返回里挖出 JSON（有些模型会包 ```json 或加前言）
+function pickJson(text) {
+  const t = String(text || '');
+  const fence = /```(?:json)?\s*([\s\S]*?)```/.exec(t);
+  const body = fence ? fence[1] : t;
+  try { return JSON.parse(body); } catch { /* 再试找花括号 */ }
+  const s = body.indexOf('{');
+  const e = body.lastIndexOf('}');
+  if (s >= 0 && e > s) {
+    try { return JSON.parse(body.slice(s, e + 1)); } catch { /* 放弃 */ }
+  }
+  throw new Error('模型没按 JSON 回');
+}
+
+async function askVision(dataUrl) {
+  const res = await fetch(settings.visionBase.replace(/\/$/, '') + '/chat/completions', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + settings.visionKey },
+    body: JSON.stringify({
+      model: settings.visionModel,
+      messages: [{
+        role: 'user',
+        content: [
+          { type: 'text', text: VISION_PROMPT },
+          { type: 'image_url', image_url: { url: dataUrl } },
+        ],
+      }],
+      temperature: 0.3,
+    }),
+  });
+  if (!res.ok) throw new Error('视觉模型 HTTP ' + res.status);
+  const j = await res.json();
+  const content = j && j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content;
+  return pickJson(content);
+}
+
+// 把 <img> 缩到合适大小转 dataURL（太大既慢又贵）
+function imageToDataUrl(img, maxW) {
+  const w0 = img.naturalWidth || img.width || 800;
+  const h0 = img.naturalHeight || img.height || 600;
+  const scale = Math.min(1, (maxW || 1400) / w0);
+  const c = document.createElement('canvas');
+  c.width = Math.round(w0 * scale);
+  c.height = Math.round(h0 * scale);
+  c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+  return c.toDataURL('image/jpeg', 0.85);
+}
+
+async function pdfPageDataUrl(n, maxW) {
+  const page = await RDR.pdf.getPage(n);
+  const base = page.getViewport({ scale: 1 });
+  const scale = Math.min(3, (maxW || 1400) / base.width);
+  const vp = page.getViewport({ scale: scale });
+  const c = document.createElement('canvas');
+  c.width = Math.floor(vp.width);
+  c.height = Math.floor(vp.height);
+  await page.render({ canvasContext: c.getContext('2d'), viewport: vp }).promise;
+  return c.toDataURL('image/jpeg', 0.85);
+}
+
+// 统一入口：dataUrl + 标题 → 走视觉模型 → 复用「知识点」面板渲染
+async function showVisionPoints(dataUrl, title) {
+  if (!visionReady()) {
+    toast('先在设置里填视觉模型的 Key');
+    state.tab = 'settings';
+    return render();
+  }
+  const ch = { title: title || '看图', text: '' };
+  renderPoints({ loading: true }, ch);
+  try {
+    const data = await askVision(dataUrl);
+    renderPoints(data, ch);
+  } catch (err) {
+    renderPoints({ error: err.message }, ch);
+  }
+}
+
+async function visionFromImage() {
+  const img = document.getElementById('imgView');
+  if (!img) return;
+  if (!img.complete) await new Promise((r) => { img.onload = r; });
+  const url = imageToDataUrl(img, 1400);
+  showVisionPoints(url, RDR.name || '看图');
+}
+
+async function visionFromPdfPage() {
+  if (!RDR.pdf) return;
+  toast('正在把这一页转成图片…');
+  const url = await pdfPageDataUrl(RDR.page, 1400);
+  showVisionPoints(url, RDR.name + ' · 第 ' + RDR.page + ' 页');
+}
+
 // ── 图片：直接看图 / OCR / 出题 ─────────────────────────
 async function openImageFile(f) {
   resetBook();
@@ -2654,10 +2776,12 @@ function renderImage() {
       : '<div class="hint" style="margin-top:10px">这是图片，没有文字层。点右侧「识别文字」做 OCR，之后就能取词、出知识点。</div>')
     + '<div class="floating' + (RDR.toolsVisible ? ' show' : '') + '" id="imgTools">'
     + '<button id="ocrBtn">识别文字</button>'
+    + '<button id="vizBtn">看图出题</button>'
     + '<button id="kpBtn" class="t-close">知识点</button>'
     + '<button id="closeImg" class="t-close">关闭</button></div>';
   document.getElementById('ocrBtn').onclick = () => { hideTools(); ocrImage(); };
   document.getElementById('kpBtn').onclick = () => { hideTools(); showPoints(); };
+  document.getElementById('vizBtn').onclick = () => { hideTools(); visionFromImage(); };
   document.getElementById('closeImg').onclick = () => { resetBook(); renderReader(); };
   bindFlipGestures(view, { prev: () => {}, next: () => {}, middle: toggleTools });
   flipHintOnce();
@@ -2939,6 +3063,7 @@ function renderTextBook() {
     + '<button id="spreadBtn">' + (RDR.spread ? '单页' : '双页') + '</button>'
     + '<div class="sep"></div>'
     + '<button id="kpBtn" class="t-close">知识点</button>'
+    + '<button id="vizBtn" class="t-close">看图出题</button>'
     + '<button id="togglePaged" class="t-close">' + (RDR.paged ? '滚动' : '分页') + '</button>'
     + '<button id="closeBook" class="t-close">关闭</button></div>';
   // 远程图挂了就把位置收起来，别留一个破图标
@@ -3257,6 +3382,7 @@ function renderPdfScroll() {
     + '<button id="spreadBtn" class="t-close">' + (RDR.spread ? '单页' : '双页') + '</button>'
     + '<button id="ocrBtn" class="t-close">识别文字</button>'
     + '<button id="kpBtn" class="t-close">知识点</button>'
+    + '<button id="vizBtn" class="t-close">看图出题</button>'
     + '<button id="toggleScroll" class="t-close">滚动</button>'
     + '<button id="closePdf" class="t-close">关闭</button>'
     + (RDR.textLines && RDR.textLines.length ? '<button id="showText" class="t-close">文字视图</button>' : '')
@@ -3291,6 +3417,8 @@ function renderPdfScroll() {
   if (tb2) tb2.onclick = () => showOutline();
   const kpb2 = document.getElementById('kpBtn');
   if (kpb2) kpb2.onclick = () => { hideTools(); showPoints(); };
+  const viz = document.getElementById('vizBtn');
+  if (viz) viz.onclick = () => { hideTools(); visionFromPdfPage(); };
   document.getElementById('closePdf').onclick = () => { saveReadPos(); resetBook(); renderReader(); };
   const ocrb = document.getElementById('ocrBtn');
   if (ocrb) ocrb.onclick = () => { hideTools(); ocrCurrentPage(); };

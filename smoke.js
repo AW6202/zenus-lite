@@ -736,6 +736,41 @@ class CDP {
     check('PDF（含文字层）能取到正文并生成知识点',
       kp2.textLen > 100 && kp2.points >= 1, kp2);
 
+    // Q. 视觉模型「看图出题」：请求结构 + 结果渲染（打桩，不花钱）
+    const viz = await probe('看图出题', `
+      state.tab = 'reader'; render();
+      const sent = [];
+      const BT = String.fromCharCode(96);
+      const stub = { summary: '几何题', points: ['垂直关系'], words: [],
+        quiz: [{ q: '角 A 多少度', options: ['45', '90', '180', '360'], a: 1, why: '垂直定义' }] };
+      const orig = window.fetch;
+      window.fetch = async function (url, opts) {
+        if (String(url).indexOf('chat/completions') >= 0 && opts && opts.body) {
+          const b = JSON.parse(opts.body);
+          const c = b.messages[0].content;
+          sent.push({ model: b.model, types: c.map(function (x) { return x.type; }),
+                      isData: (c[1] && c[1].image_url && c[1].image_url.url || '').indexOf('data:image/') === 0 });
+          const body = BT + BT + BT + 'json' + String.fromCharCode(10) + JSON.stringify(stub) + String.fromCharCode(10) + BT + BT + BT;
+          return { ok: true, json: async function () { return { choices: [{ message: { content: body } }] }; } };
+        }
+        return orig.apply(this, arguments);
+      };
+      settings.visionKey = 'stub';
+      settings.visionBase = 'https://api.siliconflow.cn/v1';
+      settings.visionModel = 'Qwen/Qwen3-VL-8B-Instruct';
+      const png = await (await fetch('icons/icon-192.png')).blob();
+      await openImageFile(new File([png], 'pic.png'));
+      await new Promise(function (r) { setTimeout(r, 400); });
+      await visionFromImage();
+      await new Promise(function (r) { setTimeout(r, 600); });
+      window.fetch = orig;
+      return { sent: sent[0], points: view.querySelectorAll('.kplist li').length,
+               quiz: view.querySelectorAll('.kpq').length };
+    `);
+    check('看图出题：按 OpenAI 兼容格式发图给视觉模型并渲染结果',
+      viz.sent && viz.sent.types.join(',') === 'text,image_url' && viz.sent.isData === true
+      && viz.points >= 1 && viz.quiz >= 1, viz);
+
     // H. 关书释放 blob URL
     const clean = await probe('关书释放', `
       const b = await (await fetch('${base}smoke.epub')).blob();
