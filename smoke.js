@@ -290,6 +290,23 @@ class CDP {
     check('EPUB 章内 <br> 换行保留', ch2.br === 1, ch2);
     check('EPUB 脚注上标保留', ch2.sup === 1, ch2);
 
+    // B2. 阅读进度：关掉再打开要回到上次的章
+    const pos = await probe('阅读进度', `
+      const b = await (await fetch('${base}smoke.epub')).blob();
+      const f1 = new File([b], 'smoke.epub');
+      await openEpubBook(f1);
+      await new Promise(r => setTimeout(r, 500));
+      gotoChapter(1);
+      await new Promise(r => setTimeout(r, 300));
+      const savedCh = readPositions[RDR.key] ? readPositions[RDR.key].ch : null;
+      document.getElementById('closeBook').click();
+      await new Promise(r => setTimeout(r, 300));
+      await openEpubBook(new File([b], 'smoke.epub'));
+      await new Promise(r => setTimeout(r, 600));
+      return { savedCh, reopened: RDR.ch };
+    `);
+    check('关掉再打开回到上次读的章', pos.savedCh === 1 && pos.reopened === 1, pos);
+
     // C. 选中弹框位置：中部选区在下方，底部选区翻到上方
     const bar = await probe('选中弹框', `
       const ps = [...document.querySelectorAll('.bookText p')].filter(p => p.textContent.trim().length > 3);

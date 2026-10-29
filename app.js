@@ -1,7 +1,7 @@
 // 学习机 Lite — 静态 PWA：内容来自 pack.json，进度存本地，AI 直连 OpenAI 兼容接口
 'use strict';
 
-const BUILD = '2026-10-29.5';
+const BUILD = '2026-10-29.6';
 
 const LS = {
   progress: 'zenus.progress.v1',
@@ -10,6 +10,7 @@ const LS = {
   chat: 'zenus.chat.v1',
   known: 'zenus.known.v1',
   userCards: 'zenus.usercards.v1',
+  readpos: 'zenus.readpos.v1',
 };
 
 const DEFAULT_SETTINGS = {
@@ -198,7 +199,9 @@ function renderHeader() {
 
 function render() {
   if (!state.pack) return;
-  document.querySelectorAll('.tabbar button').forEach((b) => {
+  view.addEventListener('scroll', onViewScroll, { passive: true });
+
+document.querySelectorAll('.tabbar button').forEach((b) => {
     b.classList.toggle('on', b.dataset.tab === state.tab);
   });
   if (state.tab === 'review') return renderReview();
@@ -1034,8 +1037,11 @@ async function openTextBook(f) {
     RDR.kind = 'text';
     RDR.book = { name: f.name, chapters: chunkText(txt, 6000) };
   }
+  RDR.key = docKey(f);
   RDR.ch = 0;
+  const ratio = applyReadPos();
   renderReader();
+  if (ratio) requestAnimationFrame(() => scrollToRatio(ratio));
 }
 
 // Markdown：按一级标题切章（没有 h1 退到 h1/h2，再没有就按长度切）；每章渲染成 HTML
@@ -1178,8 +1184,11 @@ async function openEpubBook(f) {
     RDR.kind = 'epub';
     RDR.pdf = null;
     RDR.book = { name: f.name, chapters: chapters };
+    RDR.key = docKey(f);
     RDR.ch = 0;
+    const ratio = applyReadPos();
     renderReader();
+    if (ratio) requestAnimationFrame(() => scrollToRatio(ratio));
   } catch (err) {
     view.innerHTML = '<div class="empty">打不开这个 EPUB<br><span class="sub">' + esc(err.message) + '</span></div>';
   }
@@ -1207,6 +1216,65 @@ function resetBook() {
   RDR.fontRisk = false;
   RDR.textLines = [];
   RDR.textMode = false;
+  RDR.key = null;
+}
+
+function scrollToRatio(ratio) {
+  const max = Math.max(0, view.scrollHeight - view.clientHeight);
+  view.scrollTop = Math.max(0, Math.min(1, ratio)) * max;
+}
+
+// 滚动就记位置（节流），顺手过滤掉「恢复位置时滚动自己触发的那一次」
+let posTimer = null;
+function onViewScroll() {
+  if (RDR.restoring || !RDR.key || !(RDR.book || RDR.pdf)) return;
+  clearTimeout(posTimer);
+  posTimer = setTimeout(saveReadPos, 700);
+}
+
+// ── 阅读进度：同一个文件再打开，回到上次读到的地方 ────────────
+let readPositions = loadJSON(LS.readpos, {});
+
+function docKey(f) { return f.name + '|' + (f.size || 0); }
+
+function saveReadPos() {
+  if (!RDR.key || !(RDR.pdf || RDR.book)) return;
+  const r = { at: Date.now() };
+  if (RDR.pdf) { r.page = RDR.page; r.scale = RDR.scale; }
+  if (RDR.book) {
+    r.ch = RDR.ch;
+    const max = Math.max(1, view.scrollHeight - view.clientHeight);
+    r.ratio = Math.max(0, Math.min(1, view.scrollTop / max));
+  }
+  readPositions[RDR.key] = r;
+  const keys = Object.keys(readPositions);
+  if (keys.length > 50) {                       // 只留最近 50 个文件
+    keys.sort((a, b) => (readPositions[a].at || 0) - (readPositions[b].at || 0));
+    for (const k of keys.slice(0, keys.length - 50)) delete readPositions[k];
+  }
+  saveJSON(LS.readpos, readPositions);
+}
+
+// 恢复位置，返回「之前滚到的比例」（文字类才需要）
+function applyReadPos() {
+  const r = RDR.key ? readPositions[RDR.key] : null;
+  if (!r) return 0;
+  RDR.restoring = true;
+  if (RDR.pdf) {
+    if (r.scale) RDR.scale = r.scale;
+    if (r.page && r.page > 1) RDR.page = Math.min(r.page, Math.max(1, RDR.total));
+    if (RDR.page > 1) toast('回到上次读的第 ' + RDR.page + ' 页');
+    setTimeout(() => { RDR.restoring = false; }, 800);
+    return 0;
+  }
+  if (RDR.book) {
+    RDR.ch = Math.max(0, Math.min(r.ch || 0, RDR.book.chapters.length - 1));
+    setTimeout(() => { RDR.restoring = false; }, 800);
+    if (RDR.ch > 0) toast('回到上次读的第 ' + (RDR.ch + 1) + ' 节');
+    return r.ratio || 0;
+  }
+  RDR.restoring = false;
+  return 0;
 }
 
 async function ensureJSZip() {
@@ -1363,8 +1431,11 @@ async function openDocxBook(f) {
     RDR.kind = 'docx';
     RDR.pdf = null;
     RDR.book = { name: f.name, chapters: chapters };
+    RDR.key = docKey(f);
     RDR.ch = 0;
+    const ratio = applyReadPos();
     renderReader();
+    if (ratio) requestAnimationFrame(() => scrollToRatio(ratio));
   } catch (err) {
     view.innerHTML = '<div class="empty">打不开这个 DOCX<br><span class="sub">' + esc(err.message) + '</span></div>';
   }
@@ -1881,6 +1952,8 @@ async function openPdfFile(f) {
     RDR.page = 1;
     RDR.name = f.name;
     RDR.scale = 1;
+    RDR.key = docKey(f);
+    applyReadPos();
     renderReader();
   } catch (err) {
     view.innerHTML = '<div class="empty">打不开这个 PDF<br><span class="sub">' + esc(err.message) + '</span></div>';
@@ -1901,7 +1974,7 @@ function renderPdfText() {
     + '<div class="bookText plain" id="pdfTextBox">' + lines.map((l) => '<p>' + esc(l) + '</p>').join('') + '</div>'
     + '<div class="row" style="margin-top:4px"><button class="btn ghost" id="closePdf">关闭这份 PDF</button></div>';
   document.getElementById('showCanvas').onclick = () => { RDR.textMode = false; renderReader(); };
-  document.getElementById('closePdf').onclick = () => { resetBook(); renderReader(); };
+  document.getElementById('closePdf').onclick = () => { saveReadPos(); resetBook(); renderReader(); };
   const sys = document.getElementById('openSys');
   if (sys) sys.onclick = () => openWithSystemReader();
   view.scrollTop = 0;
@@ -1949,9 +2022,9 @@ function renderReader() {
   if (st) st.onclick = () => { RDR.textMode = true; renderReader(); };
   document.getElementById('prevPage').onclick = () => gotoPage(RDR.page - 1);
   document.getElementById('nextPage').onclick = () => gotoPage(RDR.page + 1);
-  document.getElementById('zoomIn').onclick = () => { RDR.scale = Math.min(3, RDR.scale * 1.2); drawPage(); };
-  document.getElementById('zoomOut').onclick = () => { RDR.scale = Math.max(0.5, RDR.scale / 1.2); drawPage(); };
-  document.getElementById('closePdf').onclick = () => { resetBook(); renderReader(); };
+  document.getElementById('zoomIn').onclick = () => { RDR.scale = Math.min(3, RDR.scale * 1.2); drawPage(); saveReadPos(); };
+  document.getElementById('zoomOut').onclick = () => { RDR.scale = Math.max(0.5, RDR.scale / 1.2); drawPage(); saveReadPos(); };
+  document.getElementById('closePdf').onclick = () => { saveReadPos(); resetBook(); renderReader(); };
   const sysBtn = document.getElementById('openSys');
   if (sysBtn) sysBtn.onclick = openWithSystemReader;
   const dis = document.getElementById('dismissWarn');
@@ -1983,7 +2056,7 @@ function renderTextBook() {
   view.querySelectorAll('#bookText img').forEach((img) => img.addEventListener('error', () => img.remove()));
   document.getElementById('prevCh').onclick = () => gotoChapter(RDR.ch - 1);
   document.getElementById('nextCh').onclick = () => gotoChapter(RDR.ch + 1);
-  document.getElementById('closeBook').onclick = () => { resetBook(); renderReader(); };
+  document.getElementById('closeBook').onclick = () => { saveReadPos(); resetBook(); renderReader(); };
   view.scrollTop = 0;
 }
 
@@ -1992,6 +2065,7 @@ function gotoChapter(n) {
   if (!b) return;
   RDR.ch = Math.max(0, Math.min(b.chapters.length - 1, n));
   renderTextBook();
+  saveReadPos();
 }
 
 function gotoPage(n) {
@@ -2000,6 +2074,7 @@ function gotoPage(n) {
   if (p === RDR.page) return;
   RDR.page = p;
   drawPage();
+  saveReadPos();
 }
 
 async function drawPage() {
@@ -2166,6 +2241,8 @@ function askFromSelection(t) {
 })();
 
 // ── 启动 ──────────────────────────────────────────────
+view.addEventListener('scroll', onViewScroll, { passive: true });
+
 document.querySelectorAll('.tabbar button').forEach((b) => {
   b.onclick = () => { state.tab = b.dataset.tab; render(); };
 });
