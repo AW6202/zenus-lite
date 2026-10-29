@@ -11,19 +11,29 @@
         <activity
             android:name=".LauncherActivity"
             android:exported="true"
-            android:label="@string/app_name">
+            android:label="@string/app_name"
+            android:launchMode="singleTask">
 
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
-            <!-- 让系统把 aw6202.github.io/zenus-lite 的链接交给本应用（微信「用其他应用打开」靠它） -->
-            <intent-filter android:autoVerify="true">
+            <!-- 能打开任意网页（微信「用其他应用打开」靠这个进入候选列表）
+                 不限定 host：否则只能匹配 aw6202.github.io 的链接 -->
+            <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="https" android:host="aw6202.github.io" android:pathPrefix="/zenus-lite" />
+                <data android:scheme="https" />
+                <data android:scheme="http" />
+            </intent-filter>
+
+            <!-- 系统分享面板分享纯文本/链接过来 -->
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
             </intent-filter>
 
             <meta-data

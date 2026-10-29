@@ -1,7 +1,7 @@
 // 学习机 Lite — 静态 PWA：内容来自 pack.json，进度存本地，AI 直连 OpenAI 兼容接口
 'use strict';
 
-const BUILD = '2026-10-29.31';
+const BUILD = '2026-10-29.32';
 
 const LS = {
   progress: 'zenus.progress.v1',
@@ -602,7 +602,16 @@ function renderSettings() {
   const cu = $('#checkUpdate');
   if (cu) cu.onclick = async () => {
     try {
-      const shared = checkShared();
+      // APK（TWA）把「用其他应用打开 / 分享」的链接转成 ?import=xxx 传进来
+  let incoming = '';
+  try { incoming = new URLSearchParams(location.search).get('import') || ''; } catch { incoming = ''; }
+  if (incoming) {
+    history.replaceState(null, '', location.pathname);   // 用完清掉，刷新不会重复导入
+    state.tab = 'reader';
+    render();
+    setTimeout(() => importFromText(incoming), 300);
+  }
+  const shared = checkShared();
   if (shared) {
     state.tab = 'reader';
     render();
