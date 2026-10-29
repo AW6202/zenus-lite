@@ -556,6 +556,7 @@ class CDP {
         { name: '材料甲', url: 'https://a.example', snippet: '片段一', summary: '摘要一' },
         { name: '材料乙', url: 'https://b.example', snippet: '片段二', summary: '摘要二' },
       ]);
+      FIND.src = 'bocha'; FIND.items = []; FIND.note = '';
       renderFind();
       const links = view.querySelectorAll('a[target=_blank]').length;
       document.getElementById('findQ').value = '测试查询';
@@ -603,6 +604,7 @@ class CDP {
 
     // L. 抓正文：开了 CORS 的站能拿到全文，没开的老实降级（不打网络就过了）
     const ft = await probe('抓正文', `
+      fetchFullText = window.__origFetchFullText || fetchFullText;   // 前面用例可能打过桩
       const t0 = performance.now();
       const got = await fetchFullText('https://raw.githubusercontent.com/mozilla/pdf.js/master/README.md');
       return { via: got && got.via, chars: got ? got.text.length : 0,
@@ -634,6 +636,7 @@ class CDP {
       const md = '文字' + String.fromCharCode(10, 10) + '![](https://cdn.example.com/map2.png)';
       const out = mdToHtml(md);
       settings.searchKey = 'stub'; settings.key = '';
+      FIND.src = 'bocha';
       FIND.items = [
         { name: '淘豆网', url: 'https://www.taodocs.com/p-1.html', summary: 'x' },
         { name: '博客', url: 'https://blog.example.com/a', summary: 'y' },
@@ -788,6 +791,39 @@ class CDP {
     check('看图出题：按 OpenAI 兼容格式发图给视觉模型并渲染结果',
       viz.sent && viz.sent.types.join(',') === 'text,image_url' && viz.sent.isData === true
       && viz.points >= 1 && viz.quiz >= 1, viz);
+
+    // R. 开放书源：Standard Ebooks 搜索 + 维基文库取正文导入（都打桩，不依赖外网）
+    const srcs = await probe('开放书源', `
+      state.tab = 'reader'; render();
+      searchStandardEbooks = async () => ([
+        { name: 'Emma', author: 'Jane Austen', url: 'https://standardebooks.org/ebooks/jane-austen/emma', kind: 'epub' },
+      ]);
+      FIND.src = 'se'; FIND.items = []; FIND.note = '';
+      renderFind();
+      const tabs = document.querySelectorAll('[data-src]').length;
+      document.getElementById('findQ').value = 'austen';
+      document.getElementById('findGo').click();
+      await new Promise(r => setTimeout(r, 600));
+      const items = document.querySelectorAll('[data-get]').length;
+      const note = FIND.note;
+      searchWikisource = async () => ([{ name: '三字经', url: 'https://zh.wikisource.org/wiki/三字经' }]);
+      wikisourceText = async () => '人之初性本善。'.repeat(120);
+      FIND.src = 'wikisource'; FIND.items = []; FIND.note = '';
+      renderFind();
+      document.getElementById('findQ').value = '三字经';
+      document.getElementById('findGo').click();
+      await new Promise(r => setTimeout(r, 600));
+      const wxBtn = document.querySelector('[data-get="0"]');
+      if (wxBtn) wxBtn.click();
+      await new Promise(r => setTimeout(r, 900));
+      return { tabs, items, note, wxKind: RDR.kind,
+               chapters: RDR.book ? RDR.book.chapters.length : 0,
+               textLen: RDR.book ? RDR.book.chapters[0].text.length : 0 };
+    `);
+    check('开放书源面板：三条通道 + Standard Ebooks 能搜到书',
+      srcs.tabs === 3 && srcs.items === 1 && /打开书页/.test(srcs.note || ''), srcs);
+    check('维基文库：取正文后导入成可读材料',
+      srcs.wxKind === 'md' && srcs.chapters >= 1 && srcs.textLen > 100, srcs);
 
     // H. 关书释放 blob URL
     const clean = await probe('关书释放', `

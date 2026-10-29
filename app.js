@@ -1,7 +1,7 @@
 // 学习机 Lite — 静态 PWA：内容来自 pack.json，进度存本地，AI 直连 OpenAI 兼容接口
 'use strict';
 
-const BUILD = '2026-10-29.22';
+const BUILD = '2026-10-29.23';
 
 const LS = {
   progress: 'zenus.progress.v1',
@@ -2452,6 +2452,60 @@ async function fetchFullText(url) {
   return null;
 }
 
+// ── 开放书源：直接下载整本书（EPUB/TXT），而不是抓网页摘要 ──────
+// 现实：中文教材/教辅的正文大多在文档站（付费墙+反爬），抓不到；
+// 能拿到的是「开放书源」里现成的电子书文件。下载下来我们用解析器读，质量最高。
+
+const FIND_SRC = { se: 'se', wikisource: 'wikisource', bocha: 'bocha' };
+
+// ① Standard Ebooks：英文公版，CORS 开放，能直接下载 EPUB
+async function searchStandardEbooks(q) {
+  const html = await (await fetch('https://standardebooks.org/ebooks?query=' + encodeURIComponent(q))).text();
+  const doc = new DOMParser().parseFromString(html, 'text/html');
+  const seen = new Set();
+  const out = [];
+  doc.querySelectorAll('a[href^="/ebooks/"]').forEach((a) => {
+    const href = a.getAttribute('href');
+    const m = /^\/ebooks\/([a-z0-9-]+)\/([a-z0-9-]+)$/.exec(href);
+    if (!m || seen.has(href)) return;
+    seen.add(href);
+    const pretty = (slug) => slug.split('-').map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+    out.push({
+      name: pretty(m[2]),
+      author: pretty(m[1]),
+      url: 'https://standardebooks.org' + href,
+      kind: 'epub',
+    });
+  });
+  return out.slice(0, 12);
+}
+
+
+// ② 维基文库：中文公版（需能访问维基）。两条 API 都带 origin=* 显式允许跨域
+async function searchWikisource(q) {
+  const api = 'https://zh.wikisource.org/w/api.php?action=query&list=search&srlimit=10&format=json&origin=*'
+    + '&srsearch=' + encodeURIComponent(q);
+  const j = await (await fetch(api)).json();
+  const hits = (j.query && j.query.search) || [];
+  return hits.map((h) => ({ name: h.title, url: 'https://zh.wikisource.org/wiki/' + encodeURIComponent(h.title), kind: 'text' }));
+}
+
+async function wikisourceText(title) {
+  const api = 'https://zh.wikisource.org/w/api.php?action=parse&prop=text&format=json&origin=*&page='
+    + encodeURIComponent(title);
+  const j = await (await fetch(api)).json();
+  if (!j.parse || !j.parse.text) throw new Error('取不到条目正文');
+  const text = htmlToReadableText(j.parse.text['*'], 'https://zh.wikisource.org/');
+  if (text.length < 200) throw new Error('正文太短，可能只是目录页');
+  return text;
+}
+
+// 打开下载好的 EPUB 直接进阅读器
+async function importEbookFile(file) {
+  hideTools();
+  await openEpubBook(file);
+}
+
 // ── G：找网络教材 ────────────────────────────────────────
 // 两条通道：
 //   ① 开放书源白名单（公有领域/免费公开）→ 直接给搜索链接，用系统浏览器打开
@@ -2468,7 +2522,7 @@ const OPEN_SOURCES = [
   { name: 'GitHub 开源教材', url: 'https://github.com/search?q={q}&type=repositories' },
 ];
 
-const FIND = { query: '', items: [], busy: false, note: '', judged: false };
+const FIND = { query: '', items: [], busy: false, note: '', judged: false, src: 'se' };
 
 // 这些站的正文是 JS 动态加载的图片切片 + 付费墙（道客巴巴/豆丁/淘豆/Book118/百度文库…），
 // 浏览器端抓不到，硬抓也涉及侵权 —— 在列表里直接标出来，别让用户白勾。
@@ -2532,6 +2586,13 @@ function renderFind() {
   }).join('');
 
   const items = FIND.items.map((it, i) => {
+    if (FIND.src === 'se' || FIND.src === 'wikisource') {
+      return '<div class="it"><div style="min-width:0"><b>' + esc(it.name) + '</b>'
+        + (it.author ? ' <small class="sub">' + esc(it.author) + '</small>' : '')
+        + '<div class="sub" style="margin-top:4px">' + esc(it.url.replace(/^https?:\/\//, '').slice(0, 56)) + '</div></div>'
+        + '<button class="btn primary" data-get="' + i + '" style="width:auto;padding:8px 12px;font-size:13px;white-space:nowrap">'
+        + (FIND.src === 'se' ? '打开书页' : '取正文并导入') + '</button></div>';
+    }
     const docSite = DOC_SITES.test(it.url || '');
     if (docSite) it.usable = false;
     const label = docSite ? '🚫 文档站，抓不到正文'
@@ -2546,42 +2607,97 @@ function renderFind() {
       + '</span></label></div>';
   }).join('');
 
+  const tabBtn = (id, label) => '<button class="btn ' + (FIND.src === id ? 'primary' : 'ghost')
+    + '" data-src="' + id + '" style="flex:1;padding:9px 6px;font-size:13px">' + label + '</button>';
+  const srcHint = FIND.src === 'se' ? '英文公版书：这里只能搜+打开书页（站点禁止自动下载），下载后回「选择文件」导入'
+    : FIND.src === 'wikisource' ? '中文公版（古籍/典籍），直接取正文导入'
+    : '全网搜（博查）：多数站点抓不到正文，只作发现用';
   view.innerHTML =
-    '<div class="meta"><span>找教材</span><span>' + (settings.searchKey ? '博查已接' : '未填搜索 key') + '</span></div>'
-    + '<div class="row" style="margin:6px 0"><input class="t" id="findQ" placeholder="想学什么？例：英语 A2 分级阅读短文 / 六年级分数应用题" value="' + esc(q) + '">'
+    '<div class="meta"><span>找教材</span><span>' + (FIND.src === 'bocha'
+      ? (settings.searchKey ? '博查已接' : '未填搜索 key') : '开放书源') + '</span></div>'
+    + '<div class="row" style="margin:6px 0">' + tabBtn('se', 'Standard Ebooks')
+    + tabBtn('wikisource', '维基文库') + tabBtn('bocha', '全网搜') + '</div>'
+    + '<div class="hint">' + srcHint + '</div>'
+    + (FIND.src === 'wikisource'
+      ? '<div class="hint">中文教材/教辅的正版免费源是「国家中小学智慧教育平台」：在里面下载 PDF 后回「选择文件」导入（它需要登录，我这边不抓）。'
+        + '<div class="row" style="margin:6px 0"><button class="btn ghost" id="eduOpen">打开国家中小学智慧教育平台</button></div></div>'
+      : '')
+    + '<div class="row" style="margin:6px 0"><input class="t" id="findQ" placeholder="想找什么？英文书名/作者，或中文典籍名" value="' + esc(q) + '">'
     + '<button class="btn primary" id="findGo" style="width:96px">搜索</button></div>'
     + (FIND.note ? '<div class="hint">' + esc(FIND.note) + '</div>' : '')
     + (FIND.busy ? '<div class="empty"><span class="spin"></span> 正在搜…</div>' : '')
     + (items ? '<h2>搜索结果</h2><div class="list">' + items + '</div>'
-      + '<div class="row" style="margin-top:10px"><button class="btn primary" id="findImport">把勾选的当短文导入</button></div>'
-      + '<div class="hint">浏览器读不到别的网站正文（跨域限制），导入的是搜索给的摘要文字；想读全文点「原网页」。</div>' : '')
+      + (FIND.src === 'bocha'
+        ? '<div class="row" style="margin-top:10px"><button class="btn primary" id="findImport">把勾选的当短文导入</button></div>'
+          + '<div class="hint">能抓到全文的才当教材；抓不到的只留链接。</div>'
+        : '') : '')
     + '<h2>开放书源（公有领域 / 免费公开）</h2><div class="list">' + srcLinks + '</div>'
     + '<div class="row" style="margin-top:12px"><button class="btn ghost" id="findBack">← 回阅读</button></div>';
 
   document.getElementById('findBack').onclick = () => renderReader();
+  const eduBtn = document.getElementById('eduOpen');
+  if (eduBtn) eduBtn.onclick = () => window.open('https://basic.smartedu.cn/tchMaterial', '_blank', 'noopener');
+  view.querySelectorAll('[data-src]').forEach((b) => {
+    b.onclick = () => { FIND.src = b.dataset.src; FIND.items = []; FIND.note = ''; renderFind(); };
+  });
   document.getElementById('findGo').onclick = async () => {
     const query = (document.getElementById('findQ').value || '').trim();
-    if (!query) return toast('先写想学什么');
+    if (!query) return toast('先写想搜什么');
     FIND.query = query;
     FIND.items = [];
     FIND.note = '';
-    if (!settings.searchKey) {
-      FIND.note = '没填博查 key，只能用下面的开放书源。要全网搜就去设置页填 key。';
+    if (FIND.src === 'bocha' && !settings.searchKey) {
+      FIND.note = '全网搜要先在设置里填博查 key；不然就用前两个开放书源。';
       return renderFind();
     }
     FIND.busy = true; renderFind();
     try {
-      FIND.items = await bochaSearch(query);
-      FIND.note = '找到 ' + FIND.items.length + ' 条，正在让 AI 判断哪些能用…';
-      renderFind();
-      FIND.items = await judgeItems(FIND.items);
-      FIND.note = '判断完成。勾选要的，点下面导入。';
+      if (FIND.src === 'se') {
+        FIND.items = await searchStandardEbooks(query);
+        FIND.note = FIND.items.length ? '找到 ' + FIND.items.length + ' 本，点「打开书页」→ 在浏览器里下载 EPUB → 回来「选择文件」导入'
+          : '没搜到，换个英文关键词试试';
+      } else if (FIND.src === 'wikisource') {
+        FIND.items = await searchWikisource(query);
+        FIND.note = FIND.items.length ? '找到 ' + FIND.items.length + ' 条，点「取正文并导入」' : '没搜到（维基需要能访问 zh.wikisource.org）';
+      } else {
+        FIND.items = await bochaSearch(query);
+        FIND.note = '找到 ' + FIND.items.length + ' 条，正在让 AI 判断哪些能用…';
+        renderFind();
+        FIND.items = await judgeItems(FIND.items);
+        FIND.note = '判断完成。勾选要的，点下面导入（能抓到全文才当教材）。';
+      }
     } catch (err) {
       FIND.note = '搜索失败：' + err.message;
     }
     FIND.busy = false;
     renderFind();
   };
+  view.querySelectorAll('[data-get]').forEach((b) => {
+    b.onclick = async () => {
+      const it = FIND.items[Number(b.dataset.get)];
+      if (!it) return;
+      b.disabled = true;
+      b.textContent = '处理中…';
+      try {
+        if (FIND.src === 'se') {
+          // 站点明说「自动下载会封 IP 24 小时」→ 不代下载，打开书页让你自己点
+          window.open(it.url, '_blank', 'noopener');
+          b.disabled = false;
+          b.textContent = '打开书页';
+          FIND.note = '已用浏览器打开书页：在那儿点 EPUB 下载，下完回这里「选择文件」导入即可。';
+          renderFind();
+        } else {
+          const text = await wikisourceText(it.name);
+          importAsText([{ name: it.name, url: it.url, full: text, via: '维基文库 API' }], it.name, 1);
+        }
+      } catch (err) {
+        b.disabled = false;
+        b.textContent = FIND.src === 'se' ? '下载并导入' : '取正文并导入';
+        FIND.note = '失败：' + err.message + (FIND.src === 'se' ? '（可能需要能访问 standardebooks.org）' : '（可能需要能访问 zh.wikisource.org）');
+        renderFind();
+      }
+    };
+  });
   const imp = document.getElementById('findImport');
   if (imp) imp.onclick = async () => {
     const picks = [...view.querySelectorAll('[data-pick]')].filter((c) => c.checked)
