@@ -145,10 +145,11 @@ function makeOutlinePdf() {
     '<< /Type /Pages /Kids [3 0 R 4 0 R] /Count 2 >>',
     page('/Contents 10 0 R'),
     page('/Contents 11 0 R'),
-    '<< /Type /Outlines /First 6 0 R /Last 7 0 R /Count 2 >>',
+    '<< /Type /Outlines /First 6 0 R /Last 8 0 R /Count 3 >>',
     '<< /Title (Chapter One) /Parent 5 0 R /Next 7 0 R /Dest [3 0 R /Fit] >>',
-    '<< /Title (Chapter Two) /Parent 5 0 R /Prev 6 0 R /Dest [4 0 R /Fit] >>',
-    '<< /Font /F1 9 0 R >>',
+    '<< /Title (Chapter Two) /Parent 5 0 R /Prev 6 0 R /Next 8 0 R /Dest [4 0 R /Fit] >>',
+    '<< /Title (Chapter Two again) /Parent 5 0 R /Prev 7 0 R /Dest [1 /Fit] >>',
+    '<< /Font /F1 10 0 R >>',
     '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
     '<< /Length ' + content1.length + ' >>' + NL + 'stream' + NL + content1 + NL + 'endstream',
     '<< /Length ' + content2.length + ' >>' + NL + 'stream' + NL + content2 + NL + 'endstream',
@@ -671,8 +672,9 @@ class CDP {
       return { items: list.length, list, jumped, canvases, parsed: parsed.length,
                parsedFirst: parsed[0] && parsed[0].title, hasOcrDraft: typeof ocrOutlineDraft === 'function' };
     `);
-    check('PDF 书签能读成目录并点击跳页',
-      toc.items === 2 && toc.jumped === 2 && toc.list[1].indexOf('p.2') >= 0, toc);
+    check('PDF 书签能读成目录并点击跳页（含「直接给页号」的书签）',
+      toc.items === 3 && toc.jumped === 2 && toc.list[1].indexOf('p.2') >= 0
+      && toc.list[2].indexOf('p.2') >= 0, toc);
     check('双页模式并排渲染两页', toc.canvases === 2, toc);
     check('扫描版目录：OCR 文本能抽成目录条目',
       toc.parsed === 3 && toc.hasOcrDraft === true, toc);

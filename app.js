@@ -1,7 +1,7 @@
 // 学习机 Lite — 静态 PWA：内容来自 pack.json，进度存本地，AI 直连 OpenAI 兼容接口
 'use strict';
 
-const BUILD = '2026-10-29.21';
+const BUILD = '2026-10-29.22';
 
 const LS = {
   progress: 'zenus.progress.v1',
@@ -3139,6 +3139,8 @@ function gotoChapter(n, at) {
   if (!b) return;
   RDR.ch = Math.max(0, Math.min(b.chapters.length - 1, n));
   RDR.pageIdx = 0;
+  // 打开的"恢复到第几页"比例不能再套到新章节上，否则跳章会跳到该章中间
+  RDR.pendingRatio = null;
   renderTextBook();
   if (RDR.paged && at === 'last') {
     RDR.pageIdx = Math.max(0, (RDR.pages || 1) - 1);
@@ -3164,9 +3166,11 @@ function gotoPage(n) {
 async function outlinePageNo(dest) {
   try {
     let d = dest;
-    if (typeof dest === 'string') d = await RDR.pdf.getDestination(dest);
+    if (typeof d === 'string') d = await RDR.pdf.getDestination(d);   // 命名目的
     if (!Array.isArray(d) || !d.length) return null;
-    const idx = await RDR.pdf.getPageIndex(d[0]);
+    const ref = d[0];
+    if (typeof ref === 'number') return Math.max(1, Math.floor(ref) + 1);  // 有些文件直接给 0 基页号
+    const idx = await RDR.pdf.getPageIndex(ref);
     return idx + 1;
   } catch { return null; }
 }
@@ -3205,7 +3209,7 @@ async function showOutline() {
     items.forEach((it, i) => { if (it.page && it.page <= cur) active = i; });
     html += '<div class="list">' + items.map((it, i) =>
       '<button class="tocItem' + (i === active ? ' on' : '') + '" data-i="' + i + '" style="padding-left:' + (12 + it.depth * 14) + 'px">'
-      + '<span>' + esc(it.title) + '</span><small>' + (it.page ? 'p.' + it.page : '') + '</small></button>').join('') + '</div>';
+      + '<span>' + esc(it.title) + '</span><small>' + (it.page ? 'p.' + it.page : '无页码') + '</small></button>').join('') + '</div>';
   } else {
     html += '<div class="hint">这份 PDF 没有书签（常见于扫描件）。可以用「跳到第…页」，或者用「OCR 生成目录」：'
       + '把目录页 OCR 出来，自动整理成可点的目录草案。</div>';
@@ -3222,6 +3226,7 @@ async function showOutline() {
     b.onclick = () => {
       const it = items[Number(b.dataset.i)];
       if (it.page) goToPageEverywhere(it.page);
+      else toast('这条书签没带页码（文件本身没写），用「跳到第…页」吧');
     };
   });
   view.scrollTop = 0;
@@ -3229,8 +3234,13 @@ async function showOutline() {
 
 // 跳出目录页后回到阅读并定位
 function goToPageEverywhere(n) {
+  if (RDR.textMode) {
+    toast('现在是「文字视图」，不能按页跳；先点「看原图」');
+    return;
+  }
   const p = Math.max(1, Math.min(RDR.total || 1, n));
   RDR.page = p;
+  toast('跳到第 ' + p + ' 页');
   if (RDR.pdfScroll) {
     renderReader();
     setTimeout(() => scrollToPdfPage(p), 120);
@@ -3360,7 +3370,12 @@ function showBookToc() {
     if (n && n >= 1) { RDR.pageIdx = 0; gotoChapter(n - 1, 'first'); }
   };
   view.querySelectorAll('.tocItem').forEach((btn) => {
-    btn.onclick = () => { RDR.pageIdx = 0; gotoChapter(Number(btn.dataset.i), 'first'); };
+    btn.onclick = () => {
+      const i = Number(btn.dataset.i);
+      RDR.pageIdx = 0;
+      gotoChapter(i, 'first');
+      toast('跳到第 ' + (i + 1) + ' 节');
+    };
   });
   view.scrollTop = 0;
 }
