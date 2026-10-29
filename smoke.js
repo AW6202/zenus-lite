@@ -43,7 +43,7 @@ function serve() {
 }
 
 // ── 测试用书：一本书要把「标题/段落/强调/列表/引用/图/表/脚注/换行」全放进去 ──
-async function makeFixtures(pdfPath) {
+async function makeFixtures(pdfPath, scanPath) {
   const JSZip = require(path.join(ROOT, 'vendor', 'jszip.min.js'));
   fs.mkdirSync(TMP, { recursive: true });
   const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
@@ -129,6 +129,7 @@ ${filler}
 
   fs.writeFileSync(path.join(TMP, 'smoke-nofont.pdf'), makeNoFontPdf());
   if (pdfPath) fs.copyFileSync(pdfPath, path.join(TMP, 'smoke.pdf'));
+  if (scanPath) fs.copyFileSync(scanPath, path.join(TMP, 'smoke-scan.pdf'));
 }
 
 // 手搓最小 PDF：Type0 + CIDFontType2 + UniGB-UCS2-H，且不带 /FontFile（= 中文必然画不出来）
@@ -238,7 +239,8 @@ class CDP {
     process.exit(2);
   }
   const pdfArg = process.argv.includes('--pdf') ? process.argv[process.argv.indexOf('--pdf') + 1] : null;
-  await makeFixtures(pdfArg);
+  const scanArg = process.argv.includes('--pdf-scan') ? process.argv[process.argv.indexOf('--pdf-scan') + 1] : null;
+  await makeFixtures(pdfArg, scanArg);
   const srv = await serve();
   const base = `http://127.0.0.1:${PORT}/.scratch/smoke/`;
   const prof = path.join(TMP, 'prof');
@@ -519,6 +521,33 @@ class CDP {
     check('找教材：开放书源直链 + 搜索结果勾选导入成短文',
       find.links >= 6 && find.picks === 2 && find.kind === 'md'
       && find.chapters === 2 && find.name.indexOf('找教材') === 0 && find.heading === true, find);
+
+    // K. OCR：资源在位 + 库能加载（真识别要 --pdf-scan 才跑）
+    const ocr = await probe('OCR 资源', `
+      const lang = await fetch('vendor/ocr/chi_sim.traineddata.gz');
+      const core = await fetch('vendor/ocr/tesseract-core-simd-lstm.wasm');
+      const lb = lang.ok ? (await lang.arrayBuffer()).byteLength : 0;
+      const cb = core.ok ? (await core.arrayBuffer()).byteLength : 0;
+      const T = await ensureTesseract();
+      return { langBytes: lb, coreBytes: cb, lib: !!T };
+    `);
+    check('OCR 资源（中文模型 / wasm / 库）都在线上且可加载',
+      ocr.langBytes > 1000000 && ocr.coreBytes > 1000000 && ocr.lib === true, ocr);
+
+    if (scanArg) {
+      const ocrRun = await probe('OCR 真跑', `
+        const b = await (await fetch('${base}smoke-scan.pdf')).blob();
+        await openPdfFile(new File([b], 'scan.pdf'));
+        await new Promise(r => setTimeout(r, 3000));
+        const t0 = performance.now();
+        await ocrCurrentPage();
+        return { ms: Math.round(performance.now() - t0), lines: (RDR.textLines || []).length,
+                 sample: (RDR.textLines || []).slice(0, 3) };
+      `);
+      check('扫描件能 OCR 出文字', ocrRun.lines > 5, ocrRun);
+    } else {
+      console.log('SKIP  OCR 真识别（要验就加 --pdf-scan <扫描件.pdf>）');
+    }
 
     // H. 关书释放 blob URL
     const clean = await probe('关书释放', `

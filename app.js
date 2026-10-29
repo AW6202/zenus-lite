@@ -1,7 +1,7 @@
 // 学习机 Lite — 静态 PWA：内容来自 pack.json，进度存本地，AI 直连 OpenAI 兼容接口
 'use strict';
 
-const BUILD = '2026-10-29.11';
+const BUILD = '2026-10-29.12';
 
 const LS = {
   progress: 'zenus.progress.v1',
@@ -2177,6 +2177,7 @@ function renderReader() {
     + '<div id="readerWrap"><canvas id="pdfCanvas"></canvas><div class="textLayer" id="textLayer"></div></div>'
     + '<div class="floating pager' + (RDR.toolsVisible ? ' show' : '') + '" id="pdfTools">'
     + '<button id="prevPage">◀</button><button id="zoomOut">－</button><button id="zoomIn">＋</button><button id="nextPage">▶</button>'
+    + '<button id="ocrBtn" class="t-close">识别文字</button>'
     + '<button id="closePdf" class="t-close">关闭</button>'
     + (RDR.textLines && RDR.textLines.length ? '<button id="showText" class="t-close">文字视图</button>' : '')
     + '</div>';
@@ -2189,6 +2190,8 @@ function renderReader() {
   document.getElementById('closePdf').onclick = () => { saveReadPos(); resetBook(); renderReader(); };
   const sysBtn = document.getElementById('openSys');
   if (sysBtn) sysBtn.onclick = openWithSystemReader;
+  const ocrb = document.getElementById('ocrBtn');
+  if (ocrb) ocrb.onclick = () => { hideTools(); ocrCurrentPage(); };
   const dis = document.getElementById('dismissWarn');
   if (dis) dis.onclick = () => { const w = document.getElementById('pdfFontWarn'); if (w) w.remove(); };
   drawPage();
@@ -2203,6 +2206,80 @@ function renderReader() {
 // EPUB / MD 走「结构渲染」；TXT 走「段落 + 保留换行」
 function plainToHtml(text) {
   return String(text || '').split(/\n{2,}/).map((p) => '<p>' + esc(p.replace(/\n+$/, '')) + '</p>').join('');
+}
+
+// ── F：扫描件 OCR（Tesseract.js，全部自托管，离线可用）──────────
+// 只认「画面上有字但没有文字层」的 PDF（扫描件）。字体没嵌入那种画面本来就是空白，
+// OCR 也认不出东西——那种走文字重建（extractPdfText）。
+
+let ocrBusy = false;
+
+async function ensureTesseract() {
+  await ensureLib('vendor/ocr/tesseract.min.js', 'Tesseract');
+  return window.Tesseract;
+}
+
+function ocrStatus(text) {
+  let el = document.getElementById('ocrStatus');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'ocrStatus';
+    el.className = 'notice';
+    el.style.marginTop = '10px';
+    const wrap = document.getElementById('readerWrap');
+    if (wrap && wrap.parentNode) wrap.parentNode.insertBefore(el, wrap.nextSibling);
+    else return;
+  }
+  el.textContent = text;
+}
+
+async function ocrCurrentPage() {
+  if (ocrBusy) return;
+  const canvas = document.getElementById('pdfCanvas');
+  if (!canvas || !canvas.width) return toast('先把这一页渲染出来');
+  ocrBusy = true;
+  try {
+    ocrStatus('正在准备识别引擎（首次约 9MB，之后走缓存）…');
+    const T = await ensureTesseract();
+    const worker = await T.createWorker(['chi_sim', 'eng'], 1, {
+      workerPath: 'vendor/ocr/worker.min.js',
+      corePath: 'vendor/ocr/tesseract-core-simd-lstm.wasm.js',
+      langPath: 'vendor/ocr/',
+      logger: (m) => {
+        if (m.status === 'recognizing text') ocrStatus('识别中… ' + Math.round((m.progress || 0) * 100) + '%');
+        else if (m.status) ocrStatus(m.status + '…');
+      },
+    });
+    try {
+      ocrStatus('渲染高清页…');
+      // 屏幕上的画布只有 ~700px 宽，认字太糊；单独渲染一张 ~1800px 的给 OCR
+      const page = await RDR.pdf.getPage(RDR.page);
+      const base = page.getViewport({ scale: 1 });
+      const scale = Math.max(1.5, Math.min(4, 1800 / base.width));
+      const vp = page.getViewport({ scale: scale });
+      const hi = document.createElement('canvas');
+      hi.width = Math.floor(vp.width);
+      hi.height = Math.floor(vp.height);
+      await page.render({ canvasContext: hi.getContext('2d'), viewport: vp }).promise;
+      ocrStatus('识别中…');
+      const { data } = await worker.recognize(hi);
+      const lines = String(data.text || '').split('\n').map((s) => s.trim()).filter(Boolean);
+      if (!lines.length) throw new Error('这一页没认出文字');
+      RDR.textLines = lines;
+      RDR.textMode = true;
+      const st = document.getElementById('ocrStatus');
+      if (st) st.remove();
+      renderReader();
+      toast('识别完成：' + lines.length + ' 行');
+    } finally {
+      try { await worker.terminate(); } catch { /* 已结束 */ }
+    }
+  } catch (err) {
+    ocrStatus('识别失败：' + err.message);
+    toast('OCR 失败：' + err.message);
+  } finally {
+    ocrBusy = false;
+  }
 }
 
 // ── G：找网络教材 ────────────────────────────────────────
