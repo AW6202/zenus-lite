@@ -25,6 +25,8 @@ pack.json             内容包 ← 要改内容就改这个
 manifest.webmanifest  PWA 清单（可加到主屏幕）
 sw.js                 Service Worker：外壳缓存、内容包网络优先
 smoke.js              阅读器冒烟（真 Edge headless 跑 DOM 断言，改阅读器必跑）
+vendor/cmaps/         pdf.js 的 CMap（1.4MB，中文 CID 字体必需，按需下载）
+vendor/standard_fonts/ pdf.js 的标准字体（804KB，未嵌入字体的 PDF 必需）
 icons/                图标
 ```
 
@@ -34,6 +36,7 @@ icons/                图标
 - **EPUB**：JSZip 解压按 spine 顺序读，每章**按原结构渲染**（标题/列表/引用/表格/图片/脚注），图片从 zip 里取出
 - **Markdown**：按一级标题切章，渲染标题/列表/引用/代码块
 - **TXT**：自动识别 UTF-8 / GB18030；空行分段，没有空行按行分段
+- **DOCX**：JSZip 读 `word/document.xml`，按 Word 的标题样式切章；数据表保留表格、版式表单拍平成段落流（表单硬渲染成表格在手机上没法读）；图片走 `_rels` 取
 - 选中文字 → 弹框（🔊 朗读 / ＋卡 存生词 / 问AI）出现在选区**下方**（上方会被手机 Edge 自带菜单盖住）
 
 ## 五个页签

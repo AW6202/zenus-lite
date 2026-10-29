@@ -93,6 +93,40 @@ ${filler}
   const lines = ['第一章 山雨'];
   for (let i = 1; i <= 120; i++) lines.push(`第${i}行：整本书没有空行分隔，只靠换行。`);
   fs.writeFileSync(path.join(TMP, 'smoke-gbk.txt'), encodeGbk(lines.join('\r\n')));
+
+  // DOCX：标题样式切章 / 自动编号 / 自带编号不加符号 / 数据表保留 / 版式表拍平 / 图片
+  const HEAD = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>';
+  const NS = 'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" '
+    + 'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"';
+  const para = (t, style) => `<w:p>${style ? `<w:pPr><w:pStyle w:val="${style}"/></w:pPr>` : ''}`
+    + `<w:r><w:t xml:space="preserve">${t}</w:t></w:r></w:p>`;
+  const cell = (t) => `<w:tc><w:p><w:r><w:t>${t}</w:t></w:r></w:p></w:tc>`;
+  const dataTbl = `<w:tbl><w:tr>${cell('词')}${cell('释义')}</w:tr><w:tr>${cell('narrow')}${cell('狭窄的')}</w:tr></w:tbl>`;
+  const layoutTbl = `<w:tbl><w:tr><w:tc>${para('版式表左格')}${para('版式表左格二')}</w:tc><w:tc></w:tc></w:tr></w:tbl>`;
+  const docXml = `${HEAD}<w:document ${NS}><w:body>`
+    + para('一级标题　制度', '2')
+    + para('正文第一段，含 **不该出现的星号**。')
+    + `<w:p><w:r><w:rPr><w:b/></w:rPr><w:t>加粗一句</w:t></w:r></w:p>`
+    + `<w:p><w:pPr><w:numPr><w:ilvl w:val="0"/><w:numId w:val="1"/></w:numPr></w:pPr><w:r><w:t>自动编号项</w:t></w:r></w:p>`
+    + `<w:p><w:pPr><w:numPr><w:ilvl w:val="0"/><w:numId w:val="1"/></w:numPr></w:pPr><w:r><w:t>2.1 自带编号的条款</w:t></w:r></w:p>`
+    + dataTbl + layoutTbl
+    + `<w:p><w:r><w:drawing><a:blip xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" r:embed="rIdImg"/></w:drawing></w:r></w:p>`
+    + para('二级标题　变更', '3')
+    + para('第二章正文。')
+    + '</w:body></w:document>';
+  const stylesXml = `${HEAD}<w:styles ${NS}>`
+    + '<w:style w:type="paragraph" w:styleId="2"><w:name w:val="heading 2"/></w:style>'
+    + '<w:style w:type="paragraph" w:styleId="3"><w:name w:val="heading 3"/></w:style></w:styles>';
+  const relsXml = `${HEAD}<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">`
+    + `<Relationship Id="rIdImg" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/pic.png"/></Relationships>`;
+  const dzip = new JSZip();
+  dzip.file('[Content_Types].xml', `${HEAD}<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"/>`);
+  dzip.file('word/document.xml', docXml);
+  dzip.file('word/styles.xml', stylesXml);
+  dzip.file('word/_rels/document.xml.rels', relsXml);
+  dzip.file('word/media/pic.png', png);
+  fs.writeFileSync(path.join(TMP, 'smoke.docx'), await dzip.generateAsync({ type: 'nodebuffer' }));
+
   if (pdfPath) fs.copyFileSync(pdfPath, path.join(TMP, 'smoke.pdf'));
 }
 
@@ -284,7 +318,40 @@ class CDP {
     check('GBK txt 不乱码', txt.mojibake === false && txt.head.indexOf('第一章 山雨') === 0, txt);
     check('无空行 txt 按行分段', txt.ps > 100, txt);
 
-    // F. 关书释放 blob URL
+    // F. DOCX
+    const docx = await probe('DOCX', `
+      const b = await (await fetch('${base}smoke.docx')).blob();
+      await openDocxBook(new File([b], 'smoke.docx'));
+      await new Promise(r => setTimeout(r, 500));
+      const box = document.querySelector('.bookText');
+      const q = (s) => box.querySelectorAll(s).length;
+      const txt = box.textContent;
+      return {
+        kind: RDR.kind, chapters: RDR.book.chapters.length,
+        titles: RDR.book.chapters.map(c => c.title),
+        table: q('table'), strong: q('strong'), img: q('img'),
+        imgLoaded: box.querySelector('img') ? box.querySelector('img').naturalWidth : 0,
+        bullet: txt.indexOf('• 自动编号项') >= 0,
+        noDoubleNum: txt.indexOf('• 2.1') < 0 && txt.indexOf('2.1 自带编号的条款') >= 0,
+        layoutFlattened: txt.indexOf('版式表左格') >= 0 && txt.indexOf('版式表左格二') >= 0,
+      };
+    `);
+    check('DOCX 按标题样式切章', docx.chapters === 2 && docx.titles[0] === '一级标题 制度', docx);
+    check('DOCX 数据表保留表格 + 版式表拍平成文字',
+      docx.table === 1 && docx.layoutFlattened, docx);
+    check('DOCX 自动编号加符号，自带编号不重复加', docx.bullet && docx.noDoubleNum, docx);
+    check('DOCX 粗体与图片', docx.strong === 1 && docx.img === 1 && docx.imgLoaded > 0, docx);
+
+    // G. PDF 的 CMap / 标准字体资源要在线上存在（缺了中文 CID 字体整块空白）
+    const cmap = await probe('PDF 字体资源', `
+      const res = await fetch('vendor/cmaps/GBK-EUC-H.bcmap');
+      const buf = res.ok ? await res.arrayBuffer() : null;
+      const sf = await fetch('vendor/standard_fonts/LiberationSans-Regular.ttf');
+      return { cmapOk: res.ok && buf && buf.byteLength > 1000, cmapBytes: buf ? buf.byteLength : 0, sfOk: sf.ok };
+    `);
+    check('PDF 的 CMap 与标准字体在线上可取', !!cmap.cmapOk && !!cmap.sfOk, cmap);
+
+    // H. 关书释放 blob URL
     const clean = await probe('关书释放', `
       const b = await (await fetch('${base}smoke.epub')).blob();
       await openEpubBook(new File([b], 'smoke.epub'));

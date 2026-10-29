@@ -1,7 +1,7 @@
 // 学习机 Lite — 静态 PWA：内容来自 pack.json，进度存本地，AI 直连 OpenAI 兼容接口
 'use strict';
 
-const BUILD = '2026-10-29.1';
+const BUILD = '2026-10-29.2';
 
 const LS = {
   progress: 'zenus.progress.v1',
@@ -1001,6 +1001,7 @@ async function openBookFile(ev) {
   if (!f) return;
   const name = f.name.toLowerCase();
   if (name.endsWith('.epub')) return openEpubBook(f);
+  if (name.endsWith('.docx')) return openDocxBook(f);
   if (name.endsWith('.txt') || name.endsWith('.md')) return openTextBook(f);
   return openPdfFile(f);
 }
@@ -1174,6 +1175,7 @@ function resetBook() {
   RDR.assets = {};
   RDR.book = null;
   RDR.kind = null;
+  RDR.fontFix = false;
 }
 
 async function ensureJSZip() {
@@ -1316,13 +1318,239 @@ async function epubAsset(src, zip, baseDir) {
   return url;
 }
 
+// ── DOCX（JSZip + word/document.xml，不依赖任何转换服务）────────
+const W_NS = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+const R_NS = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
+
+async function openDocxBook(f) {
+  view.innerHTML = '<div class="empty">正在解析 DOCX…</div>';
+  try {
+    await ensureJSZip();
+    resetBook();
+    const zip = await JSZip.loadAsync(await f.arrayBuffer());
+    const chapters = await parseDocx(zip);
+    if (!chapters.length) throw new Error('没找到可读的段落');
+    RDR.kind = 'docx';
+    RDR.pdf = null;
+    RDR.book = { name: f.name, chapters: chapters };
+    RDR.ch = 0;
+    renderReader();
+  } catch (err) {
+    view.innerHTML = '<div class="empty">打不开这个 DOCX<br><span class="sub">' + esc(err.message) + '</span></div>';
+  }
+}
+
+// styles.xml：把 Word 的「样式 ID」翻成标题级别（中文 Word 的 ID 常是数字，名字才是 heading N）
+async function docxHeadingMap(zip) {
+  const map = {};
+  const f = zip.file('word/styles.xml');
+  if (!f) return map;
+  const dom = new DOMParser().parseFromString(await f.async('string'), 'application/xml');
+  for (const st of dom.getElementsByTagNameNS(W_NS, 'style')) {
+    const id = st.getAttributeNS(W_NS, 'styleId') || st.getAttribute('w:styleId');
+    const nameEl = st.getElementsByTagNameNS(W_NS, 'name')[0];
+    const name = nameEl ? (nameEl.getAttributeNS(W_NS, 'val') || nameEl.getAttribute('w:val') || '') : '';
+    if (!id) continue;
+    const lv = /^(?:heading|标题)\s*([1-9])$/i.exec(name.trim()) || /^title$/i.exec(name.trim());
+    if (lv) map[id] = lv[1] ? Number(lv[1]) : 1;
+  }
+  return map;
+}
+
+// 图片：document.xml 里只有 rId，真正的文件在 word/media/，靠 rels 对上号
+async function docxRels(zip) {
+  const map = {};
+  const f = zip.file('word/_rels/document.xml.rels');
+  if (!f) return map;
+  const dom = new DOMParser().parseFromString(await f.async('string'), 'application/xml');
+  for (const rel of dom.getElementsByTagNameNS('*', 'Relationship')) {
+    const id = rel.getAttribute('Id');
+    const target = rel.getAttribute('Target') || '';
+    if (!id || !target) continue;
+    if (/^https?:/i.test(target)) { map[id] = target; continue; }
+    const path = zipPath('word/', target);
+    const type = IMG_MIME[(path.split('.').pop() || '').toLowerCase()];
+    const file = type && zip.file(path);
+    if (!file) continue;
+    const u8 = await file.async('uint8array');
+    const url = URL.createObjectURL(new Blob([u8], { type: type }));
+    RDR.assets[path] = url;
+    RDR.urls.push(url);
+    map[id] = url;
+  }
+  return map;
+}
+
+function docxKids(el, name) { return [...el.children].filter((c) => c.localName === name); }
+function docxWAttr(el, name) {
+  return el.getAttributeNS(W_NS, name) || el.getAttribute('w:' + name) || '';
+}
+
+// 一段里的所有 run → HTML（粗/斜/换行/制表/图片/域代码/修订）
+function docxRuns(el, imgMap) {
+  let out = '';
+  for (const node of [...el.childNodes]) {
+    if (node.nodeType !== 1) continue;
+    const ln = node.localName;
+    if (ln === 'r') {
+      let inner = docxRuns(node, imgMap);
+      const rPr = docxKids(node, 'rPr')[0];
+      if (rPr && inner) {
+        const b = docxKids(rPr, 'b')[0];
+        const i = docxKids(rPr, 'i')[0];
+        if (b && docxWAttr(b, 'val') !== '0' && docxWAttr(b, 'val') !== 'false') inner = '<strong>' + inner + '</strong>';
+        if (i && docxWAttr(i, 'val') !== '0' && docxWAttr(i, 'val') !== 'false') inner = '<em>' + inner + '</em>';
+      }
+      out += inner;
+    } else if (ln === 't') {
+      out += esc(node.textContent);
+    } else if (ln === 'br' || ln === 'cr') {
+      out += '<br>';
+    } else if (ln === 'tab') {
+      out += '&nbsp;&nbsp;&nbsp;&nbsp;';
+    } else if (ln === 'drawing' || ln === 'pict') {
+      out += docxImages(node, imgMap);
+    } else if (ln === 'del' || ln === 'instrText' || ln === 'delText' || ln === 'footnoteReference') {
+      /* 修订删除 / 域代码 / 脚注引用：不显示 */
+    } else {
+      out += docxRuns(node, imgMap);
+    }
+  }
+  return out;
+}
+
+function docxImages(el, imgMap) {
+  let out = '';
+  for (const blip of el.getElementsByTagNameNS('*', 'blip')) {
+    const rid = blip.getAttributeNS(R_NS, 'embed') || blip.getAttribute('r:embed') || '';
+    if (imgMap[rid]) out += '<img src="' + imgMap[rid] + '" alt="">';
+  }
+  return out;
+}
+
+function docxParaBlock(p, imgMap, headingMap) {
+  const pPr = docxKids(p, 'pPr')[0];
+  const styleEl = pPr && docxKids(pPr, 'pStyle')[0];
+  const styleId = styleEl ? docxWAttr(styleEl, 'val') : '';
+  const html = docxRuns(p, imgMap).trim();
+  if (!html) return null;
+  const level = headingMap[styleId] || 0;
+  if (level) {
+    const tag = level <= 3 ? level : 3;
+    return { html: '<h' + tag + '>' + html + '</h' + tag + '>', level: level };
+  }
+  // Word 自动编号只用来补符号：正文自带「4.1」「(1)」的，再加符号就成了双编号
+  const text = htmlToText(html).trim();
+  const selfNumbered = /^\s*([0-9]+([.．][0-9]+)*[.．、)]|[（(][0-9一二三四五六七八九十]+[)）]|[一二三四五六七八九十]+[、.])/.test(text);
+  const numbered = !!(pPr && docxKids(pPr, 'numPr').length);
+  return { html: '<p>' + (numbered && !selfNumbered ? '• ' : '') + html + '</p>', level: 0 };
+}
+
+function docxCellBlocks(tc, imgMap, headingMap) {
+  const out = [];
+  for (const c of [...tc.children]) {
+    if (c.localName === 'p') {
+      const b = docxParaBlock(c, imgMap, headingMap);
+      if (b) out.push(b);
+    } else if (c.localName === 'tbl') {
+      out.push(...docxTableBlocks(c, imgMap, headingMap));
+    } else if (c.localName === 'sdt' || c.localName === 'sdtContent' || c.localName === 'customXml') {
+      out.push(...docxCellBlocks(c, imgMap, headingMap));
+    }
+  }
+  return out;
+}
+
+// 数据表（≤4 列、每格都有内容）保留表格；版式表格（表单/边框排版）拍平成段落流——
+// 手机上把「一个格子一个字」的表硬渲染成表格，是没法读的（2026-10-29 用真实控制程序验证）
+function docxTableBlocks(tbl, imgMap, headingMap) {
+  const rows = docxKids(tbl, 'tr').map((tr) => docxKids(tr, 'tc'));
+  const cells = rows.flat();
+  if (!cells.length) return [];
+  const cols = Math.max(...rows.map((r) => r.length));
+  const allFilled = cells.every((tc) => docxRuns(tc, imgMap).trim().length > 0);
+  if (rows.length >= 2 && cols >= 2 && cols <= 4 && allFilled) {
+    const body = rows.map((r) => '<tr>' + r.map((tc) => {
+      const inner = docxCellBlocks(tc, imgMap, headingMap).map((b) => b.html).join('<br>');
+      return '<td>' + inner + '</td>';
+    }).join('') + '</tr>').join('');
+    return [{ html: '<table>' + body + '</table>', level: 0 }];
+  }
+  return cells.flatMap((tc) => docxCellBlocks(tc, imgMap, headingMap));
+}
+
+async function parseDocx(zip) {
+  const docFile = zip.file('word/document.xml');
+  if (!docFile) throw new Error('不是标准 DOCX（缺 word/document.xml）');
+  const headingMap = await docxHeadingMap(zip);
+  const imgMap = await docxRels(zip);
+  const dom = new DOMParser().parseFromString(await docFile.async('string'), 'application/xml');
+  const bodyEl = dom.getElementsByTagNameNS(W_NS, 'body')[0];
+  if (!bodyEl) throw new Error('DOCX 里没有正文');
+
+  const chapters = [];
+  let cur = { title: '', blocks: [] };
+  const flush = () => {
+    const html = cur.blocks.join('\n');
+    const text = htmlToText(html);
+    if (text.trim() || /<img/.test(html)) {
+      chapters.push({ title: cur.title || ('第 ' + (chapters.length + 1) + ' 节'), text: text, html: html, blocks: cur.blocks.slice() });
+    }
+    cur = { title: '', blocks: [] };
+  };
+  const emit = (b, top) => {
+    if (b.level && top) {          // 只让「顶层」标题切章：表内标题常被滥用（正文也用 heading 样式），切开就是碎片
+      flush();
+      cur.title = htmlToText(b.html).replace(/\s+/g, ' ').trim().slice(0, 40);
+    }
+    cur.blocks.push(b.html);
+  };
+  const walkTop = (container) => {
+    for (const el of [...container.children]) {
+      const ln = el.localName;
+      if (ln === 'p') { const b = docxParaBlock(el, imgMap, headingMap); if (b) emit(b, true); }
+      else if (ln === 'tbl') docxTableBlocks(el, imgMap, headingMap).forEach((b) => emit(b, false));
+      else if (ln === 'sdt' || ln === 'sdtContent' || ln === 'customXml') walkTop(el);
+    }
+  };
+  walkTop(bodyEl);
+  flush();
+  // 整篇没有可切章的标题（表单型文档常见）→ 按长度切，别让一章拖到 6 万字
+  return chapters.length === 1 ? splitBySize(chapters[0], 12000) : chapters;
+}
+
+function splitBySize(ch, limit) {
+  if (!ch.blocks || ch.text.length <= limit) return [{ title: ch.title, text: ch.text, html: ch.html }];
+  const groups = [];
+  let group = [];
+  let len = 0;
+  for (const b of ch.blocks) {
+    const bl = htmlToText(b).length;
+    if (len + bl > limit && group.length) { groups.push(group); group = []; len = 0; }
+    group.push(b);
+    len += bl;
+  }
+  if (group.length) groups.push(group);
+  return groups.map((g, i) => {
+    const html = g.join('\n');
+    return { title: '第 ' + (i + 1) + ' 节', text: htmlToText(html), html: html };
+  });
+}
+
 async function openPdfFile(f) {
   view.innerHTML = '<div class="empty">正在打开 PDF…</div>';
   try {
     await ensurePdfJs();
     resetBook();
     const buf = await f.arrayBuffer();
-    RDR.pdf = await pdfjsLib.getDocument({ data: buf }).promise;
+    // cMaps + 标准字体必须给：中文/日文 PDF 常用 CID 字体（GBK-EUC-H / Identity-H），
+    // 没有 cMaps 时这类字体整块渲染成空白——2026-10-29 用户报「发票有的字不显示」。
+    RDR.pdf = await pdfjsLib.getDocument({
+      data: buf,
+      cMapUrl: 'vendor/cmaps/',
+      cMapPacked: true,
+      standardFontDataUrl: 'vendor/standard_fonts/',
+    }).promise;
     RDR.total = RDR.pdf.numPages;
     RDR.page = 1;
     RDR.name = f.name;
@@ -1334,13 +1562,14 @@ async function openPdfFile(f) {
 }
 
 function renderReader() {
-  if (RDR.kind === 'epub' || RDR.kind === 'text' || RDR.kind === 'md') return renderTextBook();
+  if (RDR.kind === 'epub' || RDR.kind === 'text' || RDR.kind === 'md' || RDR.kind === 'docx') return renderTextBook();
   if (!RDR.pdf && !RDR.book) {
     view.innerHTML = '<div class="empty">选一本书，直接在页面里读。<br>'
       + '<span class="sub">选中任意文字 → 朗读 / 存卡 / 问 AI。文件不上传，全在本机解析。</span>'
       + '<div class="row" style="margin-top:16px"><button class="btn primary" id="pickPdf">选择文件</button></div>'
-      + '<div class="sub" style="margin-top:10px">支持 PDF · EPUB · TXT · Markdown</div></div>'
-      + '<input type="file" id="pdfFile" accept=".pdf,.epub,.txt,.md,application/pdf,application/epub+zip,text/plain" style="display:none">';
+      + '<div class="sub" style="margin-top:10px">支持 PDF · EPUB · DOCX · TXT · Markdown</div></div>'
+      + '<input type="file" id="pdfFile" accept=".pdf,.epub,.docx,.txt,.md,application/pdf,application/epub+zip,'
+      + 'application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain" style="display:none">';
     document.getElementById('pickPdf').onclick = () => document.getElementById('pdfFile').click();
     document.getElementById('pdfFile').onchange = openBookFile;
     return;
@@ -1440,6 +1669,15 @@ async function drawPage() {
     }).promise;
     const lb = document.getElementById('pgLabel');
     if (lb) lb.textContent = RDR.page + ' / ' + RDR.total;
+
+    // 字体是异步注册的：手机上个别字（常用另一套子集字体）会晚到 → 画布上留下空白。
+    // 等 document.fonts 全部就绪后补画一次当前页；每份文档只补一次。
+    if (!RDR.fontFix && document.fonts && document.fonts.status === 'loading') {
+      RDR.fontFix = true;
+      document.fonts.ready.then(() => {
+        if (RDR.pdf && document.getElementById('pdfCanvas')) drawPage();
+      });
+    }
   } catch (err) {
     /* 翻页过快会 abort，忽略 */
   } finally {

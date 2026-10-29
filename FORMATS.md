@@ -23,12 +23,12 @@ Koodo 支持 EPUB / PDF / MOBI / AZW3 / TXT / MD / FB2 / CBZ / CBR / DJVU / RTF 
 
 | 格式 | 状态 | 用什么 |
 |---|---|---|
-| PDF（有文字层） | ✅ 已支持 | `vendor/pdf.min.js`（pdf.js），Canvas + 文字层，选中即取词 |
+| PDF（有文字层） | ✅ 已支持 | pdf.js，Canvas + 文字层，选中即取词；**必须带 `cmaps/` + `standard_fonts/`**（缺了中文 CID 字体整块空白） |
 | EPUB | ✅ 已支持（**结构渲染**） | JSZip 解压 → container.xml → opf 的 manifest/spine → 每章清洗后按原结构渲染：标题/段落/强调/列表/引用/表格/脚注；图片从 zip 取出转 blob URL |
 | Markdown | ✅ 已支持（轻量渲染） | 按 h1 切章（无 h1 退到 h1/h2），渲染标题/列表/引用/代码块/粗细体；链接与图片只留文字 |
 | TXT | ✅ 已支持 | UTF-8 失败自动退 GB18030（中文 txt 小说多是 GBK）；空行分段，没有空行按行分段，超长块硬切；保留原始换行 |
 | PDF（扫描件） | ❌ 待做 | Tesseract.js（WASM，离线）或 OCR 接口 |
-| DOCX | ⬜ 好做 | JSZip + `word/document.xml`，约半天 |
+| DOCX | ✅ 已支持 | JSZip + `word/document.xml` + `styles.xml`（标题级别）+ `_rels`（图片）；表格按「数据表/版式表」分流 |
 | MOBI / AZW3 | ⬜ 麻烦 | Kindle 私有格式（PalmDB + 压缩）。JS 解析器稀少且不稳，建议先让用户用 Calibre/在线转 EPUB |
 | CBZ / CBR | ⬜ 可做 | 就是 zip/rar 包图片，做个逐图翻页即可；对学习取词价值低 |
 | DJVU | ❌ 不做 | djvu.js 体积大、场景少 |
@@ -62,8 +62,8 @@ node smoke.js --pdf 某文件.pdf  # 额外验 PDF 回归
 
 ## 下一步优先级
 
-1. **DOCX**（最省事、职场资料多是它）
-2. **扫描版 PDF OCR**（手头扫描件多）
+1. **扫描版 PDF OCR**（手头扫描件多；没有文字层就只能看图）
+2. ~~DOCX~~ 已完成（2026-10-29）
 3. **MOBI/AZW3**：先给"请转 EPUB"的提示，别硬做
 4. CBZ/漫画：学习场景用不上，最后再说
 
