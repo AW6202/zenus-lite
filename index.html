@@ -36,6 +36,8 @@ main{flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain;padd
 .tabbar button{flex:1;background:none;border:0;color:var(--dim);padding:8px 0 9px;font-size:10px;display:flex;flex-direction:column;align-items:center;gap:3px}
 .tabbar button.on{color:var(--acc)}
 .tabbar svg{width:19px;height:19px;stroke:currentColor;fill:none;stroke-width:1.7}
+/* 沉浸阅读：打开一本书时藏掉底部导航（复习/浏览/测验…），关闭书自动恢复 */
+body.reading .tabbar{display:none}
 
 .card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:20px 18px;min-height:210px;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;gap:12px}
 .front{font-size:26px;font-weight:600;line-height:1.35;word-break:break-word}

@@ -1,7 +1,7 @@
 // 学习机 Lite — 静态 PWA：内容来自 pack.json，进度存本地，AI 直连 OpenAI 兼容接口
 'use strict';
 
-const BUILD = '2026-10-30.1';
+const BUILD = '2026-10-30.2';
 
 const LS = {
   progress: 'zenus.progress.v1',
@@ -278,6 +278,14 @@ function renderHeader() {
   };
 }
 
+// 沉浸阅读：真的打开了一本书/PDF/图片时才藏底部导航；阅读器的"选一本书"首页不藏（还要靠它跳走）
+function syncReadingChrome() {
+  const reading = state.tab === 'reader'
+    && !!(RDR.book || RDR.pdf || RDR.kind === 'image'
+      || (RDR.textMode && RDR.textLines && RDR.textLines.length));
+  document.body.classList.toggle('reading', reading);
+}
+
 function render() {
   if (!state.pack) return;
   view.addEventListener('scroll', onViewScroll, { passive: true });
@@ -311,6 +319,7 @@ document.querySelectorAll('.tabbar button').forEach((b) => {
     b.classList.toggle('on', b.dataset.tab === state.tab);
   });
   document.body.classList.toggle('reader-mode', state.tab === 'reader');
+  syncReadingChrome();
   if (state.tab === 'review') return renderReview();
   if (state.tab === 'browse') return renderBrowse();
   if (state.tab === 'reader') return renderReader();
@@ -2321,6 +2330,7 @@ function openWithSystemReader() {
 }
 
 function renderReader() {
+  syncReadingChrome();
   if (RDR.kind === 'image') return renderImage();
   if (RDR.kind === 'epub' || RDR.kind === 'text' || RDR.kind === 'md' || RDR.kind === 'docx') return renderTextBook();
   if (RDR.textMode && RDR.textLines && RDR.textLines.length) return renderPdfText();
