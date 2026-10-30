@@ -1007,6 +1007,34 @@ class CDP {
     `);
     check('书架页存在且能导入书源', shelf.hasShelf && shelf.after === 1 && shelf.listed, shelf);
 
+    // 书源规则入口：整份 JSON 要留住（规则在原生侧求值），测试/搜索入口在无桥环境下不能崩
+    const srcRules = await probe('书源规则入口', `
+      sources = []; saveJSON(LS.sources, sources);
+      renderSourceManager();
+      await new Promise(r => setTimeout(r, 80));
+      document.getElementById('srcBox').value = JSON.stringify([{
+        bookSourceName: '规则源', bookSourceUrl: 'https://example.com',
+        searchUrl: 'https://example.com/s?q={{key}}',
+        ruleSearch: { bookList: 'class.bookbox', name: 'tag.h4@text' }
+      }]);
+      document.getElementById('srcAdd').click();
+      await new Promise(r => setTimeout(r, 120));
+      const kept = !!(sources[0] && sources[0].raw && sources[0].raw.searchUrl);
+      const hasSearch = !!document.getElementById('srcSearch');
+      const hasPick = !!document.getElementById('srcPick');
+      const hasKey = !!document.getElementById('srcKey');
+      const hasTest = !!document.querySelector('[data-stest]');
+      // 浏览器里没有桥：点「测试」必须只给提示，不能抛
+      let threw = false;
+      try { await testSource(0); } catch (e) { threw = true; }
+      sources = []; saveJSON(LS.sources, sources);
+      renderShelf();
+      return { kept, hasSearch, hasPick, hasKey, hasTest, threw };
+    `);
+    check('书源：保留规则 JSON + 测试/搜索入口（无桥不崩）',
+      srcRules.kept && srcRules.hasSearch && srcRules.hasPick && srcRules.hasKey
+      && srcRules.hasTest && !srcRules.threw, srcRules);
+
     // 卡片模型 v2：同词只留一条 / 课本已有不重复建 / 手动结论不被复习覆盖
     const cards = await probe('卡片模型', `
       const before = userCards.length;
@@ -1034,6 +1062,33 @@ class CDP {
         && cards.back === '烟' && cards.hint === '/x/', cards);
     check('课本已有的词不重复建卡', cards.packReason === 'exists-in-pack' || cards.packReason === 'skip', cards);
     check('手动标记的已掌握不被复习答错覆盖', cards.stillKnown === true, cards);
+
+    // 「已掌握」单一事实源：复习队列 / 统计 / 抓词入库 必须同一口径
+    const knownScope = await probe('已掌握口径', `
+      state.courseId = MINE_ID;
+      upsertCard({ front: 'scope-alpha', back: '甲' });
+      upsertCard({ front: 'scope-beta', back: '乙' });
+      markKnown('scope-alpha', 'manual');
+      const inQueue = (w) => dueQueue().some(c => normFront(c.front) === w);
+      const qBefore = { alpha: inQueue('scope-alpha'), beta: inQueue('scope-beta') };
+      const bar = statsBar();
+      const before = userCards.length;
+      const added = addCardFromSelection('scope-alpha');
+      const grew = userCards.length - before;
+      unmarkKnown('scope-alpha');
+      const backInQueue = inQueue('scope-alpha');
+      // 清理
+      userCards = userCards.filter(c => normFront(c.front).indexOf('scope-') !== 0);
+      saveJSON(LS.userCards, userCards);
+      ['scope-alpha', 'scope-beta'].forEach(w => { delete cardIndex[normFront(w)]; });
+      saveJSON(LS.cardIndex, cardIndex);
+      state.courseId = state.pack.courses[0].id;
+      return { qBefore, barHasKnown: bar.indexOf('已掌握 1') >= 0, added, grew, backInQueue };
+    `);
+    check('已掌握：不进复习队列 / 不重复进生词本 / 移除后回队列',
+      knownScope.qBefore.alpha === false && knownScope.qBefore.beta === true
+      && knownScope.barHasKnown === true && knownScope.added === false
+      && knownScope.grew === 0 && knownScope.backInQueue === true, knownScope);
 
     // 系统内核渲染视图：按设计**不再有**右侧浮栏，动作全在壳的长按菜单里；
     // 页面只需提供「当前在读什么」给壳的存入思源用

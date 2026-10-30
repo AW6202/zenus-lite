@@ -274,6 +274,11 @@ function normWord(w) {
   return String(w || '').toLowerCase().trim().replace(/[’']/g, "'").replace(/\s+/g, ' ');
 }
 function isKnown(w) { return !!known[normWord(w)]; }
+
+// 「已掌握」的唯一判定口径：卡片的正面词是否在 known 里。
+// 复习队列、统计、抓词入库都必须走这一个函数，别各写一套把口径写散。
+function isKnownCard(card) { return !!(card && card.front && isKnown(card.front)); }
+
 function markKnown(w, why) {
   const k = normWord(w);
   if (!k) return;
@@ -362,7 +367,8 @@ function allCards() { return course()?.cards || []; }
 
 function dueQueue() {
   const now = Date.now();
-  const cards = allCards();
+  // 已掌握的词不进复习队列：否则「标记已掌握」就只是多了个标记，卡片照样天天刷
+  const cards = allCards().filter((c) => !isKnownCard(c));
   const due = cards.filter((c) => entry(c.id).reps > 0 && entry(c.id).due <= now);
   const fresh = cards.filter((c) => entry(c.id).reps === 0).slice(0, settings.dailyNew);
   return [...due, ...fresh];
@@ -436,11 +442,14 @@ document.querySelectorAll('.tabbar button').forEach((b) => {
 }
 
 function statsBar() {
-  const cards = allCards();
+  const all = allCards();
   const now = Date.now();
+  // 与 dueQueue 同一口径：已掌握的不算「待复习」也不算「未学」，单独列出来
+  const knownCount = all.filter(isKnownCard).length;
+  const cards = all.filter((c) => !isKnownCard(c));
   const n = cards.filter((c) => entry(c.id).reps > 0 && entry(c.id).due <= now).length;
   const fresh = cards.filter((c) => entry(c.id).reps === 0).length;
-  return `<div class="meta"><span>待复习 ${n} · 未学 ${fresh}</span><span>共 ${cards.length} 张</span></div>`;
+  return `<div class="meta"><span>待复习 ${n} · 未学 ${fresh}</span><span>共 ${all.length} 张 · 已掌握 ${knownCount}</span></div>`;
 }
 
 function courseLang() {
@@ -2816,7 +2825,7 @@ async function doLookup() {
     const list = lookupIn(dict, word);
     box.innerHTML = renderLookupResult(list, word, lang);
     box.querySelectorAll('[data-add]').forEach((b) => {
-      b.onclick = () => { addCardFromSelection(b.dataset.add); b.textContent = '已加入'; b.disabled = true; };
+      b.onclick = () => { if (addCardFromSelection(b.dataset.add)) { b.textContent = '已加入'; b.disabled = true; } };
     });
     box.querySelectorAll('[data-say]').forEach((b) => {
       b.onclick = () => speak(b.dataset.say, lang === 'ja' ? 'ja-JP' : 'en-US');
@@ -3259,23 +3268,36 @@ async function renderShelf() {
   view.scrollTop = 0;
 }
 
-// 书源管理（P0：只有导入/列出/删除；规则解析下周做）
+// 书源管理：导入 / 测试连通性 / 按规则搜一本书放进书架。
+// 规则解析在原生侧（ZenusBookSource.kt）——网页 fetch 别人的站会被 CORS 挡死，只能走桥。
 function renderSourceManager() {
   window.__zenusMenuBoxMode = '';
   const rows = sources.map((src, i) =>
     '<div class="it" style="display:flex;align-items:center;gap:8px">'
     + '<div style="flex:1;min-width:0"><div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'
-    + esc(src.name || '未命名书源') + '</div><div class="sub">' + esc(src.url || '') + '</div></div>'
+    + esc(src.name || '未命名书源')
+    + (src.raw ? '' : ' <span class="sub">（旧版只存了名字，请重新导入）</span>') + '</div>'
+    + '<div class="sub">' + esc(src.url || '') + '</div></div>'
+    + '<button class="btn ghost" data-stest="' + i + '" style="width:auto;padding:6px 10px;font-size:12px">测试</button>'
     + '<button class="btn ghost" data-sdel="' + i + '" style="width:auto;padding:6px 10px;font-size:12px">删除</button></div>'
   ).join('');
+  const pickOptions = sources.length
+    ? sources.map((s, i) => '<option value="' + i + '">' + esc(s.name || ('书源 ' + (i + 1))) + '</option>').join('')
+    : '<option value="-1">（先导入书源）</option>';
   view.innerHTML =
     '<div class="meta"><span>书源管理</span><span>' + sources.length + ' 个</span></div>'
     + '<div class="hint">粘贴 Legado 书源 JSON（一个数组，或单个对象也可以）。'
-    + '目前只保存名字和地址——按规则搜索/取正文是下一步。</div>'
+    + '导入后能「测试」连通性，也能直接按书源搜书、把第一章加入书架。</div>'
     + '<textarea class="t" id="srcBox" rows="6" style="height:auto;min-height:120px;font-size:12px"'
     + ' placeholder="粘贴书源 JSON 数组"></textarea>'
     + '<div class="row" style="margin-top:8px"><button class="btn primary" id="srcAdd">导入书源</button>'
     + '<button class="btn ghost" id="srcBack">← 回书架</button></div>'
+    + '<div class="row" style="margin-top:12px;gap:8px;flex-wrap:nowrap">'
+    + '<select class="t" id="srcPick" style="flex:1;height:36px;min-height:36px;padding:4px 8px;font-size:12px">'
+    + pickOptions + '</select>'
+    + '<input class="t" id="srcKey" placeholder="书名或作者" style="flex:1.2;height:36px;min-height:36px;padding:6px 10px">'
+    + '<button class="btn primary" id="srcSearch" style="width:auto;padding:0 14px">搜索</button></div>'
+    + '<div id="srcResults"></div>'
     + (rows || '<div class="empty" style="margin-top:14px">还没有书源</div>');
   document.getElementById('srcBack').onclick = () => renderShelf();
   document.getElementById('srcAdd').onclick = () => {
@@ -3290,13 +3312,17 @@ function renderSourceManager() {
       const url = it.bookSourceUrl || it.url;
       if (!name || !url) continue;
       if (sources.some((x) => x.url === url)) continue;
-      sources.push({ name, url, group: it.bookSourceGroup || '', enabled: it.enabled !== false });
+      // 整份 JSON 都留着：规则（searchUrl / ruleSearch / ruleToc / ruleContent）在原生侧求值
+      sources.push({ name, url, group: it.bookSourceGroup || '', enabled: it.enabled !== false, raw: it });
       added++;
     }
     saveJSON(LS.sources, sources);
     toast('导入 ' + added + ' 个书源');
     renderSourceManager();
   };
+  view.querySelectorAll('[data-stest]').forEach((el) => {
+    el.onclick = () => testSource(Number(el.dataset.stest));
+  });
   view.querySelectorAll('[data-sdel]').forEach((el) => {
     el.onclick = () => {
       sources.splice(Number(el.dataset.sdel), 1);
@@ -3304,7 +3330,102 @@ function renderSourceManager() {
       renderSourceManager();
     };
   });
+  document.getElementById('srcSearch').onclick = () => {
+    const pick = document.getElementById('srcPick');
+    const key = (document.getElementById('srcKey').value || '').trim() || '斗破苍穹';
+    searchInSource(Number(pick ? pick.value : -1), key);
+  };
   view.scrollTop = 0;
+}
+
+// 书源相关动作的前置检查：统一说清「为什么现在不能用」，而不是静默失败
+function sourceReady(src) {
+  if (!nativePort()) { toast('书源抓取只能在 App 里用（浏览器会被跨域挡住）'); return false; }
+  if (!src) { toast('先选一个书源'); return false; }
+  if (!src.raw) { toast('这个书源只存了名字，请重新粘贴导入一次'); return false; }
+  return true;
+}
+
+async function testSource(i) {
+  const src = sources[i];
+  if (!sourceReady(src)) return;
+  toast('测试中…');
+  try {
+    const r = await nativeCall('bookProbe', { source: src.raw, key: '' }, 40000);
+    const engine = r.engine === 'json' ? 'JSON 接口（暂不支持）' : 'HTML';
+    const entries = r.entries == null ? '' : ' / 抓到 ' + r.entries + ' 条';
+    toast('连通：' + (r.bytes || 0) + ' 字 / ' + engine + entries);
+  } catch (e) {
+    toast('测试失败：' + (e.message || e));
+  }
+}
+
+async function searchInSource(i, key) {
+  const src = sources[i];
+  if (!sourceReady(src)) return;
+  const box = document.getElementById('srcResults');
+  if (box) box.innerHTML = '<div class="hint">正在搜索「' + esc(key) + '」…</div>';
+  try {
+    const list = await nativeCall('bookSearch', { source: src.raw, key }, 40000);
+    if (!list || !list.length) {
+      if (box) box.innerHTML = '<div class="empty">没有搜到，换个关键词试试</div>';
+      return;
+    }
+    if (box) {
+      box.innerHTML =
+        '<div class="meta" style="margin-top:12px"><span>搜索结果</span><span>' + list.length + ' 条</span></div>'
+        + list.map((b, k) =>
+          '<div class="it" style="display:flex;align-items:center;gap:8px">'
+          + '<div style="flex:1;min-width:0"><div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'
+          + esc(b.name || '未命名') + '</div><div class="sub">' + esc(b.author || '') + '</div></div>'
+          + '<button class="btn ghost" data-addbook="' + k + '" style="width:auto;padding:6px 10px;font-size:12px">加入书架</button></div>'
+        ).join('');
+      box.querySelectorAll('[data-addbook]').forEach((el) => {
+        el.onclick = () => addBookToShelf(src, list[Number(el.dataset.addbook)], el);
+      });
+    }
+  } catch (e) {
+    if (box) box.innerHTML = '<div class="empty">搜索失败：' + esc(e.message || String(e)) + '</div>';
+  }
+}
+
+// 抓一本书：一次抓前几章存成材料（整本抓太慢，且书源站会限流）。
+// 单章失败不整本放弃——原生侧的 bookChapters 会把失败章节带 error 返回，这里只收成功的。
+const BOOK_BATCH = 5;
+async function addBookToShelf(src, book, btn) {
+  if (!sourceReady(src)) return;
+  if (btn) { btn.disabled = true; btn.textContent = '抓取中…'; }
+  try {
+    const info = await nativeCall('bookInfo', { source: src.raw, url: book.bookUrl }, 40000);
+    const tocUrl = (info && info.tocUrl) || book.bookUrl;
+    const toc = await nativeCall('bookToc', { source: src.raw, url: tocUrl }, 40000);
+    if (!toc || !toc.length) throw new Error('目录是空的');
+    const want = Math.min(BOOK_BATCH, toc.length);
+    const urls = toc.slice(0, want).map((c) => c.url).filter(Boolean);
+    const got = await nativeCall('bookChapters', { source: src.raw, urls, limit: want }, 120000);
+    const chapters = [];
+    (got || []).forEach((g, i) => {
+      if (!g || !g.text) return;
+      const t = (toc[i] && toc[i].title) || ('第 ' + (i + 1) + ' 章');
+      chapters.push({ title: (book.name || '未命名') + ' · ' + t, text: g.text });
+    });
+    if (!chapters.length) throw new Error('前几章都没抓到正文');
+    const payload = JSON.stringify(chapters);
+    await matPut({
+      id: 'src:' + (book.bookUrl || book.name || Date.now()),
+      name: book.name || '未命名',
+      kind: 'text',
+      savedAt: Date.now(),
+      bytes: payload.length,
+      chapters,
+      origin: { source: src.name || '', bookUrl: book.bookUrl || '' },
+    });
+    toast('已加入书架（抓到 ' + chapters.length + ' 章 / 共 ' + toc.length + ' 章）');
+    if (btn) { btn.disabled = false; btn.textContent = '已加入'; }
+  } catch (e) {
+    toast('抓取失败：' + (e.message || e));
+    if (btn) { btn.disabled = false; btn.textContent = '加入书架'; }
+  }
 }
 
 // 阅读器首页的「最近读过」：从 IndexedDB 里列出来，点一下接着读
@@ -4038,9 +4159,7 @@ function renderPoints(kp, ch) {
   o.querySelectorAll('[data-w]').forEach((b) => {
     b.onclick = () => {
       const w = kp.words[Number(b.dataset.w)];
-      addCardFromSelection(w.w);
-      b.textContent = '已加入';
-      b.disabled = true;
+      if (addCardFromSelection(w.w)) { b.textContent = '已加入'; b.disabled = true; }
     };
   });
   o.querySelectorAll('.kpq').forEach((box) => {
@@ -4672,13 +4791,19 @@ async function drawPage() {
 // ── 选中文字 → 朗读 / 存卡 / 问 AI ────────────────────
 function addCardFromSelection(text) {
   const front = String(text).replace(/\s+/g, ' ').trim().slice(0, 80);
-  if (!front) return;
+  if (!front) return false;
+  // 已掌握的词不再进生词本：和复习队列同一口径（都问 isKnown）
+  if (isKnown(front)) {
+    toast('「' + front + '」已标记为已掌握；要先在「已掌握」里移除再存');
+    return false;
+  }
   const r = upsertCard({ front, topic: '阅读生词', source: { kind: 'reader', at: Date.now() } });
-  if (r.reason === 'exists-in-pack') { toast('这个词课本里已经有了'); return; }
-  if (r.reason === 'merged') { toast('已经在「我的生词」里了'); return; }
+  if (r.reason === 'exists-in-pack') { toast('这个词课本里已经有了'); return false; }
+  if (r.reason === 'merged') { toast('已经在「我的生词」里了'); return false; }
   renderHeader();
   toast('已加入「我的生词」');
   if (settings.key && r.card) fillCardMeaning(r.card);
+  return true;
 }
 
 async function fillCardMeaning(card) {
