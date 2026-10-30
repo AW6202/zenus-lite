@@ -3353,6 +3353,8 @@ function renderSourceManager() {
     '<div class="it" style="display:flex;align-items:center;gap:8px">'
     + '<div style="flex:1;min-width:0"><div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'
     + esc(src.name || '未命名书源')
+    + ' <span class="sub">[' + sourceTypeLabel(src.type) + ']</span>'
+    + (Number(src.type) === 2 ? ' <span class="sub" style="color:#c60">（漫画源暂不支持正文）</span>' : '')
     + (src.raw ? '' : ' <span class="sub">（旧版只存了名字，请重新导入）</span>') + '</div>'
     + '<div class="sub">' + esc(src.url || '') + '</div></div>'
     + '<button class="btn ghost" data-stest="' + i + '" style="width:auto;padding:6px 10px;font-size:12px">测试</button>'
@@ -3377,25 +3379,19 @@ function renderSourceManager() {
     + '<div id="srcResults"></div>'
     + (rows || '<div class="empty" style="margin-top:14px">还没有书源</div>');
   document.getElementById('srcBack').onclick = () => renderShelf();
-  document.getElementById('srcAdd').onclick = () => {
+  document.getElementById('srcAdd').onclick = async () => {
     const raw = document.getElementById('srcBox').value.trim();
-    if (!raw) return toast('先粘贴书源 JSON');
-    let data;
-    try { data = JSON.parse(raw); } catch (e) { return toast('JSON 解析失败：' + e.message); }
-    const arr = Array.isArray(data) ? data : [data];
-    let added = 0;
-    for (const it of arr) {
-      const name = it.bookSourceName || it.name;
-      const url = it.bookSourceUrl || it.url;
-      if (!name || !url) continue;
-      if (sources.some((x) => x.url === url)) continue;
-      // 整份 JSON 都留着：规则（searchUrl / ruleSearch / ruleToc / ruleContent）在原生侧求值
-      sources.push({ name, url, group: it.bookSourceGroup || '', enabled: it.enabled !== false, raw: it });
-      added++;
+    if (!raw) return toast('先粘贴书源 JSON 或合集地址');
+    const btn = document.getElementById('srcAdd');
+    btn.disabled = true;
+    try {
+      const r = await importSources(raw);
+      if (r.error) return toast(r.error);
+      toast('导入 ' + r.added + ' 个书源' + (r.collections ? '（展开 ' + r.collections + ' 个合集）' : ''));
+      renderSourceManager();
+    } finally {
+      btn.disabled = false;
     }
-    saveJSON(LS.sources, sources);
-    toast('导入 ' + added + ' 个书源');
-    renderSourceManager();
   };
   view.querySelectorAll('[data-stest]').forEach((el) => {
     el.onclick = () => testSource(Number(el.dataset.stest));
@@ -3413,6 +3409,83 @@ function renderSourceManager() {
     searchInSource(Number(pick ? pick.value : -1), key);
   };
   view.scrollTop = 0;
+}
+
+// ── 书源库 / 一键导入 ────────────────────────────────
+// 对齐 Legado 的三种导入形态（见 legado-E 的 ImportBookSourceViewModel）：
+//   1) 单个书源对象  2) 书源数组  3) {"sourceUrls": ["https://…"]}  —— 合集/订阅清单
+// 合集里还可能套合集，这里用队列展开（上限 800，防止误导入把页面撑死）。
+
+function normalizeSourcePayload(data) {
+  if (!data) return [];
+  if (Array.isArray(data)) return data.filter(Boolean);
+  if (typeof data === 'object') {
+    if (Array.isArray(data.sourceUrls)) {
+      return data.sourceUrls.filter(Boolean).map((u) => ({ __collectionUrl: String(u) }));
+    }
+    if (data.bookSourceUrl || data.bookSourceName) return [data];
+  }
+  return [];
+}
+
+function sourceTypeLabel(type) {
+  switch (Number(type || 0)) {
+    case 1: return '音频';
+    case 2: return '漫画';
+    case 3: return '下载';
+    case 4: return '视频';
+    default: return '文本';
+  }
+}
+
+async function importSources(raw) {
+  const text = String(raw || '').trim();
+  let payloadText = text;
+  // 粘的是一条地址 → 用原生去拉（网页 fetch 会被 CORS 挡死）
+  if (/^https?:\/\//i.test(text)) {
+    if (!nativePort()) return { error: '从网址导入要在 App 里用（浏览器会被跨域挡住）' };
+    try {
+      payloadText = await nativeCall('sourceFetch', { url: text }, 60000);
+    } catch (e) {
+      return { error: '拉取合集失败：' + (e.message || e) };
+    }
+  }
+
+  let data;
+  try { data = JSON.parse(payloadText); } catch (e) { return { error: 'JSON 解析失败：' + e.message }; }
+
+  const queue = normalizeSourcePayload(data);
+  let added = 0;
+  let collections = 0;
+  let seen = 0;
+  for (let i = 0; i < queue.length && seen < 800; i++) {
+    const it = queue[i];
+    if (it && it.__collectionUrl) {
+      collections++;
+      if (!nativePort()) continue;
+      try {
+        const subText = await nativeCall('sourceFetch', { url: it.__collectionUrl }, 60000);
+        normalizeSourcePayload(JSON.parse(subText)).forEach((s) => { if (s) queue.push(s); });
+      } catch { /* 单个合集失败不影响其它 */ }
+      continue;
+    }
+    seen++;
+    const name = it.bookSourceName || it.name;
+    const url = it.bookSourceUrl || it.url;
+    if (!name || !url) continue;
+    if (sources.some((x) => x.url === url)) continue;
+    sources.push({
+      name,
+      url,
+      group: it.bookSourceGroup || '',
+      enabled: it.enabled !== false,
+      type: Number(it.bookSourceType || 0),
+      raw: it,
+    });
+    added++;
+  }
+  saveJSON(LS.sources, sources);
+  return { added, collections };
 }
 
 // 书源相关动作的前置检查：统一说清「为什么现在不能用」，而不是静默失败

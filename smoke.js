@@ -1035,6 +1035,32 @@ class CDP {
       srcRules.kept && srcRules.hasSearch && srcRules.hasPick && srcRules.hasKey
       && srcRules.hasTest && !srcRules.threw, srcRules);
 
+    // 书源库：Legado 的三种导入形态（单对象 / 数组 / {"sourceUrls":[…]}）
+    const lib = await probe('书源库导入', `
+      const single = normalizeSourcePayload({ bookSourceName: 'S1', bookSourceUrl: 'https://a' });
+      const arr = normalizeSourcePayload([{ bookSourceName: 'S2', bookSourceUrl: 'https://b' }]);
+      const coll = normalizeSourcePayload({ sourceUrls: ['https://c1', 'https://c2'] });
+      const empty = normalizeSourcePayload({ foo: 1 });
+      const labels = [sourceTypeLabel(0), sourceTypeLabel(2), sourceTypeLabel(1)];
+      // 直接走「数组形态」导入（不需要桥）
+      sources = []; saveJSON(LS.sources, sources);
+      const r = await importSources(JSON.stringify([
+        { bookSourceName: '导入源A', bookSourceUrl: 'https://x', bookSourceType: 0 },
+        { bookSourceName: '导入源B', bookSourceUrl: 'https://y', bookSourceType: 2 }
+      ]));
+      const n = sources.length;
+      const dup = await importSources(JSON.stringify([{ bookSourceName: '导入源A', bookSourceUrl: 'https://x' }]));
+      const afterDup = sources.length;
+      sources = []; saveJSON(LS.sources, sources); renderShelf();
+      return { single: single.length, arr: arr.length, coll: coll.length,
+               collIsUrl: !!(coll[0] && coll[0].__collectionUrl), empty: empty.length,
+               labels: labels.join(','), added: r.added, n, dupAdded: dup.added, afterDup };
+    `);
+    check('书源库：三种形态可展开 / 去重 / 类型标签',
+      lib.single === 1 && lib.arr === 1 && lib.coll === 2 && lib.collIsUrl && lib.empty === 0
+      && lib.labels === '文本,漫画,音频' && lib.added === 2 && lib.n === 2
+      && lib.dupAdded === 0 && lib.afterDup === 2, lib);
+
     // 卡片模型 v2：同词只留一条 / 课本已有不重复建 / 手动结论不被复习覆盖
     const cards = await probe('卡片模型', `
       const before = userCards.length;
