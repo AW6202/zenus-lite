@@ -3128,6 +3128,17 @@ function attachZoomPan(wrap, img) {
   }, { passive: true });
 }
 
+// Markdown 里「单换行」渲染出来是空格 —— 思源会把整段压成一行。
+// 所以送出去之前，每个换行都升格成空行（段落分隔），多余的合并。
+function paragraphize(text) {
+  return String(text || '')
+    .replace(/\r\n/g, '\n')
+    .replace(/[ \t]+\n/g, '\n')
+    .replace(/\n+/g, '\n')
+    .replace(/\n/g, '\n\n')
+    .trim();
+}
+
 // 原生长按菜单调用这里的动作（网页右侧浮栏已撤掉，动作都在长按菜单里）
 // 壳的「存入思源」会问这个：当前在读什么？（没有可存的内容就返回 null）
 window.__zenusCurrentDoc = function () {
@@ -3135,16 +3146,19 @@ window.__zenusCurrentDoc = function () {
     if (RDR.book && RDR.book.chapters && RDR.book.chapters[RDR.ch]) {
       const ch = RDR.book.chapters[RDR.ch];
       const text = ch.text || (ch.html ? ch.html.replace(/<[^>]+>/g, '') : '');
-      return JSON.stringify({ title: RDR.book.name + ' · ' + (ch.title || ('第 ' + (RDR.ch + 1) + ' 节')), markdown: text });
+      return JSON.stringify({
+        title: RDR.book.name + ' · ' + (ch.title || ('第 ' + (RDR.ch + 1) + ' 节')),
+        markdown: paragraphize(text),
+      });
     }
     if (RDR.kind === 'nativepdf' && RDR.textLines && RDR.textLines.length) {
-      return JSON.stringify({ title: RDR.name || 'PDF', markdown: RDR.textLines.join(String.fromCharCode(10)) });
+      return JSON.stringify({ title: RDR.name || 'PDF', markdown: paragraphize(RDR.textLines.join('\n')) });
     }
     if (RDR.textMode && RDR.textLines && RDR.textLines.length) {
-      return JSON.stringify({ title: RDR.name || 'PDF', markdown: RDR.textLines.join(String.fromCharCode(10)) });
+      return JSON.stringify({ title: RDR.name || 'PDF', markdown: paragraphize(RDR.textLines.join('\n')) });
     }
     if (RDR.kind === 'image' && RDR.textLines && RDR.textLines.length) {
-      return JSON.stringify({ title: (RDR.name || '图片') + '（识别文字）', markdown: RDR.textLines.join(String.fromCharCode(10)) });
+      return JSON.stringify({ title: (RDR.name || '图片') + '（识别文字）', markdown: paragraphize(RDR.textLines.join('\n')) });
     }
     return null;
   } catch (e) { return null; }
