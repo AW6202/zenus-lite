@@ -105,3 +105,37 @@ node smoke.js                  # EPUB 结构 / MD / GBK / TXT / 弹框位置 / �
 node smoke.js --pdf 某文件.pdf  # 加验 PDF 回归
 ```
 失败会列出哪条断言红，退出码 1。
+
+## ✅ 2026-10-30 晚（本轮新增，已上线）
+
+| 项 | 状态 |
+|---|---|
+| 朗读**跳字**修复：分块改按 Legado 方式（清洗→切句→超 80 字按逗号再切） | ✅ v34 |
+| **防弹窗**开关（设置 → 操作习惯 → 阻止脚本弹窗，默认开；无手势才拦） | ✅ v32 |
+| **书架**（学习机 → 阅读 → 书架）：列出本地文件/网页等全部材料，可开可删 | ✅ P0 |
+| **存到书架**（浏览器 ≡ 菜单）：当前网页正文 → .md → 学习机落库 | ✅ v35 |
+| **书源管理**：粘贴 Legado 书源 JSON，保存名字/地址，可删除 | ✅ P0 |
+| 长按菜单并入浏览器原菜单；只在图片/内核 PDF 视图接管 | ✅ v27/v28 |
+| 学习机里「存入思源」改存当前材料/章节 | ✅ v29 |
+| 内核实渲染 PDF 撤掉浮栏 | ✅ |
+| 选中文字只留壳的菜单（学习机浮框在壳内关闭） | ✅ |
+
+## 🔜 下周（按优先级）
+
+1. **思源写入未闭环**（见文首"下周第一件"）
+2. **书源 P1：规则引擎子集** —— `searchUrl` + `ruleSearch/ruleBookInfo/ruleToc/ruleContent`，
+   支持 `class.x.0@tag.a@href`、`@text/@href`、`##regex`、`&&/||`、简单 JSONPath；
+   不支持 `@js` 的源要**明确提示**而不是静默失败。EinkBro 已内置 jsoup 可用。估算 1~2 天。
+3. **known 单一事实源收尾**：抓词过滤、复习队列对已掌握卡的口径统一
+
+## 收坑记录（今天踩的，已分流）
+
+| 坑 | 分流到哪 |
+|---|---|
+| Compose 的 `IntrinsicSize.Max` 容器里放 `Slider` 会崩（长按喇叭卡死） | 已修 + 注释写在 TtsSettingDialogFragment |
+| 引擎按钮 `isEnabled = readingState == IDLE` 会死锁（stop 不重置状态） | 已修：stop() 对所有引擎统一收尾 |
+| aapt 把 assets 里 `.gz` 解压并去后缀 | 已写进 ZENUS.md（词典改存明文 .json） |
+| WebView 长按由原生拦截，网页 `contextmenu` 不触发 | 菜单做在原生侧（ContextMenuDelegate） |
+| OkHttp 默认走系统代理，连 127.0.0.1 会被劫走 | ZenusSiyuan 加 NO_PROXY |
+| 思源「启用 HTTPS」改了要重启才生效；自签名证书 | ZenusSiyuan 放开证书校验 + http/https 回退 |
+| Bash heredoc 会吃掉一层反斜杠（生成 Kotlin 代码被破坏） | 改用 Write 工具写文件，不在 heredoc 里拼带反斜杠的代码 |
