@@ -737,7 +737,8 @@ class CDP {
       await openImageFile(new File([png], 'pic.png'));
       await new Promise(r => setTimeout(r, 300));
       const imgState = { kind: RDR.kind, shown: !!document.getElementById('imgView'),
-                         tools: document.querySelectorAll('#imgTools button').length };
+                         float: document.querySelectorAll('#imgTools button').length,
+                         menu: typeof window.__zenusMenu === 'function' };
       // PDF（有文字层）
       const b = await (await fetch('${base}smoke.pdf')).blob();
       await openPdfFile(new File([b], 'smoke.pdf'));
@@ -751,8 +752,9 @@ class CDP {
       closePoints();
       return { imgState, textLen, points };
     `);
-    check('图片能导入并给出识别/知识点入口',
-      kp2.imgState.kind === 'image' && kp2.imgState.shown === true && kp2.imgState.tools >= 3, kp2);
+    check('图片能导入并给出识别/知识点入口（菜单入口在，浮栏已撤）',
+      kp2.imgState.kind === 'image' && kp2.imgState.shown === true
+        && kp2.imgState.float === 0 && kp2.imgState.menu === true, kp2);
     check('PDF（含文字层）能取到正文并生成知识点',
       kp2.textLen > 100 && kp2.points >= 1, kp2);
 
@@ -1032,25 +1034,26 @@ class CDP {
       npTools.has && npTools.shown && npTools.wraps === 2, npTools);
 
     // 图片视图：单击叫出工具条 + 长按弹自己的动作面板（不能被浏览器 blob 菜单顶掉）
-    const imgActs = await probe('图片长按菜单', `
+    // 图片视图：浮栏已撤（动作改到 App 长按菜单），但要保证菜单入口 __zenusMenu 可用
+    const imgActs = await probe('图片菜单入口', `
       const png = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
       RDR.kind = 'image'; RDR.srcUrl = png; RDR.name = '冒烟图片';
       renderImage();
       await new Promise(r => setTimeout(r, 80));
-      const img = document.getElementById('imgView');
-      let prevented = false;
-      const ev = new MouseEvent('contextmenu', { bubbles: true, cancelable: true });
-      img.dispatchEvent(ev);
-      prevented = ev.defaultPrevented;
-      await new Promise(r => setTimeout(r, 60));
-      const panel = document.getElementById('imgActions');
-      const has = panel && !!panel.querySelector('#iaFull') && !!panel.querySelector('#iaSave') && !!panel.querySelector('#iaOcr');
-      closeImageActions();
-      resetBook(); renderReader();
-      return { prevented, has, closed: !document.getElementById('imgActions') };
+      const hasMenu = typeof window.__zenusMenu === 'function';
+      const hasFloat = !!document.getElementById('imgTools');
+      const okFull = window.__zenusMenu('full');
+      await new Promise(r => setTimeout(r, 80));
+      const viewerOpened = !!document.getElementById('imgViewer');
+      closeImageViewer();
+      const okClose = window.__zenusMenu('close');
+      await new Promise(r => setTimeout(r, 80));
+      const backHome = !!document.getElementById('pickPdf');
+      return { hasMenu, hasFloat, okFull, viewerOpened, okClose, backHome };
     `);
-    check('图片长按弹自己的动作面板（全屏/另存/识别文字）',
-      imgActs.prevented && imgActs.has && imgActs.closed, imgActs);
+    check('图片不再挂右侧浮栏；长按菜单入口可用（全屏 / 关闭）',
+      imgActs.hasMenu && imgActs.hasFloat === false && imgActs.okFull === true
+        && imgActs.viewerOpened && imgActs.okClose === true && imgActs.backHome, imgActs);
 
     if (pdfArg) {
       const pdf = await probe('PDF', `

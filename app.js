@@ -3059,6 +3059,77 @@ function closeImageViewer() {
   ivState = null;
 }
 
+// 就地双指缩放：直接放大图片本身，放大后单指平移。
+// 容器不裁剪（overflow visible），所以不会出现"框里裁着看"的观感。
+function attachZoomPan(wrap, img) {
+  let scale = 1, tx = 0, ty = 0;
+  let startDist = 0, startScale = 1, startX = 0, startY = 0, startTx = 0, startTy = 0;
+  let dragging = false, lastX = 0, lastY = 0;
+
+  const apply = () => {
+    img.style.transform = 'translate(' + tx + 'px,' + ty + 'px) scale(' + scale + ')';
+    img.style.transformOrigin = 'center center';
+  };
+  const reset = () => { scale = 1; tx = 0; ty = 0; apply(); };
+  wrap.__zoomReset = reset;
+
+  const dist = (t) => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
+
+  wrap.addEventListener('touchstart', (e) => {
+    if (e.touches.length === 2) {
+      startDist = dist(e.touches) || 1;
+      startScale = scale;
+      const cx = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+      const cy = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+      startX = cx; startY = cy; startTx = tx; startTy = ty;
+      dragging = false;
+    } else if (e.touches.length === 1) {
+      dragging = true;
+      lastX = e.touches[0].clientX;
+      lastY = e.touches[0].clientY;
+    }
+  }, { passive: true });
+
+  wrap.addEventListener('touchmove', (e) => {
+    if (e.touches.length === 2) {
+      e.preventDefault();
+      scale = Math.min(4, Math.max(1, startScale * (dist(e.touches) / startDist)));
+      const cx = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+      const cy = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+      tx = startTx + (cx - startX);
+      ty = startTy + (cy - startY);
+      apply();
+    } else if (e.touches.length === 1 && dragging && scale > 1) {
+      e.preventDefault();
+      const t = e.touches[0];
+      tx += t.clientX - lastX;
+      ty += t.clientY - lastY;
+      lastX = t.clientX; lastY = t.clientY;
+      apply();
+    }
+  }, { passive: false });
+
+  wrap.addEventListener('touchend', (e) => {
+    if (e.touches.length === 0) { dragging = false; startDist = 0; }
+  }, { passive: true });
+}
+
+// 原生长按菜单调用这里的动作（网页右侧浮栏已撤掉，动作都在长按菜单里）
+window.__zenusMenu = function (which) {
+  try {
+    if (which === 'full') openImageViewer(RDR.nativePages || [RDR.srcUrl], RDR.npIndex || 0);
+    else if (which === 'ocr') ocrImage();
+    else if (which === 'viz') (RDR.pdf ? visionFromPdfPage() : visionFromImage());
+    else if (which === 'kp') showPoints();
+    else if (which === 'save') saveImageAs(RDR.srcUrl || (RDR.nativePages || [])[RDR.npIndex || 0], RDR.name);
+    else if (which === 'close') {
+      if (nativePort()) nativeCall('clearPending', {}, 3000).catch(() => {});
+      RDR.nativePages = null; resetBook(); renderReader();
+    }
+    return true;
+  } catch (e) { return false; }
+};
+
 // 图片的「长按菜单」：浏览器默认弹的是自己的上下文菜单（blob: 链接、另存为…），
 // 在 App 里那些动作大多是死的。这里接管成长按弹出我们自己的动作面板。
 function showImageActions(ctx) {
@@ -3678,31 +3749,18 @@ async function ocrImage() {
 
 function renderImage() {
   view.innerHTML =
-    '<div class="meta"><span>' + esc(RDR.name) + '</span><span>图片 · 双指缩放</span></div>'
-    + '<div id="imWrap" style="overflow:hidden;touch-action:pan-y">'
+    '<div class="meta"><span>' + esc(RDR.name) + '</span><span>图片 · 双指缩放 · 长按出菜单</span></div>'
+    + '<div id="imWrap" style="overflow:visible;touch-action:pan-y;margin-bottom:12px">'
     + '<img id="imgView" src="' + RDR.srcUrl + '" alt="" style="width:100%;display:block;border-radius:8px;background:#fff;will-change:transform">'
     + '</div>'
     + (RDR.textLines && RDR.textLines.length
       ? '<h2>识别出的文字</h2><div class="bookText plain" style="font-size:14px">'
         + RDR.textLines.map((l) => '<p>' + esc(l) + '</p>').join('') + '</div>'
-      : '<div class="hint" style="margin-top:10px">这是图片，没有文字层。点右侧「识别文字」做 OCR，之后就能取词、出知识点。</div>')
-    + '<div class="floating' + (RDR.toolsVisible ? ' show' : '') + '" id="imgTools">'
-    + '<button id="imReset">全屏看</button>'
-    + '<button id="ocrBtn">识别文字</button>'
-    + '<button id="vizBtn">看图出题</button>'
-    + '<button id="kpBtn" class="t-close">知识点</button>'
-    + '<button id="closeImg" class="t-close">关闭</button></div>';
+      : '<div class="hint" style="margin-top:10px">这是图片，没有文字层。长按图片 → 菜单里选「识别文字」做 OCR，之后就能取词、出知识点。</div>')
+    ;
+  const wrapEl = document.getElementById('imWrap');
   const imgEl = document.getElementById('imgView');
-  if (imgEl) {
-    imgEl.onclick = () => toggleTools();          // 单击叫出/收起右侧工具条
-    bindImageActions(imgEl, { kind: 'image', src: RDR.srcUrl, name: RDR.name, pages: [RDR.srcUrl], index: 0 });
-  }
-  const imReset = document.getElementById('imReset');
-  if (imReset) imReset.onclick = () => openImageViewer([RDR.srcUrl], 0);
-  document.getElementById('ocrBtn').onclick = () => { hideTools(); ocrImage(); };
-  document.getElementById('kpBtn').onclick = () => { hideTools(); showPoints(); };
-  document.getElementById('vizBtn').onclick = () => { hideTools(); visionFromImage(); };
-  document.getElementById('closeImg').onclick = () => { resetBook(); renderReader(); };
+  if (wrapEl && imgEl) attachZoomPan(wrapEl, imgEl);
   bindFlipGestures(view, { prev: () => {}, next: () => {}, middle: toggleTools });
   flipHintOnce();
   view.scrollTop = 0;
