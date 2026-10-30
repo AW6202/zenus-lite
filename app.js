@@ -1,7 +1,7 @@
 // 学习机 Lite — 静态 PWA：内容来自 pack.json，进度存本地，AI 直连 OpenAI 兼容接口
 'use strict';
 
-const BUILD = '2026-10-30.4';
+const BUILD = '2026-10-30.5';
 
 const LS = {
   progress: 'zenus.progress.v1',
@@ -1456,6 +1456,7 @@ function resetBook() {
   RDR.fontRisk = false;
   RDR.textLines = [];
   RDR.textMode = false;
+  RDR.nativePages = null;
   RDR.outline = null;
   RDR.key = null;
   if (RDR.scrollIO) { try { RDR.scrollIO.disconnect(); } catch { /* 已断开 */ } RDR.scrollIO = null; }
@@ -2189,6 +2190,11 @@ async function openPdfFile(f) {
       try { RDR.textLines = await extractPdfText(buf); } catch { RDR.textLines = []; }
       RDR.textMode = RDR.textLines.length > 0;
     }
+    // App 里：pdf.js 画不出来（没字形）就交给系统内核 PdfRenderer 渲染成图片
+    if (RDR.fontRisk && nativePort()) {
+      const shown = await tryNativePdfRender();
+      if (shown) return;
+    }
     // cMaps + 标准字体必须给：中文/日文 PDF 常用 CID 字体（GBK-EUC-H / Identity-H），
     // 没有 cMaps 时这类字体整块渲染成空白——2026-10-29 用户报「发票有的字不显示」。
     RDR.pdf = await pdfjsLib.getDocument({
@@ -2205,6 +2211,7 @@ async function openPdfFile(f) {
     applyReadPos();
     renderReader();
   } catch (err) {
+    if (nativePort() && await tryNativePdfRender()) return;
     view.innerHTML = '<div class="empty">打不开这个 PDF<br><span class="sub">' + esc(err.message) + '</span>'
       + (nativePort() ? '<div class="row" style="margin-top:16px"><button class="btn primary" id="pdfSys">用其他应用打开</button></div>' : '')
       + '</div>';
@@ -2338,6 +2345,7 @@ function openWithSystemReader() {
 
 function renderReader() {
   syncReadingChrome();
+  if (RDR.kind === 'nativepdf') return renderNativePdf();
   if (RDR.kind === 'image') return renderImage();
   if (RDR.kind === 'epub' || RDR.kind === 'text' || RDR.kind === 'md' || RDR.kind === 'docx') return renderTextBook();
   if (RDR.textMode && RDR.textLines && RDR.textLines.length) return renderPdfText();
@@ -2813,6 +2821,49 @@ async function pasteFromClipboard() {
     } catch { /* 需要用户手势或权限，退到手动粘贴 */ }
   }
   renderPaste('', '');
+}
+
+// App 里：pdf.js 画不出字时，让系统内核（PdfRenderer/pdfium）把每页渲染成图片
+async function tryNativePdfRender() {
+  if (!nativePort()) return false;
+  toast('正在用系统内核渲染…');
+  try {
+    const r = await nativeCall('renderPdf', {}, 60000);
+    if (!r || !r.pages || !r.pages.length) return false;
+    RDR.nativePages = r.pages;
+    RDR.kind = 'nativepdf';
+    RDR.name = RDR.name || 'PDF（系统内核渲染）';
+    renderReader();
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
+// 系统内核渲染出来的分页图：只读浏览，取词请点「文字视图」
+function renderNativePdf() {
+  const imgs = (RDR.nativePages || []).map((u, i) =>
+    '<img src="' + esc(u) + '" alt="第 ' + (i + 1) + ' 页" style="width:100%;display:block;margin:0 0 10px">'
+  ).join('');
+  view.innerHTML =
+    '<div class="meta"><span>' + esc(RDR.name || 'PDF') + '</span><span>系统内核渲染 · ' + (RDR.nativePages || []).length + ' 页</span></div>'
+    + '<div class="hint">这份 PDF 没有嵌入字体，前端画不出字，已用系统内核渲染成图片（字形可能和原件不同，二维码/印章不受影响）。'
+    + (RDR.textLines && RDR.textLines.length ? '要看字/取词请点下面的「文字视图」。' : '') + '</div>'
+    + '<div class="row" style="margin:8px 0">'
+    + (RDR.textLines && RDR.textLines.length ? '<button class="btn" id="npText">文字视图</button>' : '')
+    + '<button class="btn" id="npSys">用其他应用打开</button>'
+    + '<button class="btn ghost" id="npClose">关闭</button></div>'
+    + imgs;
+  const t = document.getElementById('npText');
+  if (t) t.onclick = () => { RDR.textMode = true; RDR.kind = 'pdf'; renderReader(); };
+  document.getElementById('npSys').onclick = () => openWithSystemApp();
+  document.getElementById('npClose').onclick = () => {
+    if (nativePort()) nativeCall('clearPending', {}, 3000).catch(() => {});
+    RDR.nativePages = null;
+    resetBook();
+    renderReader();
+  };
+  view.scrollTop = 0;
 }
 
 // App 里：把刚选中的文件交给系统/其他应用打开（自己解析不了的 PDF 走这里）
