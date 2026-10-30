@@ -75,6 +75,24 @@ body 顶层只有 3 个表格 + 2 个段落，1100+ 段落全在表格里（表�
 ② SW 的 vendor 缓存分支**不检查 `res.ok`** → 一次抖动/404 的响应被永久缓存，之后每次 onload 触发但 `window.JSZip` 永远是 undefined。
 现在：脚本加载按 URL 去重共用同一个 promise；加载后**必须验全局**，没挂上用 `?v=BUILD` 再取一次；SW 只缓存 ok 响应。
 
+## D-013 网页不再「抓」，改由真浏览器打开
+**2026-10-30 定（推翻「网页链接 = 抓正文」那条待办）。**
+旧做法：`importFromText()` 遇到链接就走 `fetchFullText()`（维基 API / 直连 / `r.jina.ai` 代理）。
+三条通道的实际结局：直连绝大多数站没有 CORS → 必败；代理走别人的 IP，限频就废；
+登录墙后的内容永远拿不到。而 TWA 壳只能把 URL 当参数传进来，官方明确不给注入 JS。
+**结论：网页不是文档，是要浏览器执行的应用。**
+
+现在：APK 改成 WebView 浏览器壳（fork EinkBro，见仓库 `zenus-browser/ZENUS.md`），
+网页在真内核里打开；学习机只是它的一个标签。本仓库（PWA）保留并在浏览器里照常可用，
+同时多了一个「App 里才有」的桥：
+
+- `window.zenus`（只对 `https://aw6202.github.io` 注入）→ `speak` / `stop` / `clipboard` / `inbox` / `lookup`
+- `speak()` 在没有 Web Speech API 时走原生 TTS（安卓 WebView 没实现 speechSynthesis）
+- 剪贴板统一走 `readClipText()`：App 里问原生，浏览器里用标准 API
+- 打开时 `pullWebCards()` 取原生收件箱里「网页上存的生词」，合并进 `userCards`（按 front 去重）
+
+**推翻条件**：如果以后只想要「打开网页就自动抽词」，那要回到抓取路线——但那是另一个产品。
+
 ## 待办
 1. ~~**阅读器**：PDF.js（含文字层）+ 选中取词；EPUB 用 epub.js 或只抽文本~~ → 已按 D-007 定案
 2. **喂资料 → 抓词**：粘贴文本 / TXT / PDF / EPUB → 判类型 → 抓词 → 过已掌握表 → 勾选入库

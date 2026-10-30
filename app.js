@@ -1,7 +1,7 @@
 // 学习机 Lite — 静态 PWA：内容来自 pack.json，进度存本地，AI 直连 OpenAI 兼容接口
 'use strict';
 
-const BUILD = '2026-10-29.35';
+const BUILD = '2026-10-30.1';
 
 const LS = {
   progress: 'zenus.progress.v1',
@@ -53,6 +53,59 @@ window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); inst
 window.addEventListener('appinstalled', () => { installEvent = null; toast('已安装到主屏幕'); });
 const view = $('#view');
 
+// ── 学习机 App 桥 ─────────────────────────────────────────────
+// 只有装成 APK（WebView 壳）时才有 window.zenus。浏览器里它不存在，所有调用退回网页原生 API。
+// 为什么需要：安卓 WebView 没有 speechSynthesis、读剪贴板也常被拒，这两件事只能交给原生。
+// 桥对象是 WebView 在页面加载时注入的，未必赶在我们这段脚本之前 ——
+// 所以每次用之前现探，探到了再挂监听；不要在脚本解析时拍板。
+let CTRL = null;
+function nativePort() {
+  const port = window.zenus;
+  if (!port || typeof port.postMessage !== 'function') return null;
+  if (!CTRL || CTRL.port !== port) {
+    CTRL = { port, seq: 0, waiting: new Map() };
+    port.addEventListener('message', (e) => {
+      let msg = null;
+      try { msg = JSON.parse(e.data); } catch { return; }
+      const cb = CTRL && CTRL.waiting.get(msg && msg.id);
+      if (cb) { CTRL.waiting.delete(msg.id); cb(msg); }
+    });
+  }
+  return CTRL;
+}
+
+function nativeCall(cmd, args = {}, timeout = 10000) {
+  const ctrl = nativePort();
+  if (!ctrl) return Promise.reject(new Error('不在 App 里'));
+  return new Promise((resolve, reject) => {
+    const id = ++ctrl.seq;
+    const timer = setTimeout(() => {
+      ctrl.waiting.delete(id);
+      reject(new Error('桥超时：' + cmd));
+    }, timeout);
+    ctrl.waiting.set(id, (msg) => {
+      clearTimeout(timer);
+      if (msg.ok) resolve(msg.data);
+      else reject(new Error(msg.error || '桥调用失败'));
+    });
+    ctrl.port.postMessage(JSON.stringify({ id, cmd, args }));
+  });
+}
+
+// 读剪贴板：App 里走原生（WebView 常被拒），浏览器里走标准 API
+async function readClipText() {
+  if (nativePort()) {
+    try {
+      const t = await nativeCall('clipboard', {}, 4000);
+      if (typeof t === 'string') return t;
+    } catch { /* 退回网页 API */ }
+  }
+  if (navigator.clipboard && navigator.clipboard.readText) {
+    return await navigator.clipboard.readText();
+  }
+  return '';
+}
+
 // ── 存储 ──────────────────────────────────────────────
 function loadJSON(key, fallback) {
   try { return JSON.parse(localStorage.getItem(key)) ?? fallback; }
@@ -81,6 +134,12 @@ function pickVoice(lang) {
 
 function speak(text, lang = 'en-US') {
   if (!text) return;
+  if (nativePort()) {
+    // App 里没有 Web Speech API，交给原生 TTS
+    nativeCall('speak', { text: String(text), lang, rate: Number(settings.ttsRate) || 0.9 })
+      .catch((e) => toast('朗读失败：' + e.message));
+    return;
+  }
   if (!('speechSynthesis' in window)) { toast('这台设备不支持朗读'); return; }
   const synth = window.speechSynthesis;
   synth.cancel();
@@ -2689,7 +2748,7 @@ function renderPaste(prefill, note) {
   };
   document.getElementById('pasteClip').onclick = async () => {
     try {
-      const t = await navigator.clipboard.readText();
+      const t = await readClipText();
       document.getElementById('pasteBox').value = t;
       toast('已读入剪贴板内容');
     } catch (e) {
@@ -2705,9 +2764,9 @@ let lastImportedUrl = '';
 // 从别的 App 切回来时，若剪贴板里有链接，给一条可点的提示（读不到就静默，不打扰）
 async function checkClipboardHint() {
   if (Date.now() - lastClipCheck < 60000) return;
-  if (!navigator.clipboard || !navigator.clipboard.readText) return;
+  if (!nativePort() && (!navigator.clipboard || !navigator.clipboard.readText)) return;
   try {
-    const t = (await navigator.clipboard.readText() || '').trim();
+    const t = (await readClipText() || '').trim();
     if (!looksLikeUrl(t) || t === lastImportedUrl) return;
     lastClipCheck = Date.now();
     if (document.getElementById('clipBar')) return;
@@ -2725,9 +2784,9 @@ async function checkClipboardHint() {
 }
 
 async function pasteFromClipboard() {
-  if (navigator.clipboard && navigator.clipboard.readText) {
+  if (nativePort() || (navigator.clipboard && navigator.clipboard.readText)) {
     try {
-      const t = await navigator.clipboard.readText();
+      const t = await readClipText();
       if (t && t.trim()) { lastImportedUrl = t.trim(); return importFromText(t); }
     } catch { /* 需要用户手势或权限，退到手动粘贴 */ }
   }
@@ -4144,11 +4203,48 @@ document.querySelectorAll('.tabbar button').forEach((b) => {
   b.onclick = () => { state.tab = b.dataset.tab; render(); };
 });
 
+// 网页上「＋存卡」的生词：App 打开时从原生收件箱取回来（取走即清空，不会重复计数）
+async function pullWebCards() {
+  if (!nativePort()) return;
+  let list = [];
+  try {
+    list = JSON.parse(await nativeCall('inbox', {}, 6000) || '[]');
+  } catch { return; }
+  if (!Array.isArray(list) || !list.length) return;
+  const fresh = [];
+  for (const c of list) {
+    const front = String(c.front || '').trim();
+    if (!front) continue;
+    if (userCards.some((x) => String(x.front || '').toLowerCase() === front.toLowerCase())) continue;
+    const card = {
+      id: String(c.id || ('web-' + Date.now() + '-' + fresh.length)),
+      front,
+      back: String(c.back || ''),
+      hint: String(c.hint || ''),
+      level: '',
+      topic: String(c.topic || '网页生词'),
+      source: String(c.source || ''),
+      sourceTitle: String(c.sourceTitle || ''),
+    };
+    userCards.unshift(card);
+    fresh.push(card);
+  }
+  if (!fresh.length) return;
+  saveJSON(LS.userCards, userCards);
+  renderHeader();
+  toast('网页上存的 ' + fresh.length + ' 个生词已入库');
+  if (settings.key) fresh.filter((c) => !c.back).slice(0, 5).forEach((c) => fillCardMeaning(c));
+}
+
 (async function init() {
   try {
     await loadPack();
     renderHeader();
     render();
+    // 桥对象可能比首屏晚到，重试两次；取走即清空，多调不会重复入库
+    pullWebCards();
+    setTimeout(pullWebCards, 1500);
+    setTimeout(pullWebCards, 6000);
   } catch (err) {
     view.innerHTML = `<div class="empty">内容包加载失败<br><span class="sub">${esc(err.message)}</span></div>`;
   }
