@@ -3261,7 +3261,11 @@ async function renderShelf() {
     + '<div style="flex:1;min-width:0">'
     + '<div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(r.name || '未命名') + '</div>'
     + '<div class="sub">' + kindName(r.kind) + ' · ' + new Date(r.savedAt || 0).toLocaleDateString()
-    + ' · ' + Math.round((r.bytes || 0) / 1024) + 'KB</div></div>'
+    + ' · ' + Math.round((r.bytes || 0) / 1024) + 'KB'
+    + (flatWarn(r) ? ' · <span style="color:#c00">旧版抓取（没分段）</span>' : '') + '</div></div>'
+    + (r.origin
+      ? '<button class="btn ghost" data-refetch="' + esc(r.id) + '" style="width:auto;padding:6px 10px;font-size:12px">重抓</button>'
+      : '')
     + '<button class="btn ghost" data-del="' + esc(r.id) + '" style="width:auto;padding:6px 10px;font-size:12px">删除</button>'
     + '</div>').join('');
 
@@ -3274,12 +3278,71 @@ async function renderShelf() {
   document.getElementById('shBack').onclick = () => { state.tab = 'reader'; render(); };
   document.getElementById('shSources').onclick = () => renderSourceManager();
   view.querySelectorAll('[data-open]').forEach((el) => {
-    el.onclick = (e) => { if (e.target.dataset && e.target.dataset.del) return; openStoredMaterial(el.dataset.open); };
+    el.onclick = (e) => {
+      if (e.target.dataset && (e.target.dataset.del || e.target.dataset.refetch)) return;
+      openStoredMaterial(el.dataset.open);
+    };
+  });
+  view.querySelectorAll('[data-refetch]').forEach((el) => {
+    el.onclick = (e) => { e.stopPropagation(); refetchMaterial(el.dataset.refetch, el); };
   });
   view.querySelectorAll('[data-del]').forEach((el) => {
     el.onclick = async (e) => { e.stopPropagation(); await matDelete(el.dataset.del); renderShelf(); };
   });
   view.scrollTop = 0;
+}
+
+// 旧版抓取的材料是「整章压成一行」（v46 之前 text() 把段落拼平了）。
+// 这类材料没法事后补分段——正文里本来就没有换行信息，只能按书源重抓一遍。
+function flatWarn(r) {
+  if (!r || !r.chapters || !r.chapters.length) return false;
+  const t = String(r.chapters[0].text || '');
+  return t.length > 400 && t.indexOf('\n') < 0;
+}
+
+async function refetchMaterial(id, btn) {
+  if (!nativePort()) { toast('重抓要在 App 里用'); return; }
+  let all = [];
+  try { all = await matAll(); } catch { return; }
+  const rec = all.find((x) => x.id === id);
+  if (!rec || !rec.origin) { toast('这份材料没有书源信息，重抓不了'); return; }
+  // 老材料只存了书源名字，没存规则；按名字回到书源列表里找
+  let raw = rec.origin.raw || null;
+  if (!raw) {
+    const byName = sources.find((s) => s.name === rec.origin.source && s.raw);
+    raw = byName ? byName.raw : null;
+  }
+  if (!raw) { toast('找不到对应书源，请先在「书源管理」里导入，再重抓'); return; }
+  if (btn) { btn.disabled = true; btn.textContent = '重抓中…'; }
+  try {
+    const info = await nativeCall('bookInfo', { source: raw, url: rec.origin.bookUrl }, 40000);
+    const tocUrl = (info && info.tocUrl) || rec.origin.tocUrl || rec.origin.bookUrl;
+    const toc = await nativeCall('bookToc', { source: raw, url: tocUrl }, 40000);
+    if (!toc || !toc.length) throw new Error('目录是空的');
+    const want = Math.min(BOOK_BATCH, toc.length);
+    const urls = toc.slice(0, want).map((c) => c.url).filter(Boolean);
+    const got = await nativeCall('bookChapters', { source: raw, urls, limit: want }, 120000);
+    const chapters = [];
+    (got || []).forEach((g, i) => {
+      if (!g || !g.text) return;
+      const t = (toc[i] && toc[i].title) || ('第 ' + (i + 1) + ' 章');
+      chapters.push({ title: ((rec.name || '') + ' · ' + t).trim(), text: g.text });
+    });
+    if (!chapters.length) throw new Error('没抓到正文');
+    const payload = JSON.stringify(chapters);
+    await matPut({
+      ...rec,
+      chapters,
+      bytes: payload.length,
+      savedAt: Date.now(),
+      origin: { ...rec.origin, tocUrl },
+    });
+    toast('已重抓 ' + chapters.length + ' 章（带分段）');
+    renderShelf();
+  } catch (e) {
+    toast('重抓失败：' + (e.message || e));
+    if (btn) { btn.disabled = false; btn.textContent = '重抓'; }
+  }
 }
 
 // 书源管理：导入 / 测试连通性 / 按规则搜一本书放进书架。
@@ -3432,7 +3495,7 @@ async function addBookToShelf(src, book, btn) {
       savedAt: Date.now(),
       bytes: payload.length,
       chapters,
-      origin: { source: src.name || '', bookUrl: book.bookUrl || '' },
+      origin: { source: src.name || '', bookUrl: book.bookUrl || '', tocUrl, raw: src.raw || null },
     });
     toast('已加入书架（抓到 ' + chapters.length + ' 章 / 共 ' + toc.length + ' 章）');
     if (btn) { btn.disabled = false; btn.textContent = '已加入'; }
