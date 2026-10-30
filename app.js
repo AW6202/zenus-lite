@@ -1,7 +1,7 @@
 // 学习机 Lite — 静态 PWA：内容来自 pack.json，进度存本地，AI 直连 OpenAI 兼容接口
 'use strict';
 
-const BUILD = '2026-10-30.16';
+const BUILD = '2026-10-30.17';
 
 const LS = {
   progress: 'zenus.progress.v1',
@@ -3118,6 +3118,27 @@ function attachZoomPan(wrap, img) {
 }
 
 // 原生长按菜单调用这里的动作（网页右侧浮栏已撤掉，动作都在长按菜单里）
+// 壳的「存入思源」会问这个：当前在读什么？（没有可存的内容就返回 null）
+window.__zenusCurrentDoc = function () {
+  try {
+    if (RDR.book && RDR.book.chapters && RDR.book.chapters[RDR.ch]) {
+      const ch = RDR.book.chapters[RDR.ch];
+      const text = ch.text || (ch.html ? ch.html.replace(/<[^>]+>/g, '') : '');
+      return JSON.stringify({ title: RDR.book.name + ' · ' + (ch.title || ('第 ' + (RDR.ch + 1) + ' 节')), markdown: text });
+    }
+    if (RDR.kind === 'nativepdf' && RDR.textLines && RDR.textLines.length) {
+      return JSON.stringify({ title: RDR.name || 'PDF', markdown: RDR.textLines.join(String.fromCharCode(10)) });
+    }
+    if (RDR.textMode && RDR.textLines && RDR.textLines.length) {
+      return JSON.stringify({ title: RDR.name || 'PDF', markdown: RDR.textLines.join(String.fromCharCode(10)) });
+    }
+    if (RDR.kind === 'image' && RDR.textLines && RDR.textLines.length) {
+      return JSON.stringify({ title: (RDR.name || '图片') + '（识别文字）', markdown: RDR.textLines.join(String.fromCharCode(10)) });
+    }
+    return null;
+  } catch (e) { return null; }
+};
+
 window.__zenusMenu = function (which) {
   try {
     if (which === 'full') openImageViewer(RDR.nativePages || [RDR.srcUrl], RDR.npIndex || 0);
@@ -3251,16 +3272,7 @@ function renderNativePdf() {
     + '<div class="hint">这份 PDF 没有嵌入字体，前端画不出字，已用系统内核渲染成图片（字形可能和原件不同，二维码/印章不受影响）。'
     + (RDR.textLines && RDR.textLines.length ? '要看字/取词请点右侧「文字视图」。' : '') + '</div>'
     + imgs
-    + '<div class="floating' + (RDR.toolsVisible ? ' show' : '') + '" id="npTools">'
-    + '<button id="npPrev">◀</button><button id="npNext">▶</button>'
-    + '<button id="npReset">全屏</button>'
-    + '<div class="sep"></div>'
-    + '<button id="npKp">知识点</button>'
-    + '<button id="npViz">看图出题</button>'
-    + '<div class="sep"></div>'
-    + (RDR.textLines && RDR.textLines.length ? '<button id="npText" class="t-close">文字视图</button>' : '')
-    + '<button id="npSys" class="t-close">用其他应用</button>'
-    + '<button id="npClose" class="t-close">关闭</button></div>';
+    ;
 
   const wraps = [...view.querySelectorAll('.npWrap')];
   const gotoPage = (i) => {
@@ -3280,21 +3292,7 @@ function renderNativePdf() {
       openImageViewer(pages, i);
     };
   });
-  syncTools();
-  document.getElementById('npPrev').onclick = () => gotoPage((RDR.npIndex || 0) - 1);
-  document.getElementById('npNext').onclick = () => gotoPage((RDR.npIndex || 0) + 1);
-  document.getElementById('npKp').onclick = () => { hideTools(); showPoints(); };
-  document.getElementById('npViz').onclick = () => { hideTools(); visionFromPdfPage(); };
-  document.getElementById('npReset').onclick = () => openImageViewer(pages, RDR.npIndex || 0);
-  const t = document.getElementById('npText');
-  if (t) t.onclick = () => { RDR.textMode = true; RDR.kind = 'pdf'; renderReader(); };
-  document.getElementById('npSys').onclick = () => openWithSystemApp();
-  document.getElementById('npClose').onclick = () => {
-    if (nativePort()) nativeCall('clearPending', {}, 3000).catch(() => {});
-    RDR.nativePages = null;
-    resetBook();
-    renderReader();
-  };
+  // 动作统一走壳的长按菜单（全屏/知识点/出题/文字视图/用其他应用/关闭）
   bindFlipGestures(view, { prev: () => {}, next: () => {}, middle: toggleTools });
   view.scrollTop = 0;
 }

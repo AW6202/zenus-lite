@@ -1013,47 +1013,23 @@ class CDP {
     check('课本已有的词不重复建卡', cards.packReason === 'exists-in-pack' || cards.packReason === 'skip', cards);
     check('手动标记的已掌握不被复习答错覆盖', cards.stillKnown === true, cards);
 
-    // 系统内核渲染视图：右侧工具条要跟其它阅读视图一样齐（用户报过这里只剩 4 个按钮）
-    const npTools = await probe('内核实渲染工具条', `
+    // 系统内核渲染视图：按设计**不再有**右侧浮栏，动作全在壳的长按菜单里；
+    // 页面只需提供「当前在读什么」给壳的存入思源用
+    const npTools = await probe('内核实渲染视图', `
       const png = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
       RDR.nativePages = [png, png];
       RDR.name = '冒烟页';
       RDR.kind = 'nativepdf';
       renderNativePdf();
       await new Promise(r => setTimeout(r, 80));
-      const bar = document.getElementById('npTools');
-      const ids = ['npPrev','npNext','npKp','npViz','npSys','npClose','npReset'];
-      const has = ids.every(id => !!document.getElementById(id));
-      const shown = bar && bar.classList.contains('show');
+      const hadBar = !!document.getElementById('npTools');
       const wraps = document.querySelectorAll('.npWrap').length;
-      const missing = ids.filter(id => !document.getElementById(id));
+      const docApi = typeof window.__zenusCurrentDoc === 'function';
       RDR.nativePages = null; resetBook(); renderReader();
-      return { has, shown, wraps, missing };
+      return { hadBar, wraps, docApi };
     `);
-    check('内核实渲染的 PDF 视图有完整工具条（翻页/知识点/出题/文字视图）',
-      npTools.has && npTools.shown && npTools.wraps === 2, npTools);
-
-    // 图片视图：单击叫出工具条 + 长按弹自己的动作面板（不能被浏览器 blob 菜单顶掉）
-    // 图片视图：浮栏已撤（动作改到 App 长按菜单），但要保证菜单入口 __zenusMenu 可用
-    const imgActs = await probe('图片菜单入口', `
-      const png = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
-      RDR.kind = 'image'; RDR.srcUrl = png; RDR.name = '冒烟图片';
-      renderImage();
-      await new Promise(r => setTimeout(r, 80));
-      const hasMenu = typeof window.__zenusMenu === 'function';
-      const hasFloat = !!document.getElementById('imgTools');
-      const okFull = window.__zenusMenu('full');
-      await new Promise(r => setTimeout(r, 80));
-      const viewerOpened = !!document.getElementById('imgViewer');
-      closeImageViewer();
-      const okClose = window.__zenusMenu('close');
-      await new Promise(r => setTimeout(r, 80));
-      const backHome = !!document.getElementById('pickPdf');
-      return { hasMenu, hasFloat, okFull, viewerOpened, okClose, backHome };
-    `);
-    check('图片不再挂右侧浮栏；长按菜单入口可用（全屏 / 关闭）',
-      imgActs.hasMenu && imgActs.hasFloat === false && imgActs.okFull === true
-        && imgActs.viewerOpened && imgActs.okClose === true && imgActs.backHome, imgActs);
+    check('内核实渲染视图不再挂浮栏，且提供当前材料给「存入思源」',
+      npTools.hadBar === false && npTools.wraps === 2 && npTools.docApi, npTools);
 
     if (pdfArg) {
       const pdf = await probe('PDF', `
