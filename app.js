@@ -1,7 +1,7 @@
 // 学习机 Lite — 静态 PWA：内容来自 pack.json，进度存本地，AI 直连 OpenAI 兼容接口
 'use strict';
 
-const BUILD = '2026-10-30.2';
+const BUILD = '2026-10-30.4';
 
 const LS = {
   progress: 'zenus.progress.v1',
@@ -136,7 +136,7 @@ function speak(text, lang = 'en-US') {
   if (!text) return;
   if (nativePort()) {
     // App 里没有 Web Speech API，交给原生 TTS
-    nativeCall('speak', { text: String(text), lang, rate: Number(settings.ttsRate) || 0.9 })
+    nativeCall('speak', { text: String(text), lang })   // 语速由 App 的朗读设置决定
       .catch((e) => toast('朗读失败：' + e.message));
     return;
   }
@@ -548,8 +548,10 @@ function renderSettings() {
     <input class="t" id="s-new" type="number" min="0" max="100" value="${settings.dailyNew}">
     <label class="f">AI 对话携带上下文条数（0 = 每条独立问）</label>
     <input class="t" id="s-ctx" type="number" min="0" max="40" value="${settings.ctxMsgs}">
-    <label class="f">朗读语速（0.5 慢 – 1.2 快）</label>
-    <input class="t" id="s-rate" type="number" step="0.1" min="0.5" max="1.2" value="${settings.ttsRate}">
+    ${nativePort()
+      ? '<label class="f">朗读语速：由 App 统一控制（长按浏览器里的喇叭图标调整）</label>'
+      : '<label class="f">朗读语速（0.5 慢 – 1.2 快）</label>'
+        + '<input class="t" id="s-rate" type="number" step="0.1" min="0.5" max="1.2" value="' + settings.ttsRate + '">'}
     <div class="row" style="margin-top:10px">
       <button class="btn" id="testSpeak">试听一句</button>
     </div>
@@ -605,7 +607,7 @@ function renderSettings() {
     if ($('#s-vkey')) settings.visionKey = $('#s-vkey').value.trim();
     settings.dailyNew = Math.max(0, Number($('#s-new').value) || 0);
     settings.ctxMsgs = Math.max(0, Math.min(40, Number($('#s-ctx').value) || 0));
-    settings.ttsRate = Math.min(1.2, Math.max(0.5, Number($('#s-rate').value) || 0.9));
+    if ($('#s-rate')) settings.ttsRate = Math.min(1.2, Math.max(0.5, Number($('#s-rate').value) || 0.9));
     saveJSON(LS.settings, settings);
     toast('设置已保存');
   };
@@ -644,7 +646,7 @@ function renderSettings() {
   const tst = $('#testSpeak');
   if (tst) tst.onclick = () => {
     settings.ctxMsgs = Math.max(0, Math.min(40, Number($('#s-ctx').value) || 0));
-    settings.ttsRate = Math.min(1.2, Math.max(0.5, Number($('#s-rate').value) || 0.9));
+    if ($('#s-rate')) settings.ttsRate = Math.min(1.2, Math.max(0.5, Number($('#s-rate').value) || 0.9));
     speak('This is how it sounds. Tap any word to hear it again.');
   };
   const ds = $('#doSync');
@@ -2203,7 +2205,12 @@ async function openPdfFile(f) {
     applyReadPos();
     renderReader();
   } catch (err) {
-    view.innerHTML = '<div class="empty">打不开这个 PDF<br><span class="sub">' + esc(err.message) + '</span></div>';
+    view.innerHTML = '<div class="empty">打不开这个 PDF<br><span class="sub">' + esc(err.message) + '</span>'
+      + (nativePort() ? '<div class="row" style="margin-top:16px"><button class="btn primary" id="pdfSys">用其他应用打开</button></div>' : '')
+      + '</div>';
+    if (nativePort()) {
+      document.getElementById('pdfSys').onclick = () => openWithSystemApp();
+    }
   }
 }
 
@@ -2356,7 +2363,10 @@ function renderReader() {
     '<div class="meta"><span>' + esc(RDR.name) + '</span><span id="pgLabel">' + RDR.page + ' / ' + RDR.total + '</span></div>'
     + (RDR.fontRisk ? '<div class="notice" id="pdfFontWarn">这份 PDF 没嵌入字体，浏览器画不出其中一些字。'
       + '可改用手机自带的阅读器打开（能正常显示，但不能取词）。'
-      + '<div class="row" style="margin-top:8px"><button class="btn ghost" id="openSys" style="padding:7px 10px;font-size:13px">用系统阅读器打开</button>'
+      + '<div class="row" style="margin-top:8px">'
+      + (nativePort()
+          ? '<button class="btn ghost" id="openSys2" style="padding:7px 10px;font-size:13px">用其他应用打开</button>'
+          : '<button class="btn ghost" id="openSys" style="padding:7px 10px;font-size:13px">用系统阅读器打开</button>')
       + '<button class="btn ghost" id="dismissWarn" style="padding:7px 10px;font-size:13px">知道了</button></div></div>' : '')
     + '<div id="readerWrap"><canvas id="pdfCanvas"></canvas><div class="textLayer" id="textLayer"></div></div>'
     + '<div class="floating pager' + (RDR.toolsVisible ? ' show' : '') + '" id="pdfTools">'
@@ -2379,6 +2389,8 @@ function renderReader() {
   document.getElementById('closePdf').onclick = () => { saveReadPos(); resetBook(); renderReader(); };
   const sysBtn = document.getElementById('openSys');
   if (sysBtn) sysBtn.onclick = openWithSystemReader;
+  const sysBtn2 = document.getElementById('openSys2');
+  if (sysBtn2) sysBtn2.onclick = openWithSystemApp;
   const ocrb = document.getElementById('ocrBtn');
   if (ocrb) ocrb.onclick = () => { hideTools(); ocrCurrentPage(); };
   const ts = document.getElementById('toggleScroll');
@@ -2801,6 +2813,14 @@ async function pasteFromClipboard() {
     } catch { /* 需要用户手势或权限，退到手动粘贴 */ }
   }
   renderPaste('', '');
+}
+
+// App 里：把刚选中的文件交给系统/其他应用打开（自己解析不了的 PDF 走这里）
+function openWithSystemApp() {
+  if (!nativePort()) return toast('这个功能只在 App 里可用');
+  nativeCall('openLastFile', {}, 4000)
+    .then((ok) => { if (!ok) toast('系统里没有能打开它的应用'); })
+    .catch(() => toast('调用失败，试试在文件管理器里打开'));
 }
 
 // 从别的 App 分享进来（share.html 存在 localStorage 里）
@@ -4213,6 +4233,33 @@ document.querySelectorAll('.tabbar button').forEach((b) => {
   b.onclick = () => { state.tab = b.dataset.tab; render(); };
 });
 
+// App 里：浏览器下载的 PDF/EPUB/DOCX/TXT/MD 会先交给学习机（原生用本地 127.0.0.1 服务暴露）
+async function openPendingFile() {
+  if (!nativePort()) return false;
+  let info = null;
+  try { info = await nativeCall('pendingFile', {}, 4000); } catch { return false; }
+  if (!info || !info.url) return false;
+  try {
+    const res = await fetch(info.url);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const blob = await res.blob();
+    const f = new File([blob], info.name, { type: blob.type || info.mime || '' });
+    nativeCall('clearPending', {}, 3000).catch(() => {});
+    state.tab = 'reader';
+    render();
+    const ext = String(info.name || '').split('.').pop().toLowerCase();
+    if (ext === 'pdf') await openPdfFile(f);
+    else if (ext === 'epub') await openEpubBook(f);
+    else if (ext === 'docx') await openDocxBook(f);
+    else await openTextBook(f);
+    toast('已从浏览器载入：' + info.name);
+    return true;
+  } catch (e) {
+    toast('载入失败：' + e.message);
+    return false;
+  }
+}
+
 // 网页上「＋存卡」的生词：App 打开时从原生收件箱取回来（取走即清空，不会重复计数）
 async function pullWebCards() {
   if (!nativePort()) return;
@@ -4255,6 +4302,9 @@ async function pullWebCards() {
     pullWebCards();
     setTimeout(pullWebCards, 1500);
     setTimeout(pullWebCards, 6000);
+    // 浏览器下载的可读文件：有就自动进阅读器
+    openPendingFile();
+    setTimeout(openPendingFile, 2000);
   } catch (err) {
     view.innerHTML = `<div class="empty">内容包加载失败<br><span class="sub">${esc(err.message)}</span></div>`;
   }
