@@ -3326,7 +3326,7 @@ async function refetchMaterial(id, btn) {
     (got || []).forEach((g, i) => {
       if (!g || !g.text) return;
       const t = (toc[i] && toc[i].title) || ('第 ' + (i + 1) + ' 章');
-      chapters.push({ title: ((rec.name || '') + ' · ' + t).trim(), text: g.text });
+      chapters.push({ title: ((rec.name || '') + ' · ' + t).trim(), text: g.text, url: g.url || (toc[i] && toc[i].url) || '' });
     });
     if (!chapters.length) throw new Error('没抓到正文');
     const payload = JSON.stringify(chapters);
@@ -3557,7 +3557,7 @@ async function addBookToShelf(src, book, btn) {
     (got || []).forEach((g, i) => {
       if (!g || !g.text) return;
       const t = (toc[i] && toc[i].title) || ('第 ' + (i + 1) + ' 章');
-      chapters.push({ title: (book.name || '未命名') + ' · ' + t, text: g.text });
+      chapters.push({ title: (book.name || '未命名') + ' · ' + t, text: g.text, url: g.url || (toc[i] && toc[i].url) || '' });
     });
     if (!chapters.length) throw new Error('前几章都没抓到正文');
     const payload = JSON.stringify(chapters);
@@ -4700,12 +4700,17 @@ function showBookToc() {
   view.innerHTML =
     '<div class="meta"><span>目录</span><span>' + b.chapters.length + ' 节</span></div>'
     + '<div class="row" style="margin:6px 0 10px"><button class="btn ghost" id="tocBack">← 回正文</button>'
-    + '<button class="btn ghost" id="tocJump">跳到第…节</button></div>'
+    + '<button class="btn ghost" id="tocJump">跳到第…节</button>'
+    + (b.chapters[cur] && b.chapters[cur].url
+      ? '<button class="btn" id="tocBrowser">浏览器打开本章</button>' : '')
+    + '</div>'
     + '<div class="list">' + b.chapters.map((c, i) =>
       '<button class="tocItem' + (i === cur ? ' on' : '') + '" data-i="' + i + '">'
       + '<span>' + esc(c.title || ('第 ' + (i + 1) + ' 节')) + '</span>'
-      + '<small>' + (i + 1) + '</small></button>').join('') + '</div>';
+      + '<small>' + (i + 1) + (c.url ? ' · 可浏览器打开' : '') + '</small></button>').join('') + '</div>';
   document.getElementById('tocBack').onclick = () => renderTextBook();
+  const tb = document.getElementById('tocBrowser');
+  if (tb) tb.onclick = () => openChapterInBrowser(b.chapters[cur] && b.chapters[cur].url);
   document.getElementById('tocJump').onclick = () => {
     const n = Number(prompt('跳到第几节？（共 ' + b.chapters.length + ' 节）', String(cur + 1)));
     if (n && n >= 1) { RDR.pageIdx = 0; gotoChapter(n - 1, 'first'); }
@@ -4718,7 +4723,27 @@ function showBookToc() {
       toast('跳到第 ' + (i + 1) + ' 节');
     };
   });
+  // 长按章节：若有 url，直接在浏览器里打开（漫画/需要登录的站点走这条路）
+  view.querySelectorAll('.tocItem').forEach((btn) => {
+    const i = Number(btn.dataset.i);
+    btn.oncontextmenu = (e) => {
+      const c = b.chapters[i];
+      if (!c || !c.url) return;
+      e.preventDefault();
+      openChapterInBrowser(c.url);
+    };
+  });
   view.scrollTop = 0;
+}
+
+// 用真浏览器打开章节页：漫画站懒加载/防盗链/JS 渲染都能自然解决，
+// 规则引擎做不到的"打开就能看"就靠这一步。
+function openChapterInBrowser(url) {
+  if (!url) { toast('这一章没有保存地址'); return; }
+  if (!nativePort()) { toast('要在 App 里才能交给浏览器打开'); return; }
+  nativeCall('openUrl', { url }, 5000)
+    .then(() => toast('已交给浏览器打开'))
+    .catch((e) => toast('打开失败：' + (e.message || e)));
 }
 
 // ── 单页 / 双页（横屏读教材更像书）──────────────────────
