@@ -1,7 +1,7 @@
 // 学习机 Lite — 静态 PWA：内容来自 pack.json，进度存本地，AI 直连 OpenAI 兼容接口
 'use strict';
 
-const BUILD = '2026-10-30.17';
+const BUILD = '2026-10-30.18';
 
 const LS = {
   progress: 'zenus.progress.v1',
@@ -14,6 +14,7 @@ const LS = {
   kpoints: 'zenus.kpoints.v1',
   cardIndex: 'zenus.cards.index.v1',   // 词 → 卡片 id（跨库去重）
   schema: 'zenus.schema.v2',
+  sources: 'zenus.sources.v1',   // Legado 书源（先只存元信息，规则解析下周做）
 };
 
 const DEFAULT_SETTINGS = {
@@ -2464,14 +2465,15 @@ function renderReader() {
     view.innerHTML = '<div class="empty">选一本书，直接在页面里读。<br>'
       + '<span class="sub">选中任意文字 → 朗读 / 存卡 / 问 AI。文件不上传，全在本机解析。</span>'
       + '<div class="row" style="margin-top:16px"><button class="btn primary" id="pickPdf">选择文件</button></div>'
-      + '<div class="row" style="margin-top:8px"><button class="btn" id="findBooks">找教材</button>'
-      + '<button class="btn" id="lookupBtn">查词</button></div>'
+      + '<div class="row" style="margin-top:8px"><button class="btn" id="shelfBtn">书架</button>'
+      + '<button class="btn" id="findBooks">找教材</button><button class="btn" id="lookupBtn">查词</button></div>'
       + '<div class="row" style="margin-top:8px"><button class="btn" id="pasteBtn">粘贴 / 分享导入</button></div>'
       + '<div class="sub" style="margin-top:10px">支持 PDF · EPUB · DOCX · TXT · Markdown · 图片</div>'
       + '<div id="recentMats" style="margin-top:14px;text-align:left"></div></div>'
       + '<input type="file" id="pdfFile" accept=".pdf,.epub,.docx,.txt,.md,.png,.jpg,.jpeg,.webp,image/*,application/pdf,application/epub+zip,'
       + 'application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain" style="display:none">';
     document.getElementById('pickPdf').onclick = () => document.getElementById('pdfFile').click();
+    document.getElementById('shelfBtn').onclick = () => renderShelf();
     document.getElementById('findBooks').onclick = () => renderFind();
     document.getElementById('lookupBtn').onclick = () => renderLookup();
     document.getElementById('pasteBtn').onclick = () => pasteFromClipboard();
@@ -3218,6 +3220,91 @@ function bindImageActions(img, ctx) {
     e.preventDefault();
     showImageActions(ctx);
   });
+}
+
+// ── 书架 ─────────────────────────────────────────────
+// 统一入口：本地文件、网页材料、以后的书源书籍都往这里放。
+// 数据源就是材料库（IndexedDB），不另建一份，避免"两处各记一套"。
+let sources = loadJSON(LS.sources, []);
+
+async function renderShelf() {
+  window.__zenusMenuMode = '';
+  let mats = [];
+  try { mats = await matAll(); } catch { mats = []; }
+  mats.sort((a, b) => (b.savedAt || 0) - (a.savedAt || 0));
+  const kindName = (k) => k === 'epub' ? 'EPUB' : k === 'docx' ? 'DOCX' : k === 'md' ? 'MD' : k === 'web' ? '网页' : '文本';
+  const rows = mats.map((r) =>
+    '<div class="it" data-open="' + esc(r.id) + '" style="display:flex;align-items:center;gap:8px">'
+    + '<div style="flex:1;min-width:0">'
+    + '<div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(r.name || '未命名') + '</div>'
+    + '<div class="sub">' + kindName(r.kind) + ' · ' + new Date(r.savedAt || 0).toLocaleDateString()
+    + ' · ' + Math.round((r.bytes || 0) / 1024) + 'KB</div></div>'
+    + '<button class="btn ghost" data-del="' + esc(r.id) + '" style="width:auto;padding:6px 10px;font-size:12px">删除</button>'
+    + '</div>').join('');
+
+  view.innerHTML =
+    '<div class="meta"><span>书架</span><span>' + mats.length + ' 份材料 · ' + sources.length + ' 个书源</span></div>'
+    + '<div class="row" style="margin:8px 0;flex-wrap:wrap">'
+    + '<button class="btn" id="shSources">书源管理</button>'
+    + '<button class="btn ghost" id="shBack">← 回阅读</button></div>'
+    + (rows || '<div class="empty">书架还是空的。<br><span class="sub">在壳里打开网页 → ≡ 菜单「存到书架」；或直接导入本地文件。</span></div>');
+  document.getElementById('shBack').onclick = () => { state.tab = 'reader'; render(); };
+  document.getElementById('shSources').onclick = () => renderSourceManager();
+  view.querySelectorAll('[data-open]').forEach((el) => {
+    el.onclick = (e) => { if (e.target.dataset && e.target.dataset.del) return; openStoredMaterial(el.dataset.open); };
+  });
+  view.querySelectorAll('[data-del]').forEach((el) => {
+    el.onclick = async (e) => { e.stopPropagation(); await matDelete(el.dataset.del); renderShelf(); };
+  });
+  view.scrollTop = 0;
+}
+
+// 书源管理（P0：只有导入/列出/删除；规则解析下周做）
+function renderSourceManager() {
+  window.__zenusMenuBoxMode = '';
+  const rows = sources.map((src, i) =>
+    '<div class="it" style="display:flex;align-items:center;gap:8px">'
+    + '<div style="flex:1;min-width:0"><div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'
+    + esc(src.name || '未命名书源') + '</div><div class="sub">' + esc(src.url || '') + '</div></div>'
+    + '<button class="btn ghost" data-sdel="' + i + '" style="width:auto;padding:6px 10px;font-size:12px">删除</button></div>'
+  ).join('');
+  view.innerHTML =
+    '<div class="meta"><span>书源管理</span><span>' + sources.length + ' 个</span></div>'
+    + '<div class="hint">粘贴 Legado 书源 JSON（一个数组，或单个对象也可以）。'
+    + '目前只保存名字和地址——按规则搜索/取正文是下一步。</div>'
+    + '<textarea class="t" id="srcBox" rows="6" style="height:auto;min-height:120px;font-size:12px"'
+    + ' placeholder="粘贴书源 JSON 数组"></textarea>'
+    + '<div class="row" style="margin-top:8px"><button class="btn primary" id="srcAdd">导入书源</button>'
+    + '<button class="btn ghost" id="srcBack">← 回书架</button></div>'
+    + (rows || '<div class="empty" style="margin-top:14px">还没有书源</div>');
+  document.getElementById('srcBack').onclick = () => renderShelf();
+  document.getElementById('srcAdd').onclick = () => {
+    const raw = document.getElementById('srcBox').value.trim();
+    if (!raw) return toast('先粘贴书源 JSON');
+    let data;
+    try { data = JSON.parse(raw); } catch (e) { return toast('JSON 解析失败：' + e.message); }
+    const arr = Array.isArray(data) ? data : [data];
+    let added = 0;
+    for (const it of arr) {
+      const name = it.bookSourceName || it.name;
+      const url = it.bookSourceUrl || it.url;
+      if (!name || !url) continue;
+      if (sources.some((x) => x.url === url)) continue;
+      sources.push({ name, url, group: it.bookSourceGroup || '', enabled: it.enabled !== false });
+      added++;
+    }
+    saveJSON(LS.sources, sources);
+    toast('导入 ' + added + ' 个书源');
+    renderSourceManager();
+  };
+  view.querySelectorAll('[data-sdel]').forEach((el) => {
+    el.onclick = () => {
+      sources.splice(Number(el.dataset.sdel), 1);
+      saveJSON(LS.sources, sources);
+      renderSourceManager();
+    };
+  });
+  view.scrollTop = 0;
 }
 
 // 阅读器首页的「最近读过」：从 IndexedDB 里列出来，点一下接着读

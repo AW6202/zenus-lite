@@ -985,6 +985,28 @@ class CDP {
         viewer.open && viewer.stage && viewer.hasBtns && viewer.label.indexOf('2 /') === 0 && viewer.closed,
         viewer);
 
+    // 书架：能列出材料、能导入书源（P0 只存名字+地址）
+    const shelf = await probe('书架与书源', `
+      closePoints && closePoints();
+      state.tab = 'reader'; render();
+      await renderShelf();
+      await new Promise(r => setTimeout(r, 150));
+      const hasShelf = !!document.getElementById('shSources');
+      const before = sources.length;
+      sources = []; saveJSON(LS.sources, sources);
+      renderSourceManager();
+      await new Promise(r => setTimeout(r, 80));
+      document.getElementById('srcBox').value = JSON.stringify([{ bookSourceName: '冒烟源', bookSourceUrl: 'https://example.com/src' }]);
+      document.getElementById('srcAdd').click();
+      await new Promise(r => setTimeout(r, 120));
+      const after = sources.length;
+      const listed = (document.body.innerHTML.includes('冒烟源'));
+      sources = []; saveJSON(LS.sources, sources);
+      renderShelf();
+      return { hasShelf, before, after, listed };
+    `);
+    check('书架页存在且能导入书源', shelf.hasShelf && shelf.after === 1 && shelf.listed, shelf);
+
     // 卡片模型 v2：同词只留一条 / 课本已有不重复建 / 手动结论不被复习覆盖
     const cards = await probe('卡片模型', `
       const before = userCards.length;
