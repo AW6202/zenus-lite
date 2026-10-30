@@ -1,7 +1,7 @@
 // 学习机 Lite — 静态 PWA：内容来自 pack.json，进度存本地，AI 直连 OpenAI 兼容接口
 'use strict';
 
-const BUILD = '2026-10-30.14';
+const BUILD = '2026-10-30.15';
 
 const LS = {
   progress: 'zenus.progress.v1',
@@ -424,6 +424,7 @@ document.querySelectorAll('.tabbar button').forEach((b) => {
     b.classList.toggle('on', b.dataset.tab === state.tab);
   });
   document.body.classList.toggle('reader-mode', state.tab === 'reader');
+  if (state.tab !== 'reader') window.__zenusMenuMode = '';
   syncReadingChrome();
   if (state.tab === 'review') return renderReview();
   if (state.tab === 'browse') return renderBrowse();
@@ -2452,6 +2453,8 @@ function openWithSystemReader() {
 
 function renderReader() {
   syncReadingChrome();
+  // 默认不接管长按；只有图片/PDF 图视图会把它设成 'image'/'pdfpage'
+  window.__zenusMenuMode = '';
   if (RDR.kind === 'nativepdf') return renderNativePdf();
   if (RDR.kind === 'image') return renderImage();
   if (RDR.kind === 'epub' || RDR.kind === 'text' || RDR.kind === 'md' || RDR.kind === 'docx') return renderTextBook();
@@ -3234,6 +3237,7 @@ async function fillRecentMaterials() {
 // 系统内核渲染出来的分页图：只读浏览，取词请点「文字视图」
 // 缩放走双指手势（attachZoomPan），按钮收进右侧浮层，跟其它阅读视图保持一致
 function renderNativePdf() {
+  window.__zenusMenuMode = 'pdfpage';
   const pages = RDR.nativePages || [];
   const imgs = pages.map((u, i) =>
     '<div class="npWrap" data-page="' + i + '" style="overflow:hidden;touch-action:pan-y;margin:0 0 10px">'
@@ -3748,6 +3752,7 @@ async function ocrImage() {
 }
 
 function renderImage() {
+  window.__zenusMenuMode = 'image';   // 只在这个视图里才让 App 接管长按
   view.innerHTML =
     '<div class="meta"><span>' + esc(RDR.name) + '</span><span>图片 · 双指缩放 · 长按出菜单</span></div>'
     + '<div id="imWrap" style="overflow:visible;touch-action:pan-y;margin-bottom:12px">'
