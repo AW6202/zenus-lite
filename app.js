@@ -1,7 +1,7 @@
 // 学习机 Lite — 静态 PWA：内容来自 pack.json，进度存本地，AI 直连 OpenAI 兼容接口
 'use strict';
 
-const BUILD = '2026-10-30.13';
+const BUILD = '2026-10-30.14';
 
 const LS = {
   progress: 'zenus.progress.v1',
