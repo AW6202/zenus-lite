@@ -1,7 +1,7 @@
 // 学习机 Lite — 静态 PWA：内容来自 pack.json，进度存本地，AI 直连 OpenAI 兼容接口
 'use strict';
 
-const BUILD = '2026-10-30.15';
+const BUILD = '2026-10-30.16';
 
 const LS = {
   progress: 'zenus.progress.v1',
@@ -4655,6 +4655,9 @@ function askFromSelection(t) {
   }
 
   document.addEventListener('selectionchange', () => {
+    // 壳里（APK）不画自己的浮框：壳自带的选区菜单已经包含 查词/＋存卡/朗读/翻译/解释，
+    // 两套叠在一起会互相遮挡（2026-10-30 用户截图确认）。浏览器里打开学习机时照旧。
+    if (nativePort()) return remove();
     const sel = window.getSelection();
     const text = sel && sel.toString().trim();
     if (!text || text.length > 300 || !sel.rangeCount) return remove();
