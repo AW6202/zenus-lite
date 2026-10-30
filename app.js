@@ -1,7 +1,7 @@
 // 学习机 Lite — 静态 PWA：内容来自 pack.json，进度存本地，AI 直连 OpenAI 兼容接口
 'use strict';
 
-const BUILD = '2026-10-30.5';
+const BUILD = '2026-10-30.7';
 
 const LS = {
   progress: 'zenus.progress.v1',
@@ -2842,18 +2842,34 @@ async function tryNativePdfRender() {
 
 // 系统内核渲染出来的分页图：只读浏览，取词请点「文字视图」
 function renderNativePdf() {
+  const zoom = RDR.npZoom || 1;
+  const widthPct = Math.round(zoom * 100);
   const imgs = (RDR.nativePages || []).map((u, i) =>
-    '<img src="' + esc(u) + '" alt="第 ' + (i + 1) + ' 页" style="width:100%;display:block;margin:0 0 10px">'
+    '<img src="' + esc(u) + '" alt="第 ' + (i + 1) + ' 页" '
+    + 'style="width:' + widthPct + '%;max-width:none;display:block;margin:0 0 10px">'
   ).join('');
   view.innerHTML =
     '<div class="meta"><span>' + esc(RDR.name || 'PDF') + '</span><span>系统内核渲染 · ' + (RDR.nativePages || []).length + ' 页</span></div>'
     + '<div class="hint">这份 PDF 没有嵌入字体，前端画不出字，已用系统内核渲染成图片（字形可能和原件不同，二维码/印章不受影响）。'
-    + (RDR.textLines && RDR.textLines.length ? '要看字/取词请点下面的「文字视图」。' : '') + '</div>'
-    + '<div class="row" style="margin:8px 0">'
+    + (RDR.textLines && RDR.textLines.length ? '要看字/取词请点「文字视图」。' : '') + '</div>'
+    + '<div class="row" style="margin:8px 0;align-items:center;flex-wrap:wrap">'
+    + '<button class="btn ghost" id="npOut">－</button>'
+    + '<span class="sub" id="npZoom" style="min-width:52px;text-align:center">' + widthPct + '%</span>'
+    + '<button class="btn ghost" id="npIn">＋</button>'
     + (RDR.textLines && RDR.textLines.length ? '<button class="btn" id="npText">文字视图</button>' : '')
     + '<button class="btn" id="npSys">用其他应用打开</button>'
     + '<button class="btn ghost" id="npClose">关闭</button></div>'
-    + imgs;
+    // 放大后要能左右拖：容器自己负责横向滚动（main 只有 overflow-y）
+    + '<div id="npWrap" style="overflow-x:auto;overflow-y:visible;-webkit-overflow-scrolling:touch">' + imgs + '</div>';
+  const setZoom = (z) => {
+    RDR.npZoom = Math.min(4, Math.max(1, Math.round(z * 2) / 2));
+    const pct = Math.round(RDR.npZoom * 100);
+    document.querySelectorAll('#npWrap img').forEach((img) => { img.style.width = pct + '%'; });
+    const label = document.getElementById('npZoom');
+    if (label) label.textContent = pct + '%';
+  };
+  document.getElementById('npOut').onclick = () => setZoom((RDR.npZoom || 1) - 0.5);
+  document.getElementById('npIn').onclick = () => setZoom((RDR.npZoom || 1) + 0.5);
   const t = document.getElementById('npText');
   if (t) t.onclick = () => { RDR.textMode = true; RDR.kind = 'pdf'; renderReader(); };
   document.getElementById('npSys').onclick = () => openWithSystemApp();
@@ -3319,9 +3335,16 @@ async function ocrImage() {
 }
 
 function renderImage() {
+  const zoom = RDR.imgZoom || 1;
   view.innerHTML =
     '<div class="meta"><span>' + esc(RDR.name) + '</span><span>图片</span></div>'
-    + '<img id="imgView" src="' + RDR.srcUrl + '" alt="" style="max-width:100%;border-radius:8px;background:#fff">'
+    + '<div class="row" style="margin:8px 0;align-items:center">'
+    + '<button class="btn ghost" id="imOut">－</button>'
+    + '<span class="sub" id="imZoom" style="min-width:52px;text-align:center">' + Math.round(zoom * 100) + '%</span>'
+    + '<button class="btn ghost" id="imIn">＋</button></div>'
+    + '<div id="imWrap" style="overflow-x:auto;overflow-y:visible;-webkit-overflow-scrolling:touch">'
+    + '<img id="imgView" src="' + RDR.srcUrl + '" alt="" style="width:' + Math.round(zoom * 100) + '%;max-width:none;display:block;border-radius:8px;background:#fff">'
+    + '</div>'
     + (RDR.textLines && RDR.textLines.length
       ? '<h2>识别出的文字</h2><div class="bookText plain" style="font-size:14px">'
         + RDR.textLines.map((l) => '<p>' + esc(l) + '</p>').join('') + '</div>'
@@ -3331,6 +3354,16 @@ function renderImage() {
     + '<button id="vizBtn">看图出题</button>'
     + '<button id="kpBtn" class="t-close">知识点</button>'
     + '<button id="closeImg" class="t-close">关闭</button></div>';
+  const imSet = (z) => {
+    RDR.imgZoom = Math.min(4, Math.max(1, Math.round(z * 2) / 2));
+    const pct = Math.round(RDR.imgZoom * 100);
+    const img = document.getElementById('imgView');
+    if (img) img.style.width = pct + '%';
+    const label = document.getElementById('imZoom');
+    if (label) label.textContent = pct + '%';
+  };
+  document.getElementById('imOut').onclick = () => imSet((RDR.imgZoom || 1) - 0.5);
+  document.getElementById('imIn').onclick = () => imSet((RDR.imgZoom || 1) + 0.5);
   document.getElementById('ocrBtn').onclick = () => { hideTools(); ocrImage(); };
   document.getElementById('kpBtn').onclick = () => { hideTools(); showPoints(); };
   document.getElementById('vizBtn').onclick = () => { hideTools(); visionFromImage(); };
@@ -3600,7 +3633,7 @@ function flipPage(delta) {
 }
 
 function bumpFont(delta) {
-  settings.readFont = Math.max(13, Math.min(26, (settings.readFont || 16) + delta));
+  settings.readFont = Math.max(12, Math.min(34, (settings.readFont || 16) + delta));
   saveJSON(LS.settings, settings);
   if (RDR.paged) {
     const ratio = RDR.pages > 1 ? (RDR.pageIdx || 0) / (RDR.pages - 1) : 0;
@@ -3650,7 +3683,7 @@ function renderTextBook() {
     + '<button id="prevCh">◀</button><button id="nextCh">▶</button>'
     + '<button id="tocBtn">目录</button>'
     + '<div class="sep"></div>'
-    + '<button id="fBig" title="字号">A+</button><button id="fSmall" title="字号">A-</button>'
+    + '<button id="fBig" title="字号">A+ ' + (settings.readFont || 16) + '</button><button id="fSmall" title="字号">A-</button>'
     + '<button id="lLoose" title="行距">行+</button><button id="lTight" title="行距">行-</button>'
     + '<button id="spreadBtn">' + (RDR.spread ? '单页' : '双页') + '</button>'
     + '<div class="sep"></div>'
