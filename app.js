@@ -1,7 +1,7 @@
 // 学习机 Lite — 静态 PWA：内容来自 pack.json，进度存本地，AI 直连 OpenAI 兼容接口
 'use strict';
 
-const BUILD = '2026-10-30.7';
+const BUILD = '2026-10-30.9';
 
 const LS = {
   progress: 'zenus.progress.v1',
@@ -119,6 +119,102 @@ let userCards = loadJSON(LS.userCards, []);  // 阅读时自己存的卡
 let reviewLog = loadJSON(LS.log, []);
 let settings = { ...DEFAULT_SETTINGS, ...loadJSON(LS.settings, {}) };
 state.chat = loadJSON(LS.chat, []);
+
+// ── 材料落库（IndexedDB）──────────────────────────────
+// 以前导入的正文只存在内存（RDR.book），关掉 App 就没了：读过的文章、打开过的书都得重来一遍。
+// 现在把章节正文存进 IndexedDB，阅读器首页列出「最近读过」，点一下接着读。
+// 注意：EPUB 的图片是 blob URL，存不下来（只存文字）；PDF 字节太大也不存。
+const MAT_DB = 'zenus_materials';
+const MAT_STORE = 'materials';
+const MAT_MAX = 20;              // 只留最近 20 份
+const MAT_MAX_BYTES = 3 * 1024 * 1024;   // 单份上限，超了不入库
+
+function idbOpen() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(MAT_DB, 1);
+    req.onupgradeneeded = () => {
+      const db = req.result;
+      if (!db.objectStoreNames.contains(MAT_STORE)) {
+        db.createObjectStore(MAT_STORE, { keyPath: 'id' });
+      }
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function matPut(rec) {
+  const db = await idbOpen();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(MAT_STORE, 'readwrite');
+    tx.objectStore(MAT_STORE).put(rec);
+    tx.oncomplete = () => resolve(true);
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+async function matAll() {
+  const db = await idbOpen();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(MAT_STORE, 'readonly');
+    const req = tx.objectStore(MAT_STORE).getAll();
+    req.onsuccess = () => resolve(req.result || []);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function matDelete(id) {
+  const db = await idbOpen();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(MAT_STORE, 'readwrite');
+    tx.objectStore(MAT_STORE).delete(id);
+    tx.oncomplete = () => resolve(true);
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+// 打开一份文字材料后调用：把章节正文存下来
+async function persistMaterial(kind) {
+  try {
+    if (!RDR.book || !RDR.book.chapters || !RDR.book.chapters.length) return;
+    const payload = RDR.book.chapters.map((c) => ({ title: c.title || '', text: c.text || '', html: c.html || '' }));
+    const json = JSON.stringify(payload);
+    if (json.length > MAT_MAX_BYTES) return;          // 太大就不存，别把配额撑爆
+    const id = RDR.key || (RDR.book.name + '|' + json.length);
+    RDR.key = id;
+    await matPut({
+      id,
+      name: RDR.book.name || '未命名材料',
+      kind: kind || RDR.kind || 'text',
+      savedAt: Date.now(),
+      bytes: json.length,
+      chapters: payload,
+    });
+    const all = await matAll();
+    if (all.length > MAT_MAX) {
+      all.sort((a, b) => (a.savedAt || 0) - (b.savedAt || 0));
+      for (const old of all.slice(0, all.length - MAT_MAX)) await matDelete(old.id);
+    }
+  } catch (e) { /* 隐私模式/配额不足：静默，不影响阅读 */ }
+}
+
+// 从库里重新打开一份材料
+async function openStoredMaterial(id) {
+  try {
+    const all = await matAll();
+    const rec = all.find((r) => r.id === id);
+    if (!rec) { toast('这份材料已经不在了'); return; }
+    resetBook();
+    RDR.kind = rec.kind === 'epub' ? 'epub' : (rec.kind === 'md' ? 'md' : 'text');
+    RDR.book = { name: rec.name, chapters: rec.chapters };
+    RDR.ch = 0;
+    RDR.key = rec.id;
+    RDR.pageIdx = 0;
+    renderReader();
+  } catch (e) {
+    toast('打开失败：' + e.message);
+  }
+}
 
 // ── 朗读（Web Speech API，不花流量、不依赖任何服务）──────────
 function pickVoice(lang) {
@@ -2357,7 +2453,8 @@ function renderReader() {
       + '<div class="row" style="margin-top:8px"><button class="btn" id="findBooks">找教材</button>'
       + '<button class="btn" id="lookupBtn">查词</button></div>'
       + '<div class="row" style="margin-top:8px"><button class="btn" id="pasteBtn">粘贴 / 分享导入</button></div>'
-      + '<div class="sub" style="margin-top:10px">支持 PDF · EPUB · DOCX · TXT · Markdown · 图片</div></div>'
+      + '<div class="sub" style="margin-top:10px">支持 PDF · EPUB · DOCX · TXT · Markdown · 图片</div>'
+      + '<div id="recentMats" style="margin-top:14px;text-align:left"></div></div>'
       + '<input type="file" id="pdfFile" accept=".pdf,.epub,.docx,.txt,.md,.png,.jpg,.jpeg,.webp,image/*,application/pdf,application/epub+zip,'
       + 'application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain" style="display:none">';
     document.getElementById('pickPdf').onclick = () => document.getElementById('pdfFile').click();
@@ -2365,6 +2462,7 @@ function renderReader() {
     document.getElementById('lookupBtn').onclick = () => renderLookup();
     document.getElementById('pasteBtn').onclick = () => pasteFromClipboard();
     document.getElementById('pdfFile').onchange = openBookFile;
+    fillRecentMaterials();
     return;
   }
   view.innerHTML =
@@ -2840,36 +2938,135 @@ async function tryNativePdfRender() {
   }
 }
 
+// 双指缩放 + 单指平移（图片 / PDF 页）。为什么自己做：浏览器自带缩放和
+// 页面布局（main 只纵向滚）叠在一起时，放大后没有可平移的版面，横滑还会被翻页手势吃掉。
+function attachZoomPan(wrap, img) {
+  let scale = 1, tx = 0, ty = 0;
+  let startDist = 0, startScale = 1, startX = 0, startY = 0, startTx = 0, startTy = 0;
+  let dragging = false, lastX = 0, lastY = 0;
+
+  const clamp = () => {
+    const w = wrap.clientWidth, h = wrap.clientHeight;
+    const iw = img.clientWidth * scale, ih = img.clientHeight * scale;
+    const maxX = Math.max(0, (iw - w) / 2);
+    const maxY = Math.max(0, (ih - h) / 2);
+    tx = Math.min(maxX, Math.max(-maxX, tx));
+    ty = Math.min(maxY, Math.max(-maxY, ty));
+  };
+  const apply = () => {
+    clamp();
+    img.style.transform = 'translate(' + tx + 'px,' + ty + 'px) scale(' + scale + ')';
+    img.style.transformOrigin = 'center center';
+  };
+  const reset = () => { scale = 1; tx = 0; ty = 0; apply(); };
+  wrap.__zoomReset = reset;
+
+  const dist = (t) => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
+  const mid = (t) => [(t[0].clientX + t[1].clientX) / 2, (t[0].clientY + t[1].clientY) / 2];
+
+  wrap.addEventListener('touchstart', (e) => {
+    wrap.style.touchAction = 'none';
+    if (e.touches.length === 2) {
+      startDist = dist(e.touches);
+      startScale = scale;
+      const m = mid(e.touches);
+      startX = m[0]; startY = m[1];
+      startTx = tx; startTy = ty;
+      dragging = false;
+    } else if (e.touches.length === 1) {
+      dragging = true;
+      lastX = e.touches[0].clientX;
+      lastY = e.touches[0].clientY;
+    }
+  }, { passive: true });
+
+  wrap.addEventListener('touchmove', (e) => {
+    if (e.touches.length === 2 && startDist > 0) {
+      e.preventDefault();
+      scale = Math.min(4, Math.max(1, startScale * (dist(e.touches) / startDist)));
+      const m = mid(e.touches);
+      tx = startTx + (m[0] - startX);
+      ty = startTy + (m[1] - startY);
+      apply();
+    } else if (e.touches.length === 1 && dragging && scale > 1) {
+      e.preventDefault();                       // 放大后单指就是平移，不再翻页
+      const t = e.touches[0];
+      tx += t.clientX - lastX;
+      ty += t.clientY - lastY;
+      lastX = t.clientX; lastY = t.clientY;
+      apply();
+    }
+  }, { passive: false });
+
+  wrap.addEventListener('touchend', (e) => {
+    if (e.touches.length === 0) { dragging = false; startDist = 0; }
+  }, { passive: true });
+}
+
+// 阅读器首页的「最近读过」：从 IndexedDB 里列出来，点一下接着读
+async function fillRecentMaterials() {
+  const box = document.getElementById('recentMats');
+  if (!box) return;
+  let all = [];
+  try { all = await matAll(); } catch { return; }
+  all.sort((a, b) => (b.savedAt || 0) - (a.savedAt || 0));
+  if (!all.length) { box.innerHTML = ''; return; }
+  const day = (ts) => {
+    const d = new Date(ts || 0);
+    return (d.getMonth() + 1) + '/' + d.getDate();
+  };
+  box.innerHTML = '<div class="sub" style="margin-bottom:6px">最近读过</div>'
+    + all.slice(0, 8).map((r) =>
+      '<div class="it" data-mat="' + esc(r.id) + '" style="display:flex;align-items:center;gap:8px">'
+      + '<div style="flex:1;min-width:0"><div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'
+      + esc(r.name || '未命名材料') + '</div>'
+      + '<div class="sub">' + day(r.savedAt) + ' · ' + Math.round((r.bytes || 0) / 1024) + 'KB</div></div>'
+      + '<button class="btn ghost" data-del="' + esc(r.id) + '" style="width:auto;padding:6px 10px;font-size:12px">删除</button>'
+      + '</div>').join('');
+  box.querySelectorAll('[data-mat]').forEach((el) => {
+    el.onclick = (e) => {
+      if (e.target.dataset && e.target.dataset.del) return;
+      openStoredMaterial(el.dataset.mat);
+    };
+  });
+  box.querySelectorAll('[data-del]').forEach((el) => {
+    el.onclick = async (e) => {
+      e.stopPropagation();
+      await matDelete(el.dataset.del);
+      fillRecentMaterials();
+    };
+  });
+}
+
 // 系统内核渲染出来的分页图：只读浏览，取词请点「文字视图」
+// 缩放走双指手势（attachZoomPan），按钮收进右侧浮层，跟其它阅读视图保持一致
 function renderNativePdf() {
-  const zoom = RDR.npZoom || 1;
-  const widthPct = Math.round(zoom * 100);
-  const imgs = (RDR.nativePages || []).map((u, i) =>
-    '<img src="' + esc(u) + '" alt="第 ' + (i + 1) + ' 页" '
-    + 'style="width:' + widthPct + '%;max-width:none;display:block;margin:0 0 10px">'
+  const pages = RDR.nativePages || [];
+  const imgs = pages.map((u, i) =>
+    '<div class="npWrap" data-page="' + i + '" style="overflow:hidden;touch-action:pan-y;margin:0 0 10px">'
+    + '<img class="npImg" src="' + esc(u) + '" alt="第 ' + (i + 1) + ' 页" '
+    + 'style="width:100%;display:block;background:#fff;will-change:transform">'
+    + '</div>'
   ).join('');
   view.innerHTML =
-    '<div class="meta"><span>' + esc(RDR.name || 'PDF') + '</span><span>系统内核渲染 · ' + (RDR.nativePages || []).length + ' 页</span></div>'
+    '<div class="meta"><span>' + esc(RDR.name || 'PDF') + '</span><span>系统内核渲染 · ' + pages.length + ' 页 · 双指缩放</span></div>'
     + '<div class="hint">这份 PDF 没有嵌入字体，前端画不出字，已用系统内核渲染成图片（字形可能和原件不同，二维码/印章不受影响）。'
-    + (RDR.textLines && RDR.textLines.length ? '要看字/取词请点「文字视图」。' : '') + '</div>'
-    + '<div class="row" style="margin:8px 0;align-items:center;flex-wrap:wrap">'
-    + '<button class="btn ghost" id="npOut">－</button>'
-    + '<span class="sub" id="npZoom" style="min-width:52px;text-align:center">' + widthPct + '%</span>'
-    + '<button class="btn ghost" id="npIn">＋</button>'
-    + (RDR.textLines && RDR.textLines.length ? '<button class="btn" id="npText">文字视图</button>' : '')
-    + '<button class="btn" id="npSys">用其他应用打开</button>'
-    + '<button class="btn ghost" id="npClose">关闭</button></div>'
-    // 放大后要能左右拖：容器自己负责横向滚动（main 只有 overflow-y）
-    + '<div id="npWrap" style="overflow-x:auto;overflow-y:visible;-webkit-overflow-scrolling:touch">' + imgs + '</div>';
-  const setZoom = (z) => {
-    RDR.npZoom = Math.min(4, Math.max(1, Math.round(z * 2) / 2));
-    const pct = Math.round(RDR.npZoom * 100);
-    document.querySelectorAll('#npWrap img').forEach((img) => { img.style.width = pct + '%'; });
-    const label = document.getElementById('npZoom');
-    if (label) label.textContent = pct + '%';
+    + (RDR.textLines && RDR.textLines.length ? '要看字/取词请点右侧「文字视图」。' : '') + '</div>'
+    + imgs
+    + '<div class="floating' + (RDR.toolsVisible ? ' show' : '') + '" id="npTools">'
+    + '<button id="npReset">复位</button>'
+    + (RDR.textLines && RDR.textLines.length ? '<button id="npText" class="t-close">文字视图</button>' : '')
+    + '<button id="npSys" class="t-close">用其他应用</button>'
+    + '<button id="npClose" class="t-close">关闭</button></div>';
+
+  view.querySelectorAll('.npWrap').forEach((w) => {
+    const img = w.querySelector('.npImg');
+    if (img) attachZoomPan(w, img);
+  });
+  RDR.toolsVisible = true;
+  document.getElementById('npReset').onclick = () => {
+    view.querySelectorAll('.npWrap').forEach((w) => { if (w.__zoomReset) w.__zoomReset(); });
   };
-  document.getElementById('npOut').onclick = () => setZoom((RDR.npZoom || 1) - 0.5);
-  document.getElementById('npIn').onclick = () => setZoom((RDR.npZoom || 1) + 0.5);
   const t = document.getElementById('npText');
   if (t) t.onclick = () => { RDR.textMode = true; RDR.kind = 'pdf'; renderReader(); };
   document.getElementById('npSys').onclick = () => openWithSystemApp();
@@ -2879,6 +3076,7 @@ function renderNativePdf() {
     resetBook();
     renderReader();
   };
+  bindFlipGestures(view, { prev: () => {}, next: () => {}, middle: toggleTools });
   view.scrollTop = 0;
 }
 
@@ -3335,35 +3533,26 @@ async function ocrImage() {
 }
 
 function renderImage() {
-  const zoom = RDR.imgZoom || 1;
   view.innerHTML =
-    '<div class="meta"><span>' + esc(RDR.name) + '</span><span>图片</span></div>'
-    + '<div class="row" style="margin:8px 0;align-items:center">'
-    + '<button class="btn ghost" id="imOut">－</button>'
-    + '<span class="sub" id="imZoom" style="min-width:52px;text-align:center">' + Math.round(zoom * 100) + '%</span>'
-    + '<button class="btn ghost" id="imIn">＋</button></div>'
-    + '<div id="imWrap" style="overflow-x:auto;overflow-y:visible;-webkit-overflow-scrolling:touch">'
-    + '<img id="imgView" src="' + RDR.srcUrl + '" alt="" style="width:' + Math.round(zoom * 100) + '%;max-width:none;display:block;border-radius:8px;background:#fff">'
+    '<div class="meta"><span>' + esc(RDR.name) + '</span><span>图片 · 双指缩放</span></div>'
+    + '<div id="imWrap" style="overflow:hidden;touch-action:pan-y">'
+    + '<img id="imgView" src="' + RDR.srcUrl + '" alt="" style="width:100%;display:block;border-radius:8px;background:#fff;will-change:transform">'
     + '</div>'
     + (RDR.textLines && RDR.textLines.length
       ? '<h2>识别出的文字</h2><div class="bookText plain" style="font-size:14px">'
         + RDR.textLines.map((l) => '<p>' + esc(l) + '</p>').join('') + '</div>'
       : '<div class="hint" style="margin-top:10px">这是图片，没有文字层。点右侧「识别文字」做 OCR，之后就能取词、出知识点。</div>')
     + '<div class="floating' + (RDR.toolsVisible ? ' show' : '') + '" id="imgTools">'
+    + '<button id="imReset">复位</button>'
     + '<button id="ocrBtn">识别文字</button>'
     + '<button id="vizBtn">看图出题</button>'
     + '<button id="kpBtn" class="t-close">知识点</button>'
     + '<button id="closeImg" class="t-close">关闭</button></div>';
-  const imSet = (z) => {
-    RDR.imgZoom = Math.min(4, Math.max(1, Math.round(z * 2) / 2));
-    const pct = Math.round(RDR.imgZoom * 100);
-    const img = document.getElementById('imgView');
-    if (img) img.style.width = pct + '%';
-    const label = document.getElementById('imZoom');
-    if (label) label.textContent = pct + '%';
-  };
-  document.getElementById('imOut').onclick = () => imSet((RDR.imgZoom || 1) - 0.5);
-  document.getElementById('imIn').onclick = () => imSet((RDR.imgZoom || 1) + 0.5);
+  const wrap = document.getElementById('imWrap');
+  const imgEl = document.getElementById('imgView');
+  if (wrap && imgEl) attachZoomPan(wrap, imgEl);
+  const imReset = document.getElementById('imReset');
+  if (imReset) imReset.onclick = () => { if (wrap && wrap.__zoomReset) wrap.__zoomReset(); };
   document.getElementById('ocrBtn').onclick = () => { hideTools(); ocrImage(); };
   document.getElementById('kpBtn').onclick = () => { hideTools(); showPoints(); };
   document.getElementById('vizBtn').onclick = () => { hideTools(); visionFromImage(); };
@@ -3664,6 +3853,11 @@ function togglePaged() {
 
 function renderTextBook() {
   const b = RDR.book;
+  // 第一次渲染就把正文落库（同一份只存一次）
+  if (b && (!RDR.persistedKey || RDR.persistedKey !== RDR.key)) {
+    RDR.persistedKey = RDR.key || (b.name + '|' + (b.chapters ? b.chapters.length : 0));
+    persistMaterial(RDR.kind);
+  }
   if (!b || !b.chapters || !b.chapters.length) { resetBook(); return renderReader(); }
   RDR.ch = Math.max(0, Math.min(b.chapters.length - 1, RDR.ch));
   const ch = b.chapters[RDR.ch];
