@@ -1,7 +1,7 @@
 // 学习机 Lite — 静态 PWA：内容来自 pack.json，进度存本地，AI 直连 OpenAI 兼容接口
 'use strict';
 
-const BUILD = '2026-10-30.10';
+const BUILD = '2026-10-30.12';
 
 const LS = {
   progress: 'zenus.progress.v1',
@@ -12,6 +12,8 @@ const LS = {
   userCards: 'zenus.usercards.v1',
   readpos: 'zenus.readpos.v1',
   kpoints: 'zenus.kpoints.v1',
+  cardIndex: 'zenus.cards.index.v1',   // 词 → 卡片 id（跨库去重）
+  schema: 'zenus.schema.v2',
 };
 
 const DEFAULT_SETTINGS = {
@@ -272,9 +274,16 @@ function normWord(w) {
 }
 function isKnown(w) { return !!known[normWord(w)]; }
 function markKnown(w, why) {
-  if (!w) return;
-  known[normWord(w)] = { ts: Date.now(), why: why || 'manual' };
+  const k = normWord(w);
+  if (!k) return;
+  known[k] = { at: Date.now(), why: why || 'manual' };
   saveJSON(LS.known, known);
+}
+
+// 手动结论（用户自己点的）不许被复习结果覆盖
+function knownIsManual(w) {
+  const v = known[normWord(w)];
+  return !!(v && typeof v === 'object' && v.why === 'manual');
 }
 function unmarkKnown(w) {
   const k = normWord(w);
@@ -285,7 +294,7 @@ function maybePromote(id, word, e) {
   const last3 = reviewLog.filter((x) => x.id === id).slice(-3);
   const solid = e.interval >= 21 && e.reps >= 3 && last3.length >= 3
     && last3.every((x) => x.r === 'good' || x.r === 'easy');
-  if (solid) markKnown(word, 'review');
+  if (solid && !known[normWord(word)]) markKnown(word, 'review');
 }
 
 // ── 调度（SM-2 简化版）────────────────────────────────
@@ -325,7 +334,7 @@ function schedule(id, rating, word) {
 
   // 复习结果联动已知词表：答错就退回「不认识」，答得稳就升级
   if (word) {
-    if (rating === 'again') unmarkKnown(word);
+    if (rating === 'again' && !knownIsManual(word)) unmarkKnown(word);
     else maybePromote(id, word, e);
   }
 }
@@ -1248,11 +1257,13 @@ function mergeState(remote) {
   for (const [k, v] of Object.entries(remote.known || {})) {
     if (!known[k] || (v.ts || 0) > (known[k].ts || 0)) { known[k] = v; changed++; }
   }
-  // 自己存的卡：按正面去重
-  const fronts = new Set(userCards.map((c) => String(c.front).toLowerCase()));
+  // 自己存的卡：交给 upsertCard 统一去重 + 字段合并（同词不同 id 会把进度并过来）
   for (const c of remote.userCards || []) {
-    if (c && c.front && !fronts.has(String(c.front).toLowerCase())) {
-      userCards.unshift(c); fronts.add(String(c.front).toLowerCase()); changed++;
+    if (!c || !c.front) continue;
+    const r = upsertCard(c);
+    if (r.added) changed++;
+    else if (r.reason === 'merged' && c.id && r.card) {
+      if (absorbProgress(c.id, r.card.id)) changed++;
     }
   }
   if (changed) {
@@ -3092,22 +3103,45 @@ function renderNativePdf() {
     + 'style="width:100%;display:block;background:#fff;will-change:transform">'
     + '</div>'
   ).join('');
+  RDR.toolsVisible = true;
   view.innerHTML =
     '<div class="meta"><span>' + esc(RDR.name || 'PDF') + '</span><span>系统内核渲染 · ' + pages.length + ' 页 · 双指缩放</span></div>'
     + '<div class="hint">这份 PDF 没有嵌入字体，前端画不出字，已用系统内核渲染成图片（字形可能和原件不同，二维码/印章不受影响）。'
     + (RDR.textLines && RDR.textLines.length ? '要看字/取词请点右侧「文字视图」。' : '') + '</div>'
     + imgs
     + '<div class="floating' + (RDR.toolsVisible ? ' show' : '') + '" id="npTools">'
-    + '<button id="npReset">全屏看</button>'
+    + '<button id="npPrev">◀</button><button id="npNext">▶</button>'
+    + '<button id="npReset">全屏</button>'
+    + '<div class="sep"></div>'
+    + '<button id="npKp">知识点</button>'
+    + '<button id="npViz">看图出题</button>'
+    + '<div class="sep"></div>'
     + (RDR.textLines && RDR.textLines.length ? '<button id="npText" class="t-close">文字视图</button>' : '')
     + '<button id="npSys" class="t-close">用其他应用</button>'
     + '<button id="npClose" class="t-close">关闭</button></div>';
 
-  view.querySelectorAll('.npWrap').forEach((w) => {
-    w.onclick = () => openImageViewer(pages, Number(w.dataset.page) || 0);
+  const wraps = [...view.querySelectorAll('.npWrap')];
+  const gotoPage = (i) => {
+    const idx = Math.max(0, Math.min(wraps.length - 1, i));
+    if (!wraps[idx]) return;
+    RDR.npIndex = idx;
+    RDR.page = idx + 1;                       // 让「知识点/看图出题」知道当前是哪一页
+    wraps[idx].scrollIntoView({ block: 'start', behavior: 'smooth' });
+    scheduleHideTools();
+  };
+  wraps.forEach((w, i) => {
+    w.onclick = () => {
+      RDR.npIndex = i;
+      RDR.page = i + 1;
+      openImageViewer(pages, i);
+    };
   });
-  RDR.toolsVisible = true;
-  document.getElementById('npReset').onclick = () => openImageViewer(pages, 0);
+  syncTools();
+  document.getElementById('npPrev').onclick = () => gotoPage((RDR.npIndex || 0) - 1);
+  document.getElementById('npNext').onclick = () => gotoPage((RDR.npIndex || 0) + 1);
+  document.getElementById('npKp').onclick = () => { hideTools(); showPoints(); };
+  document.getElementById('npViz').onclick = () => { hideTools(); visionFromPdfPage(); };
+  document.getElementById('npReset').onclick = () => openImageViewer(pages, RDR.npIndex || 0);
   const t = document.getElementById('npText');
   if (t) t.onclick = () => { RDR.textMode = true; RDR.kind = 'pdf'; renderReader(); };
   document.getElementById('npSys').onclick = () => openWithSystemApp();
@@ -3692,6 +3726,7 @@ function kpKey() {
 }
 
 let kpStore = loadJSON(LS.kpoints, {});
+let cardIndex = loadJSON(LS.cardIndex, {});   // 归一化词 → 卡片 id
 
 function cachedPoints() {
   const k = kpKey();
@@ -4418,16 +4453,12 @@ async function drawPage() {
 function addCardFromSelection(text) {
   const front = String(text).replace(/\s+/g, ' ').trim().slice(0, 80);
   if (!front) return;
-  if (userCards.some((c) => c.front.toLowerCase() === front.toLowerCase())) {
-    toast('已经在「我的生词」里了');
-    return;
-  }
-  const card = { id: 'mine-' + Date.now(), front: front, back: '', level: '', topic: '阅读生词' };
-  userCards.unshift(card);
-  saveJSON(LS.userCards, userCards);
+  const r = upsertCard({ front, topic: '阅读生词', source: { kind: 'reader', at: Date.now() } });
+  if (r.reason === 'exists-in-pack') { toast('这个词课本里已经有了'); return; }
+  if (r.reason === 'merged') { toast('已经在「我的生词」里了'); return; }
   renderHeader();
   toast('已加入「我的生词」');
-  if (settings.key) fillCardMeaning(card);
+  if (settings.key && r.card) fillCardMeaning(r.card);
 }
 
 async function fillCardMeaning(card) {
@@ -4578,6 +4609,141 @@ async function openPendingFile() {
   }
 }
 
+// ── 卡片模型 v2 ──────────────────────────────────────
+// 目标：一张卡一个身份。两个存卡入口（App「＋存卡」/ 学习机「＋卡」）、两台设备同步，
+// 同一个词都只留一条；字段统一（source/topic/时间戳），复习记录跟着 id 一起走。
+// id 仍是时间戳式（不动老数据），去重靠 cardIndex 这张「归一化词 → id」表。
+
+function normFront(s) {
+  return String(s || '').toLowerCase().trim().replace(/[’']/g, "'").replace(/\s+/g, ' ');
+}
+
+function rebuildCardIndex() {
+  const idx = {};
+  for (const c of (state.pack && state.pack.courses) || []) {
+    for (const card of c.cards || []) {
+      const k = normFront(card.front);
+      if (k && !idx[k]) idx[k] = '__pack__:' + card.id;
+    }
+  }
+  for (const c of userCards) {
+    const k = normFront(c.front);
+    if (k && !idx[k]) idx[k] = c.id;
+  }
+  cardIndex = idx;
+  saveJSON(LS.cardIndex, cardIndex);
+}
+
+// 把 B 的字段并进 A：空字段被非空覆盖，时间戳取新的
+function mergeCardFields(target, incoming, keepTargetFirst) {
+  const fill = (k) => {
+    if (incoming[k] === undefined || incoming[k] === null || incoming[k] === '') return;
+    if (keepTargetFirst && target[k]) return;
+    target[k] = incoming[k];
+  };
+  ['back', 'hint', 'explain', 'topic', 'source'].forEach(fill);
+  if (Array.isArray(incoming.options) && !(target.options || []).length) target.options = incoming.options;
+  target.updatedAt = Math.max(target.updatedAt || 0, incoming.updatedAt || Date.now());
+}
+
+// 合并两张卡时，把输家的复习进度/流水挪给赢家（不丢记录）
+function absorbProgress(fromId, toId) {
+  if (!fromId || !toId || fromId === toId) return 0;
+  let moved = 0;
+  const a = progress[fromId];
+  const b = progress[toId];
+  if (a && (!b || (a.reps || 0) > (b.reps || 0) || (a.due || 0) > (b.due || 0))) {
+    progress[toId] = a; moved++;
+  }
+  if (a) { delete progress[fromId]; moved++; }
+  for (const row of reviewLog) { if (row.id === fromId) row.id = toId; }
+  if (moved) { saveJSON(LS.progress, progress); saveJSON(LS.log, reviewLog); }
+  return moved;
+}
+
+/**
+ * 统一的写入口。返回 { added, reason }：
+ *   added=true   新建
+ *   reason='exists-in-pack'  课本里已有（只记来源，不新建，避免复习时重复出现）
+ *   reason='merged'          同词已存在，字段已合并
+ */
+function upsertCard(input) {
+  const front = String(input.front || '').trim().replace(/\s+/g, ' ');
+  if (!front) return { added: false, reason: 'empty' };
+  const key = normFront(front);
+
+  const packHit = (state.pack && state.pack.courses || []).some(
+    (c) => (c.cards || []).some((x) => normFront(x.front) === key)
+  );
+  if (packHit) {
+    cardIndex[key] = cardIndex[key] || ('__pack__:' + key);
+    saveJSON(LS.cardIndex, cardIndex);
+    return { added: false, reason: 'exists-in-pack' };
+  }
+
+  const ownerId = cardIndex[key];
+  const existing = ownerId ? userCards.find((c) => c.id === ownerId) : null;
+  if (existing) {
+    mergeCardFields(existing, input, true);
+    if (input.id && input.id !== existing.id) absorbProgress(input.id, existing.id);
+    saveJSON(LS.userCards, userCards);
+    return { added: false, reason: 'merged', card: existing };
+  }
+
+  const card = {
+    id: input.id || ('u-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6)),
+    front,
+    back: '', hint: '', explain: '',
+    topic: input.topic || '网页生词',
+    source: input.source || { kind: 'unknown' },
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+  };
+  mergeCardFields(card, input, false);
+  userCards.unshift(card);
+  cardIndex[key] = card.id;
+  saveJSON(LS.userCards, userCards);
+  saveJSON(LS.cardIndex, cardIndex);
+  return { added: true, card };
+}
+
+// 一次性迁移：补字段 + 去重 + 合并进度。失败自动回滚（有备份）。
+function migrateCardsV2() {
+  if (localStorage.getItem(LS.schema)) { rebuildCardIndex(); return; }
+  const backup = localStorage.getItem(LS.userCards);
+  try {
+    if (backup) localStorage.setItem('zenus.usercards.v1.bak', backup);
+    const seen = new Map();
+    const kept = [];
+    for (const c of userCards) {
+      if (!c || !c.front) continue;
+      const k = normFront(c.front);
+      const prev = seen.get(k);
+      const norm = {
+        id: c.id || ('u-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6)),
+        front: String(c.front).trim().replace(/\s+/g, ' '),
+        back: c.back || '', hint: c.hint || '', explain: c.explain || '',
+        options: c.options, topic: c.topic || '网页生词',
+        source: c.source || { kind: c.id && String(c.id).startsWith('web-') ? 'web' : 'reader' },
+        createdAt: c.createdAt || Date.now(), updatedAt: c.updatedAt || Date.now(),
+      };
+      if (prev) {
+        mergeCardFields(prev, norm, true);
+        absorbProgress(norm.id, prev.id);
+      } else {
+        seen.set(k, norm);
+        kept.push(norm);
+      }
+    }
+    userCards = kept;
+    saveJSON(LS.userCards, userCards);
+    rebuildCardIndex();
+    localStorage.setItem(LS.schema, '2');
+  } catch (e) {
+    if (backup) localStorage.setItem(LS.userCards, backup);
+  }
+}
+
 // 网页上「＋存卡」的生词：App 打开时从原生收件箱取回来（取走即清空，不会重复计数）
 async function pullWebCards() {
   if (!nativePort()) return;
@@ -4590,19 +4756,15 @@ async function pullWebCards() {
   for (const c of list) {
     const front = String(c.front || '').trim();
     if (!front) continue;
-    if (userCards.some((x) => String(x.front || '').toLowerCase() === front.toLowerCase())) continue;
-    const card = {
-      id: String(c.id || ('web-' + Date.now() + '-' + fresh.length)),
+    const r = upsertCard({
       front,
-      back: String(c.back || ''),
-      hint: String(c.hint || ''),
-      level: '',
-      topic: String(c.topic || '网页生词'),
-      source: String(c.source || ''),
-      sourceTitle: String(c.sourceTitle || ''),
-    };
-    userCards.unshift(card);
-    fresh.push(card);
+      back: c.back || '',
+      hint: c.hint || '',
+      topic: c.topic || '网页生词',
+      source: { kind: 'web', url: c.source || '', title: c.sourceTitle || '', at: c.at || Date.now() },
+    });
+    if (r.added && r.card) fresh.push(r.card);
+    else if (r.reason === 'merged') Object.assign(r.card || {}, { hint: c.hint || '' });
   }
   if (!fresh.length) return;
   saveJSON(LS.userCards, userCards);
@@ -4614,6 +4776,7 @@ async function pullWebCards() {
 (async function init() {
   try {
     await loadPack();
+    migrateCardsV2();
     renderHeader();
     render();
     // 桥对象可能比首屏晚到，重试两次；取走即清空，多调不会重复入库

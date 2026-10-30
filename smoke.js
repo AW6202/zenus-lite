@@ -983,6 +983,54 @@ class CDP {
         viewer.open && viewer.stage && viewer.hasBtns && viewer.label.indexOf('2 /') === 0 && viewer.closed,
         viewer);
 
+    // 卡片模型 v2：同词只留一条 / 课本已有不重复建 / 手动结论不被复习覆盖
+    const cards = await probe('卡片模型', `
+      const before = userCards.length;
+      const r1 = upsertCard({ front: 'Smokeword', back: '烟', source: { kind: 'web' } });
+      const r2 = upsertCard({ front: 'smokeword', hint: '/x/', source: { kind: 'reader' } });
+      const merged = userCards.find(c => normFront(c.front) === 'smokeword');
+      const delta = userCards.length - before;
+      const packFront = (state.pack && state.pack.courses && state.pack.courses[0].cards[0].front) || null;
+      const r3 = packFront ? upsertCard({ front: packFront, source: { kind: 'web' } }) : { reason: 'skip' };
+      markKnown('probe-known', 'manual');
+      schedule('probe-card-id', 'again', 'probe-known');
+      const stillKnown = !!known[normWord('probe-known')];
+      // 清理
+      userCards = userCards.filter(c => normFront(c.front) !== 'smokeword');
+      saveJSON(LS.userCards, userCards);
+      delete cardIndex[normFront('smokeword')];
+      delete known[normWord('probe-known')];
+      saveJSON(LS.known, known);
+      return { added1: r1.added, mergedNotAdded: r2.added === false, delta,
+               back: merged && merged.back, hint: merged && merged.hint,
+               packReason: r3.reason, stillKnown };
+    `);
+    check('同词从不同入口只留一条（字段合并）',
+      cards.added1 === true && cards.mergedNotAdded && cards.delta === 1
+        && cards.back === '烟' && cards.hint === '/x/', cards);
+    check('课本已有的词不重复建卡', cards.packReason === 'exists-in-pack' || cards.packReason === 'skip', cards);
+    check('手动标记的已掌握不被复习答错覆盖', cards.stillKnown === true, cards);
+
+    // 系统内核渲染视图：右侧工具条要跟其它阅读视图一样齐（用户报过这里只剩 4 个按钮）
+    const npTools = await probe('内核实渲染工具条', `
+      const png = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+      RDR.nativePages = [png, png];
+      RDR.name = '冒烟页';
+      RDR.kind = 'nativepdf';
+      renderNativePdf();
+      await new Promise(r => setTimeout(r, 80));
+      const bar = document.getElementById('npTools');
+      const ids = ['npPrev','npNext','npKp','npViz','npSys','npClose','npReset'];
+      const has = ids.every(id => !!document.getElementById(id));
+      const shown = bar && bar.classList.contains('show');
+      const wraps = document.querySelectorAll('.npWrap').length;
+      const missing = ids.filter(id => !document.getElementById(id));
+      RDR.nativePages = null; resetBook(); renderReader();
+      return { has, shown, wraps, missing };
+    `);
+    check('内核实渲染的 PDF 视图有完整工具条（翻页/知识点/出题/文字视图）',
+      npTools.has && npTools.shown && npTools.wraps === 2, npTools);
+
     if (pdfArg) {
       const pdf = await probe('PDF', `
         const b = await (await fetch('${base}smoke.pdf')).blob();
