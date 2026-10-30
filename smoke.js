@@ -964,6 +964,25 @@ class CDP {
     check('关书释放图片 blob（内存不涨）', clean.before > 0 && clean.after === 0 && clean.book === false, clean);
 
     // G. PDF 回归（可选）
+      // 全屏图片查看器（放大/拖动/关闭）—— 2026-10-30 新增，防它以后静默坏掉
+      const viewer = await probe('全屏查看器', `
+        const png = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+        openImageViewer([png, png], 0);
+        await new Promise(r => setTimeout(r, 120));
+        const box = document.getElementById('imgViewer');
+        const stage = box && box.querySelector('#ivStage');
+        const hasBtns = !!(box && box.querySelector('#ivPrev') && box.querySelector('#ivNext'));
+        box && box.querySelector('#ivNext').click();
+        await new Promise(r => setTimeout(r, 60));
+        const label = box && box.querySelector('#ivLabel').textContent;
+        closeImageViewer();
+        await new Promise(r => setTimeout(r, 60));
+        return { open: !!box, stage: !!stage, hasBtns, label, closed: !document.getElementById('imgViewer') };
+      `);
+      check('全屏图片查看器能开能翻页能关',
+        viewer.open && viewer.stage && viewer.hasBtns && viewer.label.indexOf('2 /') === 0 && viewer.closed,
+        viewer);
+
     if (pdfArg) {
       const pdf = await probe('PDF', `
         const b = await (await fetch('${base}smoke.pdf')).blob();

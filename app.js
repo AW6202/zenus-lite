@@ -1,7 +1,7 @@
 // 学习机 Lite — 静态 PWA：内容来自 pack.json，进度存本地，AI 直连 OpenAI 兼容接口
 'use strict';
 
-const BUILD = '2026-10-30.9';
+const BUILD = '2026-10-30.10';
 
 const LS = {
   progress: 'zenus.progress.v1',
@@ -2938,58 +2938,90 @@ async function tryNativePdfRender() {
   }
 }
 
-// 双指缩放 + 单指平移（图片 / PDF 页）。为什么自己做：浏览器自带缩放和
-// 页面布局（main 只纵向滚）叠在一起时，放大后没有可平移的版面，横滑还会被翻页手势吃掉。
-function attachZoomPan(wrap, img) {
+// 全屏图片查看器：双指缩放 / 放大后单指拖动 / 双击 1x↔2x。
+// 之前那版在页面里的小框内缩放，看起来像"框里裁着看"，不符合看图习惯；
+// 现在整屏铺开，缩放和拖动都是针对整张图。
+let ivState = null;
+
+function openImageViewer(list, index = 0) {
+  const pages = Array.isArray(list) ? list.filter(Boolean) : [list].filter(Boolean);
+  if (!pages.length) return;
+  closeImageViewer();
+  let idx = Math.max(0, Math.min(pages.length - 1, index));
   let scale = 1, tx = 0, ty = 0;
   let startDist = 0, startScale = 1, startX = 0, startY = 0, startTx = 0, startTy = 0;
-  let dragging = false, lastX = 0, lastY = 0;
+  let dragging = false, lastX = 0, lastY = 0, lastTap = 0;
 
-  const clamp = () => {
-    const w = wrap.clientWidth, h = wrap.clientHeight;
-    const iw = img.clientWidth * scale, ih = img.clientHeight * scale;
-    const maxX = Math.max(0, (iw - w) / 2);
-    const maxY = Math.max(0, (ih - h) / 2);
-    tx = Math.min(maxX, Math.max(-maxX, tx));
-    ty = Math.min(maxY, Math.max(-maxY, ty));
-  };
+  const box = document.createElement('div');
+  box.id = 'imgViewer';
+  box.style.cssText = 'position:fixed;inset:0;z-index:999;background:#000;display:flex;flex-direction:column';
+  box.innerHTML =
+    '<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;color:#fff;font-size:13px">'
+    + '<span id="ivLabel" style="flex:1">' + (idx + 1) + ' / ' + pages.length + '</span>'
+    + '<span style="opacity:.6">双指缩放</span>'
+    + '<button id="ivClose" style="background:#333;color:#fff;border:0;border-radius:6px;padding:6px 12px">关闭</button></div>'
+    + '<div id="ivStage" style="flex:1;overflow:hidden;position:relative;touch-action:none">'
+    + '<img id="ivImg" src="" alt="" style="position:absolute;left:50%;top:50%;max-width:100%;max-height:100%;transform:translate(-50%,-50%);will-change:transform">'
+    + '</div>'
+    + (pages.length > 1
+      ? '<div style="display:flex;justify-content:space-between;padding:10px 16px">'
+        + '<button id="ivPrev" style="background:#333;color:#fff;border:0;border-radius:6px;padding:8px 16px">‹ 上一页</button>'
+        + '<button id="ivNext" style="background:#333;color:#fff;border:0;border-radius:6px;padding:8px 16px">下一页 ›</button></div>'
+      : '');
+  document.body.appendChild(box);
+  document.body.style.overflow = 'hidden';
+
+  const stage = box.querySelector('#ivStage');
+  const img = box.querySelector('#ivImg');
+  ivState = { box: box };
+
   const apply = () => {
-    clamp();
-    img.style.transform = 'translate(' + tx + 'px,' + ty + 'px) scale(' + scale + ')';
-    img.style.transformOrigin = 'center center';
+    img.style.transform = 'translate(calc(-50% + ' + tx + 'px), calc(-50% + ' + ty + 'px)) scale(' + scale + ')';
   };
-  const reset = () => { scale = 1; tx = 0; ty = 0; apply(); };
-  wrap.__zoomReset = reset;
+  const fit = () => {
+    img.src = pages[idx];
+    scale = 1; tx = 0; ty = 0; apply();
+    const label = box.querySelector('#ivLabel');
+    if (label) label.textContent = (idx + 1) + ' / ' + pages.length;
+  };
+  fit();
 
   const dist = (t) => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
-  const mid = (t) => [(t[0].clientX + t[1].clientX) / 2, (t[0].clientY + t[1].clientY) / 2];
-
-  wrap.addEventListener('touchstart', (e) => {
-    wrap.style.touchAction = 'none';
+  stage.addEventListener('touchstart', (e) => {
     if (e.touches.length === 2) {
-      startDist = dist(e.touches);
+      startDist = dist(e.touches) || 1;
       startScale = scale;
-      const m = mid(e.touches);
-      startX = m[0]; startY = m[1];
+      startX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+      startY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
       startTx = tx; startTy = ty;
       dragging = false;
     } else if (e.touches.length === 1) {
+      const now = Date.now();
+      if (now - lastTap < 300) {
+        scale = scale > 1 ? 1 : 2;
+        tx = 0; ty = 0;
+        apply();
+        lastTap = 0;
+        return;
+      }
+      lastTap = now;
       dragging = true;
       lastX = e.touches[0].clientX;
       lastY = e.touches[0].clientY;
     }
   }, { passive: true });
 
-  wrap.addEventListener('touchmove', (e) => {
-    if (e.touches.length === 2 && startDist > 0) {
+  stage.addEventListener('touchmove', (e) => {
+    if (e.touches.length === 2) {
       e.preventDefault();
-      scale = Math.min(4, Math.max(1, startScale * (dist(e.touches) / startDist)));
-      const m = mid(e.touches);
-      tx = startTx + (m[0] - startX);
-      ty = startTy + (m[1] - startY);
+      scale = Math.min(5, Math.max(1, startScale * (dist(e.touches) / startDist)));
+      const cx = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+      const cy = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+      tx = startTx + (cx - startX);
+      ty = startTy + (cy - startY);
       apply();
     } else if (e.touches.length === 1 && dragging && scale > 1) {
-      e.preventDefault();                       // 放大后单指就是平移，不再翻页
+      e.preventDefault();
       const t = e.touches[0];
       tx += t.clientX - lastX;
       ty += t.clientY - lastY;
@@ -2998,9 +3030,21 @@ function attachZoomPan(wrap, img) {
     }
   }, { passive: false });
 
-  wrap.addEventListener('touchend', (e) => {
+  stage.addEventListener('touchend', (e) => {
     if (e.touches.length === 0) { dragging = false; startDist = 0; }
   }, { passive: true });
+
+  box.querySelector('#ivClose').onclick = () => closeImageViewer();
+  const prev = box.querySelector('#ivPrev');
+  const next = box.querySelector('#ivNext');
+  if (prev) prev.onclick = () => { idx = (idx - 1 + pages.length) % pages.length; fit(); };
+  if (next) next.onclick = () => { idx = (idx + 1) % pages.length; fit(); };
+}
+
+function closeImageViewer() {
+  if (ivState && ivState.box) ivState.box.remove();
+  document.body.style.overflow = '';
+  ivState = null;
 }
 
 // 阅读器首页的「最近读过」：从 IndexedDB 里列出来，点一下接着读
@@ -3054,19 +3098,16 @@ function renderNativePdf() {
     + (RDR.textLines && RDR.textLines.length ? '要看字/取词请点右侧「文字视图」。' : '') + '</div>'
     + imgs
     + '<div class="floating' + (RDR.toolsVisible ? ' show' : '') + '" id="npTools">'
-    + '<button id="npReset">复位</button>'
+    + '<button id="npReset">全屏看</button>'
     + (RDR.textLines && RDR.textLines.length ? '<button id="npText" class="t-close">文字视图</button>' : '')
     + '<button id="npSys" class="t-close">用其他应用</button>'
     + '<button id="npClose" class="t-close">关闭</button></div>';
 
   view.querySelectorAll('.npWrap').forEach((w) => {
-    const img = w.querySelector('.npImg');
-    if (img) attachZoomPan(w, img);
+    w.onclick = () => openImageViewer(pages, Number(w.dataset.page) || 0);
   });
   RDR.toolsVisible = true;
-  document.getElementById('npReset').onclick = () => {
-    view.querySelectorAll('.npWrap').forEach((w) => { if (w.__zoomReset) w.__zoomReset(); });
-  };
+  document.getElementById('npReset').onclick = () => openImageViewer(pages, 0);
   const t = document.getElementById('npText');
   if (t) t.onclick = () => { RDR.textMode = true; RDR.kind = 'pdf'; renderReader(); };
   document.getElementById('npSys').onclick = () => openWithSystemApp();
@@ -3543,16 +3584,15 @@ function renderImage() {
         + RDR.textLines.map((l) => '<p>' + esc(l) + '</p>').join('') + '</div>'
       : '<div class="hint" style="margin-top:10px">这是图片，没有文字层。点右侧「识别文字」做 OCR，之后就能取词、出知识点。</div>')
     + '<div class="floating' + (RDR.toolsVisible ? ' show' : '') + '" id="imgTools">'
-    + '<button id="imReset">复位</button>'
+    + '<button id="imReset">全屏看</button>'
     + '<button id="ocrBtn">识别文字</button>'
     + '<button id="vizBtn">看图出题</button>'
     + '<button id="kpBtn" class="t-close">知识点</button>'
     + '<button id="closeImg" class="t-close">关闭</button></div>';
-  const wrap = document.getElementById('imWrap');
   const imgEl = document.getElementById('imgView');
-  if (wrap && imgEl) attachZoomPan(wrap, imgEl);
+  if (imgEl) imgEl.onclick = () => openImageViewer([RDR.srcUrl], 0);
   const imReset = document.getElementById('imReset');
-  if (imReset) imReset.onclick = () => { if (wrap && wrap.__zoomReset) wrap.__zoomReset(); };
+  if (imReset) imReset.onclick = () => openImageViewer([RDR.srcUrl], 0);
   document.getElementById('ocrBtn').onclick = () => { hideTools(); ocrImage(); };
   document.getElementById('kpBtn').onclick = () => { hideTools(); showPoints(); };
   document.getElementById('vizBtn').onclick = () => { hideTools(); visionFromImage(); };
