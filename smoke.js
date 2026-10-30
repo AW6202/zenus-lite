@@ -1007,6 +1007,30 @@ class CDP {
     `);
     check('书架页存在且能导入书源', shelf.hasShelf && shelf.after === 1 && shelf.listed, shelf);
 
+    // 漫画：浏览器「存为漫画」交过来的 zip → 材料库 → 多图阅读器（2026-10-31）
+    const comic = await probe('漫画导入', `
+      await ensureJSZip();
+      const png = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+      const bytes = (() => { const bin = atob(png); const a = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) a[i] = bin.charCodeAt(i); return a; })();
+      const zip = new JSZip();
+      zip.file('manifest.json', JSON.stringify({ title: '冒烟漫画', pageUrl: 'https://example.com/c/1' }));
+      zip.file('img/0001.png', bytes);
+      zip.file('img/0002.png', bytes);
+      const blob = await zip.generateAsync({ type: 'blob' });
+      const n = await importComicZip(new File([blob], '冒烟漫画.zip'));
+      await new Promise((r) => setTimeout(r, 300));
+      const imgs = document.querySelectorAll('#cmWrap .cmImg').length;
+      const kind = RDR.kind;
+      const all = await matAll();
+      const rec = all.find((m) => m.kind === 'comic' && m.name === '冒烟漫画');
+      const kept = rec ? rec.images.length : 0;
+      if (rec) await matDelete(rec.id);          // 别污染书架
+      resetBook(); state.tab = 'reader'; render();
+      return { n, imgs, kind, kept };
+    `);
+    check('漫画：zip 解包成材料、阅读器按张渲染',
+      comic.n === 2 && comic.imgs === 2 && comic.kind === 'comic' && comic.kept === 2, comic);
+
     // 书源规则入口：整份 JSON 要留住（规则在原生侧求值），测试/搜索入口在无桥环境下不能崩
     const srcRules = await probe('书源规则入口', `
       sources = []; saveJSON(LS.sources, sources);

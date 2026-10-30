@@ -1,7 +1,7 @@
 // 学习机 Lite — 静态 PWA：内容来自 pack.json，进度存本地，AI 直连 OpenAI 兼容接口
 'use strict';
 
-const BUILD = '2026-10-30.18';
+const BUILD = '2026-10-31.1';
 
 const LS = {
   progress: 'zenus.progress.v1',
@@ -207,6 +207,7 @@ async function openStoredMaterial(id) {
     const all = await matAll();
     const rec = all.find((r) => r.id === id);
     if (!rec) { toast('这份材料已经不在了'); return; }
+    if (rec.kind === 'comic') { openComicMaterial(rec); return; }
     resetBook();
     RDR.kind = rec.kind === 'epub' ? 'epub' : (rec.kind === 'md' ? 'md' : 'text');
     RDR.book = { name: rec.name, chapters: rec.chapters };
@@ -1565,6 +1566,7 @@ function resetBook() {
   RDR.rendering = false;
   (RDR.urls || []).forEach((u) => { try { URL.revokeObjectURL(u); } catch { /* 已释放 */ } });
   RDR.urls = [];
+  RDR.comicUrls = [];
   RDR.assets = {};
   RDR.book = null;
   RDR.kind = null;
@@ -2468,6 +2470,7 @@ function renderReader() {
   if (RDR.kind === 'nativepdf') return renderNativePdf();
   if (RDR.kind === 'image') return renderImage();
   if (RDR.kind === 'epub' || RDR.kind === 'text' || RDR.kind === 'md' || RDR.kind === 'docx') return renderTextBook();
+  if (RDR.kind === 'comic') return renderComic();
   if (RDR.textMode && RDR.textLines && RDR.textLines.length) return renderPdfText();
   if (RDR.pdf && RDR.pdfScroll) return renderPdfScroll();
   if (!RDR.pdf && !RDR.book) {
@@ -3255,12 +3258,13 @@ async function renderShelf() {
   let mats = [];
   try { mats = await matAll(); } catch { mats = []; }
   mats.sort((a, b) => (b.savedAt || 0) - (a.savedAt || 0));
-  const kindName = (k) => k === 'epub' ? 'EPUB' : k === 'docx' ? 'DOCX' : k === 'md' ? 'MD' : k === 'web' ? '网页' : '文本';
+  const kindName = (k) => k === 'epub' ? 'EPUB' : k === 'docx' ? 'DOCX' : k === 'md' ? 'MD' : k === 'web' ? '网页' : k === 'comic' ? '漫画' : '文本';
   const rows = mats.map((r) =>
     '<div class="it" data-open="' + esc(r.id) + '" style="display:flex;align-items:center;gap:8px">'
     + '<div style="flex:1;min-width:0">'
     + '<div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(r.name || '未命名') + '</div>'
-    + '<div class="sub">' + kindName(r.kind) + ' · ' + new Date(r.savedAt || 0).toLocaleDateString()
+    + '<div class="sub">' + kindName(r.kind) + (r.kind === 'comic' ? ' · ' + ((r.images || []).length) + ' 张' : '')
+    + ' · ' + new Date(r.savedAt || 0).toLocaleDateString()
     + ' · ' + Math.round((r.bytes || 0) / 1024) + 'KB'
     + (flatWarn(r) ? ' · <span style="color:#c00">旧版抓取（没分段）</span>' : '') + '</div></div>'
     + (r.origin
@@ -4126,6 +4130,67 @@ function renderImage() {
   flipHintOnce();
   view.scrollTop = 0;
 }
+
+// ── 漫画（kind:'comic'）：一章一份材料，纵向往下滑着看 ──────────
+// 来源：App 里 ≡ 菜单「存为漫画」把当前章节的图打成一个 zip 交过来，
+// 解包后每张图是一个 Blob 存在 IndexedDB 里（离线可读，不用回头联网）。
+const MAT_COMIC_MAX_BYTES = 40 * 1024 * 1024;   // 单章上限，和原生侧一致
+
+function openComicMaterial(rec) {
+  resetBook();
+  RDR.kind = 'comic';
+  RDR.name = rec.name || '漫画';
+  RDR.key = rec.id;
+  RDR.comicBlobs = rec.images || [];
+  RDR.comicUrls = RDR.comicBlobs.map((b) => {
+    try { return URL.createObjectURL(b); } catch { return ''; }
+  }).filter(Boolean);
+  RDR.urls = RDR.comicUrls;      // 复用 resetBook 的统一释放
+  renderReader();
+  const r = readPositions[RDR.key];
+  if (r && r.ratio) requestAnimationFrame(() => scrollToRatio(r.ratio));
+}
+
+function renderComic() {
+  const urls = RDR.comicUrls || [];
+  if (!urls.length) {
+    view.innerHTML = '<div class="empty">这份漫画里没有可显示的图片。</div>';
+    return;
+  }
+  window.__zenusMenuMode = 'image';   // 图片上长按给原生菜单（识别文字/存图）
+  view.innerHTML =
+    '<div class="meta"><span>' + esc(RDR.name || '漫画') + '</span><span id="cmLabel">'
+    + urls.length + ' 张</span></div>'
+    + '<div id="cmWrap" style="display:flex;flex-direction:column;gap:2px;background:#000">'
+    + urls.map((u, i) =>
+      '<img class="cmImg" data-i="' + i + '" src="' + u + '" loading="lazy" alt=""'
+      + ' style="width:100%;height:auto;display:block;background:#000">').join('')
+    + '</div>'
+    + '<div class="floating pager" id="cmTools">'
+    + '<button id="cmTop">▲ 开头</button><button id="cmClose" class="t-close">关闭</button></div>';
+  document.getElementById('cmClose').onclick = () => { saveComicPos(); resetBook(); renderReader(); };
+  document.getElementById('cmTop').onclick = () => { view.scrollTop = 0; };
+  // 点图进全屏（复用已有的双指缩放查看器），左右滑动看下一张
+  view.querySelectorAll('.cmImg').forEach((img) => {
+    img.onclick = () => openImageViewer(urls, Number(img.dataset.i) || 0);
+  });
+  view.onscroll = onComicScroll;
+  view.scrollTop = 0;
+}
+
+let comicPosTimer = null;
+function onComicScroll() {
+  clearTimeout(comicPosTimer);
+  comicPosTimer = setTimeout(saveComicPos, 700);
+}
+
+function saveComicPos() {
+  if (!RDR.key || RDR.kind !== 'comic') return;
+  const max = Math.max(1, view.scrollHeight - view.clientHeight);
+  readPositions[RDR.key] = { at: Date.now(), ratio: Math.max(0, Math.min(1, view.scrollTop / max)) };
+  saveJSON(LS.readpos, readPositions);
+}
+
 
 // ── C：整章提知识点（只喂当前这一章，整本塞不进去）────────────
 // 输出：一句话概括 + 要点 + 生词/搭配（可一键进「我的生词」）+ 3~5 道自测题
@@ -5098,6 +5163,9 @@ document.addEventListener('click', (e) => {
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible' && state.tab === 'reader' && !RDR.book && !RDR.pdf) {
     setTimeout(checkClipboardHint, 400);
+    // 切回学习机时再看一眼：刚在浏览器里「存到书架 / 存为漫画」的话，这里直接接过来。
+    // 不然学习机标签一直挂着时，新存的材料要等下次重开页面才出现。
+    setTimeout(() => { if (!RDR.book && !RDR.pdf && !(RDR.comicUrls || []).length) openPendingFile(); }, 600);
   }
 });
 
@@ -5105,9 +5173,21 @@ document.querySelectorAll('.tabbar button').forEach((b) => {
   b.onclick = () => { state.tab = b.dataset.tab; render(); };
 });
 
-// App 里：浏览器下载的 PDF/EPUB/DOCX/TXT/MD 会先交给学习机（原生用本地 127.0.0.1 服务暴露）
+// App 里：浏览器下载的 PDF/EPUB/DOCX/TXT/MD/漫画 zip 会先交给学习机（原生用本地 127.0.0.1 服务暴露）
+let pendingBusy = false;
+
 async function openPendingFile() {
   if (!nativePort()) return false;
+  if (pendingBusy) return false;
+  pendingBusy = true;
+  try {
+    return await openPendingFileInner();
+  } finally {
+    pendingBusy = false;
+  }
+}
+
+async function openPendingFileInner() {
   let info = null;
   try { info = await nativeCall('pendingFile', {}, 4000); } catch { return false; }
   if (!info || !info.url) return false;
@@ -5123,6 +5203,12 @@ async function openPendingFile() {
     if (ext === 'pdf') await openPdfFile(f);
     else if (ext === 'epub') await openEpubBook(f);
     else if (ext === 'docx') await openDocxBook(f);
+    else if (ext === 'zip') {
+      // 漫画：App 里「存为漫画」把这一章的图打成 zip 交过来
+      const n = await importComicZip(f);
+      toast('已载入漫画：' + info.name + '（' + n + ' 张）');
+      return true;
+    }
     else await openTextBook(f);
     toast('已从浏览器载入：' + info.name);
     return true;
@@ -5132,7 +5218,55 @@ async function openPendingFile() {
   }
 }
 
-// ── 卡片模型 v2 ──────────────────────────────────────
+// ── 漫画：zip（manifest.json + img/xxxx.jpg）→ 材料库 ──────
+// 解包成 Blob 存进 IndexedDB，阅读器离线可读；任何一张解码失败都不算整份失败。
+async function importComicZip(file) {
+  await ensureJSZip();
+  const zip = await JSZip.loadAsync(await file.arrayBuffer());
+  const mf = zip.file('manifest.json');
+  let meta = { title: String(file.name || '').replace(/\.zip$/i, ''), pageUrl: '' };
+  if (mf) {
+    try { meta = Object.assign(meta, JSON.parse(await mf.async('string'))); } catch { /* 清单坏了就用文件名 */ }
+  }
+  const entries = [];
+  zip.forEach((path, entry) => {
+    if (!entry.dir && /^img\//i.test(path)) entries.push(entry);
+  });
+  entries.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+  if (!entries.length) throw new Error('压缩包里没有图片');
+
+  const blobs = [];
+  let bytes = 0;
+  for (const entry of entries) {
+    const b = await entry.async('blob');
+    bytes += b.size;
+    if (bytes > MAT_COMIC_MAX_BYTES) throw new Error('这一章超过 40MB，先别存');
+    blobs.push(b);
+  }
+  const id = 'comic:' + (meta.pageUrl || meta.title || file.name) + '|' + bytes;
+  const rec = {
+    id,
+    name: meta.title || '漫画',
+    kind: 'comic',
+    savedAt: Date.now(),
+    bytes,
+    pageUrl: meta.pageUrl || '',
+    images: blobs,
+  };
+  await matPut(rec);
+  // 只留最近 MAT_MAX 份（和文字材料同一个上限）
+  const all = await matAll();
+  if (all.length > MAT_MAX) {
+    all.sort((a, b) => (a.savedAt || 0) - (b.savedAt || 0));
+    for (const old of all.slice(0, all.length - MAT_MAX)) await matDelete(old.id);
+  }
+  state.tab = 'reader';
+  render();
+  openComicMaterial(rec);
+  return blobs.length;
+}
+
+
 // 目标：一张卡一个身份。两个存卡入口（App「＋存卡」/ 学习机「＋卡」）、两台设备同步，
 // 同一个词都只留一条；字段统一（source/topic/时间戳），复习记录跟着 id 一起走。
 // id 仍是时间戳式（不动老数据），去重靠 cardIndex 这张「归一化词 → id」表。
