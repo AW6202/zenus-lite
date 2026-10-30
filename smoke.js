@@ -1031,6 +1031,27 @@ class CDP {
     check('内核实渲染的 PDF 视图有完整工具条（翻页/知识点/出题/文字视图）',
       npTools.has && npTools.shown && npTools.wraps === 2, npTools);
 
+    // 图片视图：单击叫出工具条 + 长按弹自己的动作面板（不能被浏览器 blob 菜单顶掉）
+    const imgActs = await probe('图片长按菜单', `
+      const png = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+      RDR.kind = 'image'; RDR.srcUrl = png; RDR.name = '冒烟图片';
+      renderImage();
+      await new Promise(r => setTimeout(r, 80));
+      const img = document.getElementById('imgView');
+      let prevented = false;
+      const ev = new MouseEvent('contextmenu', { bubbles: true, cancelable: true });
+      img.dispatchEvent(ev);
+      prevented = ev.defaultPrevented;
+      await new Promise(r => setTimeout(r, 60));
+      const panel = document.getElementById('imgActions');
+      const has = panel && !!panel.querySelector('#iaFull') && !!panel.querySelector('#iaSave') && !!panel.querySelector('#iaOcr');
+      closeImageActions();
+      resetBook(); renderReader();
+      return { prevented, has, closed: !document.getElementById('imgActions') };
+    `);
+    check('图片长按弹自己的动作面板（全屏/另存/识别文字）',
+      imgActs.prevented && imgActs.has && imgActs.closed, imgActs);
+
     if (pdfArg) {
       const pdf = await probe('PDF', `
         const b = await (await fetch('${base}smoke.pdf')).blob();

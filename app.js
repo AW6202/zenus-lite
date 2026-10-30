@@ -1,7 +1,7 @@
 // 学习机 Lite — 静态 PWA：内容来自 pack.json，进度存本地，AI 直连 OpenAI 兼容接口
 'use strict';
 
-const BUILD = '2026-10-30.12';
+const BUILD = '2026-10-30.13';
 
 const LS = {
   progress: 'zenus.progress.v1',
@@ -2984,6 +2984,7 @@ function openImageViewer(list, index = 0) {
 
   const stage = box.querySelector('#ivStage');
   const img = box.querySelector('#ivImg');
+  bindImageActions(img, { kind: 'image', src: pages[idx], name: RDR.name || 'image', pages, index: idx });
   ivState = { box: box };
 
   const apply = () => {
@@ -3058,6 +3059,72 @@ function closeImageViewer() {
   ivState = null;
 }
 
+// 图片的「长按菜单」：浏览器默认弹的是自己的上下文菜单（blob: 链接、另存为…），
+// 在 App 里那些动作大多是死的。这里接管成长按弹出我们自己的动作面板。
+function showImageActions(ctx) {
+  closeImageActions();
+  const panel = document.createElement('div');
+  panel.id = 'imgActions';
+  panel.style.cssText = 'position:fixed;inset:0;z-index:1000;background:rgba(0,0,0,.45);display:flex;align-items:flex-end';
+  const btn = (id, label) =>
+    '<button id="' + id + '" style="flex:1;min-width:30%;background:#2b313b;color:#eee;border:0;'
+    + 'border-radius:10px;padding:12px 8px;font-size:14px;margin:4px">' + label + '</button>';
+  panel.innerHTML =
+    '<div style="width:100%;background:#1b1f26;border-radius:16px 16px 0 0;padding:14px">'
+    + '<div style="color:#bbb;font-size:12px;margin:0 4px 8px">图片操作</div>'
+    + '<div style="display:flex;flex-wrap:wrap">'
+    + btn('iaFull', '全屏看')
+    + btn('iaSave', '另存为')
+    + (ctx.kind === 'image' ? btn('iaOcr', '识别文字') + btn('iaViz', '看图出题') + btn('iaKp', '知识点') : '')
+    + btn('iaShare', '分享')
+    + btn('iaClose', '取消')
+    + '</div></div>';
+  document.body.appendChild(panel);
+  panel.onclick = (e) => { if (e.target === panel) closeImageActions(); };
+  const on = (id, fn) => { const el = document.getElementById(id); if (el) el.onclick = () => { closeImageActions(); fn(); }; };
+  on('iaFull', () => openImageViewer(ctx.pages || [ctx.src], ctx.index || 0));
+  on('iaSave', () => saveImageAs(ctx.src, ctx.name));
+  on('iaOcr', () => ocrImage());
+  on('iaViz', () => visionFromImage());
+  on('iaKp', () => showPoints());
+  on('iaShare', () => {
+    if (navigator.share) navigator.share({ url: ctx.src }).catch(() => {});
+    else toast('这个环境不支持分享');
+  });
+  on('iaClose', () => {});
+}
+
+function closeImageActions() {
+  const el = document.getElementById('imgActions');
+  if (el) el.remove();
+}
+
+// 另存为：把图片落成文件（App 里 WebView 的 blob 下载钩子会接住）
+function saveImageAs(src, name) {
+  if (!src) return;
+  try {
+    const a = document.createElement('a');
+    a.href = src;
+    a.download = (name || 'image') + '.png';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    toast('已保存到下载目录');
+  } catch (e) {
+    toast('保存失败：' + e.message);
+  }
+}
+
+// 让图片长按走我们自己的面板，而不是浏览器的 blob 菜单
+function bindImageActions(img, ctx) {
+  if (!img || img.dataset.actBound) return;
+  img.dataset.actBound = '1';
+  img.addEventListener('contextmenu', (e) => {
+    e.preventDefault();
+    showImageActions(ctx);
+  });
+}
+
 // 阅读器首页的「最近读过」：从 IndexedDB 里列出来，点一下接着读
 async function fillRecentMaterials() {
   const box = document.getElementById('recentMats');
@@ -3130,6 +3197,8 @@ function renderNativePdf() {
     scheduleHideTools();
   };
   wraps.forEach((w, i) => {
+    const im = w.querySelector('.npImg');
+    if (im) bindImageActions(im, { kind: 'pdfpage', src: pages[i], name: (RDR.name || 'PDF') + '-第' + (i + 1) + '页', pages, index: i });
     w.onclick = () => {
       RDR.npIndex = i;
       RDR.page = i + 1;
@@ -3624,7 +3693,10 @@ function renderImage() {
     + '<button id="kpBtn" class="t-close">知识点</button>'
     + '<button id="closeImg" class="t-close">关闭</button></div>';
   const imgEl = document.getElementById('imgView');
-  if (imgEl) imgEl.onclick = () => openImageViewer([RDR.srcUrl], 0);
+  if (imgEl) {
+    imgEl.onclick = () => toggleTools();          // 单击叫出/收起右侧工具条
+    bindImageActions(imgEl, { kind: 'image', src: RDR.srcUrl, name: RDR.name, pages: [RDR.srcUrl], index: 0 });
+  }
   const imReset = document.getElementById('imReset');
   if (imReset) imReset.onclick = () => openImageViewer([RDR.srcUrl], 0);
   document.getElementById('ocrBtn').onclick = () => { hideTools(); ocrImage(); };
