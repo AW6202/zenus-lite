@@ -1,7 +1,7 @@
 // 学习机 Lite — 静态 PWA：内容来自 pack.json，进度存本地，AI 直连 OpenAI 兼容接口
 'use strict';
 
-const BUILD = '2026-10-31.3';
+const BUILD = '2026-10-31.4';
 
 const LS = {
   progress: 'zenus.progress.v1',
@@ -3371,6 +3371,7 @@ function renderSourceManager() {
     + (Number(src.type) === 2 ? ' <span class="sub" style="color:#c60">（漫画源暂不支持正文）</span>' : '')
     + (src.raw ? '' : ' <span class="sub">（旧版只存了名字，请重新导入）</span>') + '</div>'
     + '<div class="sub">' + esc(src.url || '') + '</div></div>'
+    + '<button class="btn ghost" data-sopen="' + i + '" style="width:auto;padding:6px 10px;font-size:12px">站点</button>'
     + '<button class="btn ghost" data-stest="' + i + '" style="width:auto;padding:6px 10px;font-size:12px">测试</button>'
     + '<button class="btn ghost" data-sdel="' + i + '" style="width:auto;padding:6px 10px;font-size:12px">删除</button></div>'
   ).join('');
@@ -3417,6 +3418,9 @@ function renderSourceManager() {
   };
   view.querySelectorAll('[data-stest]').forEach((el) => {
     el.onclick = () => testSource(Number(el.dataset.stest));
+  });
+  view.querySelectorAll('[data-sopen]').forEach((el) => {
+    el.onclick = () => openInBrowser(sources[Number(el.dataset.sopen)].url);
   });
   view.querySelectorAll('[data-sdel]').forEach((el) => {
     el.onclick = () => {
@@ -3728,6 +3732,15 @@ function deleteBadSources() {
   toast('已删除 ' + bad.length + ' 个');
 }
 
+// 书源只负责「找」；真正的「读」交给浏览器（真内核：JS/登录/广告拦截/阅读模式都在那边）。
+// 阅读器这边只吃已经落下来的本地材料 —— 两边分工，别指望规则引擎当浏览器用。
+function openInBrowser(url) {
+  const u = String(url || '').trim();
+  if (!/^https?:/i.test(u)) { toast('这个书源没给可打开的地址'); return; }
+  if (!nativePort()) { window.open(u, '_blank'); return; }
+  nativeCall('openUrl', { url: u }).catch((e) => toast('打开失败：' + (e.message || e)));
+}
+
 async function searchInSource(i, key) {
   const src = sources[i];
   if (!sourceReady(src)) return;
@@ -3746,10 +3759,14 @@ async function searchInSource(i, key) {
           '<div class="it" style="display:flex;align-items:center;gap:8px">'
           + '<div style="flex:1;min-width:0"><div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'
           + esc(b.name || '未命名') + '</div><div class="sub">' + esc(b.author || '') + '</div></div>'
+          + '<button class="btn ghost" data-openbook="' + k + '" style="width:auto;padding:6px 10px;font-size:12px">浏览器打开</button>'
           + '<button class="btn ghost" data-addbook="' + k + '" style="width:auto;padding:6px 10px;font-size:12px">加入书架</button></div>'
         ).join('');
       box.querySelectorAll('[data-addbook]').forEach((el) => {
         el.onclick = () => addBookToShelf(src, list[Number(el.dataset.addbook)], el);
+      });
+      box.querySelectorAll('[data-openbook]').forEach((el) => {
+        el.onclick = () => openInBrowser(list[Number(el.dataset.openbook)].bookUrl);
       });
     }
   } catch (e) {
@@ -3791,8 +3808,14 @@ async function addBookToShelf(src, book, btn) {
     toast('已加入书架（抓到 ' + chapters.length + ' 章 / 共 ' + toc.length + ' 章）');
     if (btn) { btn.disabled = false; btn.textContent = '已加入'; }
   } catch (e) {
+    // 正文抓不到（多半是站点靠 JS 出正文）：别让用户卡死在这里，
+    // 直接把按钮换成「浏览器打开」——网页那边真内核能跑 JS。
     toast('抓取失败：' + (e.message || e));
-    if (btn) { btn.disabled = false; btn.textContent = '加入书架'; }
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = '浏览器打开';
+      btn.onclick = () => openInBrowser(book.bookUrl);
+    }
   }
 }
 

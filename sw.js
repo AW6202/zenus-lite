@@ -1,7 +1,7 @@
 // Service Worker
 // 策略：**页面与代码网络优先**，断网才回落到缓存。
 // 之前是"缓存优先"，导致每次发版手机上都要手动清缓存 —— 2026-10-28 改。
-const CACHE = 'zenus-shell-v70';
+const CACHE = 'zenus-shell-v71';
 const SHELL = [
   './',
   './index.html',
