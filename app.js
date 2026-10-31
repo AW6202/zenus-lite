@@ -1,7 +1,7 @@
 // 学习机 Lite — 静态 PWA：内容来自 pack.json，进度存本地，AI 直连 OpenAI 兼容接口
 'use strict';
 
-const BUILD = '2026-10-31.12';
+const BUILD = '2026-10-31.13';
 
 const LS = {
   progress: 'zenus.progress.v1',
@@ -3340,29 +3340,67 @@ function srcDb() {
   });
 }
 async function srcSave() {
+  let saved = 0;
   try {
     const db = await srcDb();
     await new Promise((resolve, reject) => {
       const tx = db.transaction(SRC_STORE, 'readwrite');
-      tx.objectStore(SRC_STORE).put(sources, 'sources');
+      const store = tx.objectStore(SRC_STORE);
+      store.clear();                    // 一条一个记录：坏一条不连累整份
+      sources.forEach((x, i) => {
+        store.put(x, (x && x.url) ? ('u:' + x.url) : ('i:' + i));
+        saved++;
+      });
       tx.oncomplete = () => resolve();
       tx.onerror = () => reject(tx.error);
+      tx.onabort = () => reject(tx.error || new Error('aborted'));
     });
-  } catch (e) { /* 隐私模式/配额：至少还有 localStorage 镜像 */ }
-  try { srcSave(); } catch (e) { /* 超过 5MB 就只留在 IDB */ }
+    state.srcErr = '';
+  } catch (e) {
+    state.srcErr = (e && e.message) || String(e);
+  }
+  if (sources.length <= 300) {
+    try { saveJSON(LS.sources, sources); } catch (e) { /* 配额：大合集本来就不写本地 */ }
+  }
+  return saved;
 }
+
 async function srcLoad() {
   try {
     const db = await srcDb();
-    const rec = await new Promise((resolve, reject) => {
+    const all = await new Promise((resolve, reject) => {
       const tx = db.transaction(SRC_STORE, 'readonly');
-      const r = tx.objectStore(SRC_STORE).get('sources');
-      r.onsuccess = () => resolve(r.result);
-      r.onerror = () => reject(r.error);
+      const req = tx.objectStore(SRC_STORE).getAll();
+      req.onsuccess = () => resolve(req.result || []);
+      req.onerror = () => reject(req.error);
     });
-    if (Array.isArray(rec) && rec.length) { sources = rec; return; }
-  } catch (e) { /* 没有就退回 localStorage */ }
+    // 旧版本把整份数组塞在一个记录里：读回来时摊平，别让老用户丢数据
+    const flat = [];
+    all.forEach((x) => {
+      if (Array.isArray(x)) x.forEach((y) => flat.push(y));
+      else if (x) flat.push(x);
+    });
+    const list = flat.filter((x) => x && (x.url || x.name));
+    if (list.length) { sources = list; return; }
+  } catch (e) {
+    state.srcErr = (e && e.message) || String(e);
+  }
   sources = loadJSON(LS.sources, []);
+}
+
+async function srcClearAll() {
+  sources = [];
+  try {
+    const db = await srcDb();
+    await new Promise((resolve, reject) => {
+      const tx = db.transaction(SRC_STORE, 'readwrite');
+      tx.objectStore(SRC_STORE).clear();
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+  } catch (e) { /* 清不掉也把内存清了 */ }
+  try { localStorage.removeItem(LS.sources); } catch (e) { /* ignore */ }
+  state.srcErr = '';
 }
 
 async function renderShelf() {
@@ -3498,7 +3536,8 @@ function renderSourceManager() {
     ? sources.map((s, i) => '<option value="' + i + '">' + esc(s.name || ('书源 ' + (i + 1))) + '</option>').join('')
     : '<option value="-1">（先导入书源）</option>';
   view.innerHTML =
-    '<div class="meta"><span>书源管理</span><span>' + sources.length + ' 个</span></div>'
+    '<div class="meta"><span>书源管理</span><span>' + sources.length + ' 个'
+    + (state.srcErr ? ' · 存储异常' : '') + '</span></div>'
     + '<div class="hint">粘贴 Legado 书源 JSON（一个数组，或单个对象也可以）。'
     + '导入后能「测试」连通性，也能直接按书源搜书、把第一章加入书架。</div>'
     + '<textarea class="t" id="srcBox" rows="6" style="height:auto;min-height:120px;font-size:12px"'
@@ -3506,6 +3545,7 @@ function renderSourceManager() {
     + '<div class="row" style="margin-top:8px"><button class="btn primary" id="srcAdd">导入书源</button>'
     + '<button class="btn" id="srcCat">源仓库</button>'
     + '<button class="btn" id="srcFile">从文件导入</button>'
+    + '<button class="btn ghost" id="srcReset">清空</button>'
     + '<button class="btn ghost" id="srcBack">← 回书架</button></div>'
     + '<input type="file" id="srcFileInput" accept=".json,.txt,application/json,text/plain" style="display:none">'
     + '<div class="row" style="margin-top:8px;flex-wrap:wrap;gap:8px">'
@@ -3520,6 +3560,12 @@ function renderSourceManager() {
     + '<div id="srcResults"></div>'
     + (rows || '<div class="empty" style="margin-top:14px">还没有书源</div>');
   document.getElementById('srcBack').onclick = () => renderShelf();
+  document.getElementById('srcReset').onclick = async () => {
+    if (!confirm('清空全部书源？不可撤销。')) return;
+    await srcClearAll();
+    toast('已清空');
+    renderSourceManager();
+  };
   document.getElementById('srcCat').onclick = () => { CAT.page = 1; loadCatalogPage(true); };
   document.getElementById('srcTestAll').onclick = () => testAllSources();
   document.getElementById('srcDelBad').onclick = () => deleteBadSources();
@@ -3577,10 +3623,12 @@ function renderSourceManager() {
     };
   });
   view.querySelectorAll('[data-sdel]').forEach((el) => {
-    el.onclick = () => {
+    el.onclick = async () => {
       sources.splice(Number(el.dataset.sdel), 1);
-      srcSave();
       renderSourceManager();
+      await srcSave();
+      if (state.srcErr) toast('保存失败：' + state.srcErr);
+      else toast('已删除，剩 ' + sources.length + ' 个');
     };
   });
   document.getElementById('srcSearch').onclick = () => {
@@ -3702,7 +3750,7 @@ async function importSources(raw) {
     });
     added++;
   }
-  srcSave();
+  await srcSave();
   return { added, collections, upgraded };
 }
 
