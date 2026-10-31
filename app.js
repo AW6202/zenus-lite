@@ -1,7 +1,7 @@
 // 学习机 Lite — 静态 PWA：内容来自 pack.json，进度存本地，AI 直连 OpenAI 兼容接口
 'use strict';
 
-const BUILD = '2026-10-31.11';
+const BUILD = '2026-10-31.12';
 
 const LS = {
   progress: 'zenus.progress.v1',
@@ -3486,6 +3486,9 @@ function renderSourceManager() {
     + (needLogin(src)
       ? '<button class="btn ghost" data-slogin="' + i + '" style="width:auto;padding:6px 10px;font-size:12px">登录</button>'
       : '')
+    + (src.raw && src.raw.exploreUrl
+      ? '<button class="btn ghost" data-sexp="' + i + '" style="width:auto;padding:6px 10px;font-size:12px">发现</button>'
+      : '')
     + '<button class="btn ghost" data-svars="' + i + '" style="width:auto;padding:6px 10px;font-size:12px">变量</button>'
     + '<button class="btn ghost" data-sopen="' + i + '" style="width:auto;padding:6px 10px;font-size:12px">源站</button>'
     + '<button class="btn ghost" data-stest="' + i + '" style="width:auto;padding:6px 10px;font-size:12px">测试</button>'
@@ -3552,6 +3555,9 @@ function renderSourceManager() {
   };
   view.querySelectorAll('[data-stest]').forEach((el) => {
     el.onclick = () => testSource(Number(el.dataset.stest));
+  });
+  view.querySelectorAll('[data-sexp]').forEach((el) => {
+    el.onclick = () => openExplore(Number(el.dataset.sexp));
   });
   view.querySelectorAll('[data-svars]').forEach((el) => {
     el.onclick = () => editSourceVars(Number(el.dataset.svars));
@@ -3874,6 +3880,68 @@ function needLogin(src) {
   const raw = src && src.raw;
   if (!raw) return false;
   return !!(raw.loginUrl || raw.loginUi || raw.enabledCookieJar);
+}
+
+// 发现页：书源的 exploreUrl 列出的分类/榜单（次元姬这类源不登录也能用）
+const EXP = { idx: -1, entries: [], books: [] };
+
+async function openExplore(i) {
+  const src = sources[i];
+  if (!src || !src.raw) return toast('这个书源没有发现页');
+  if (!nativePort()) return toast('发现页要在 App 里用');
+  toast('加载发现页…');
+  try {
+    const list = (await nativeCall('bookExplore', { source: src.raw }, 90000)) || [];
+    EXP.idx = i; EXP.entries = list; EXP.books = [];
+    renderExplore();
+  } catch (e) {
+    toast('发现页失败：' + (e.message || e));
+  }
+}
+
+function renderExplore() {
+  const src = sources[EXP.idx] || {};
+  const chips = EXP.entries.map((e, k) =>
+    '<button class="btn ghost" data-exp="' + k + '" style="width:auto;padding:6px 10px;font-size:12px">'
+    + esc(e.title || e.url || ('入口 ' + (k + 1))) + '</button>').join(' ');
+  const books = EXP.books.map((b, k) =>
+    '<div class="it" style="display:flex;align-items:center;gap:8px">'
+    + '<div style="flex:1;min-width:0"><div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'
+    + esc(b.name || '未命名') + '</div><div class="sub">' + esc(b.author || '') + '</div></div>'
+    + '<button class="btn ghost" data-expopen="' + k + '" style="width:auto;padding:6px 10px;font-size:12px">浏览器打开</button>'
+    + '<button class="btn primary" data-expadd="' + k + '" style="width:auto;padding:6px 10px;font-size:12px">读进阅读器</button></div>'
+  ).join('');
+  view.innerHTML =
+    '<div class="meta"><span>发现 · ' + esc(src.name || '') + '</span><span>' + EXP.entries.length + ' 个入口</span></div>'
+    + '<div class="row" style="margin:8px 0"><button class="btn ghost" id="expBack">← 回书源</button></div>'
+    + '<div style="display:flex;flex-wrap:wrap;gap:8px">' + (chips || '<div class="empty">这个源没有发现入口</div>') + '</div>'
+    + '<div id="expBooks" style="margin-top:12px">' + (books || '') + '</div>';
+  document.getElementById('expBack').onclick = () => renderSourceManager();
+  view.querySelectorAll('[data-exp]').forEach((el) => {
+    el.onclick = () => loadExploreEntry(Number(el.dataset.exp));
+  });
+  view.querySelectorAll('[data-expopen]').forEach((el) => {
+    el.onclick = () => openInBrowser((EXP.books[Number(el.dataset.expopen)] || {}).bookUrl);
+  });
+  view.querySelectorAll('[data-expadd]').forEach((el) => {
+    el.onclick = () => addBookToShelf(sources[EXP.idx], EXP.books[Number(el.dataset.expadd)], el);
+  });
+  view.scrollTop = 0;
+}
+
+async function loadExploreEntry(k) {
+  const e = EXP.entries[k];
+  if (!e) return;
+  const src = sources[EXP.idx];
+  toast('加载「' + (e.title || '') + '」…');
+  try {
+    const books = (await nativeCall('bookExploreList', { source: src.raw, url: e.url || '' }, 90000)) || [];
+    EXP.books = books;
+    if (!books.length) toast('这一类没解析出书');
+    renderExplore();
+  } catch (err) {
+    toast('列表失败：' + (err.message || err));
+  }
 }
 
 // 书源变量：登录源（loginUi 面板）常常需要一个 JWT/token，允许手动填进来
