@@ -1,7 +1,7 @@
 // 学习机 Lite — 静态 PWA：内容来自 pack.json，进度存本地，AI 直连 OpenAI 兼容接口
 'use strict';
 
-const BUILD = '2026-10-31.5';
+const BUILD = '2026-10-31.6';
 
 const LS = {
   progress: 'zenus.progress.v1',
@@ -3686,7 +3686,7 @@ async function testSource(i) {
   toast('测试中…');
   try {
     const r = await nativeCall('bookProbe', { source: src.raw, key: '' }, 40000);
-    SRC_TEST[src.url] = { ok: true, msg: (r.bytes || 0) + ' 字' };
+    SRC_TEST[src.url] = { ok: true, msg: (r.bytes || 0) + ' 字', engine: r.engine || 'html' };
     const engine = r.engine === 'json' ? 'JSON 接口（暂不支持）' : 'HTML';
     const entries = r.entries == null ? '' : ' / 抓到 ' + r.entries + ' 条';
     toast('连通：' + (r.bytes || 0) + ' 字 / ' + engine + entries);
@@ -3714,7 +3714,7 @@ async function testAllSources() {
     if (!s.raw) { skip++; continue; }
     try {
       const r = await nativeCall('bookProbe', { source: s.raw, key: '' }, 40000);
-      SRC_TEST[s.url] = { ok: true, msg: (r.bytes || 0) + ' 字' };
+      SRC_TEST[s.url] = { ok: true, msg: (r.bytes || 0) + ' 字', engine: r.engine || 'html' };
       ok++;
     } catch (e) {
       SRC_TEST[s.url] = { ok: false, msg: String((e && e.message) || e) };
@@ -3761,14 +3761,20 @@ async function searchInSource(i, key) {
       return;
     }
     if (box) {
+      // 打开方式按源的类型自动选：
+      // HTML 源 → 浏览器（真内核，排版/广告/登录都在那边）；JSON/JS 源 → 阅读器（规则引擎出正文）
+      const eng = (SRC_TEST[src.url] && SRC_TEST[src.url].engine) || 'html';
+      const readerFirst = eng !== 'html';
       box.innerHTML =
-        '<div class="meta" style="margin-top:12px"><span>搜索结果</span><span>' + list.length + ' 条</span></div>'
+        '<div class="meta" style="margin-top:12px"><span>搜索结果</span><span>' + list.length + ' 条 · '
+        + (readerFirst ? '阅读器打开' : '浏览器打开') + '</span></div>'
         + list.map((b, k) =>
           '<div class="it" style="display:flex;align-items:center;gap:8px">'
           + '<div style="flex:1;min-width:0"><div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'
           + esc(b.name || '未命名') + '</div><div class="sub">' + esc(b.author || '') + '</div></div>'
-          + '<button class="btn ghost" data-openbook="' + k + '" style="width:auto;padding:6px 10px;font-size:12px">浏览器打开</button>'
-          + '<button class="btn ghost" data-addbook="' + k + '" style="width:auto;padding:6px 10px;font-size:12px">加入书架</button></div>'
+          + '<button class="btn ' + (readerFirst ? 'ghost' : 'primary') + '" data-openbook="' + k + '" style="width:auto;padding:6px 10px;font-size:12px">浏览器打开</button>'
+          + '<button class="btn ' + (readerFirst ? 'primary' : 'ghost') + '" data-addbook="' + k + '" style="width:auto;padding:6px 10px;font-size:12px">'
+          + (readerFirst ? '读进阅读器' : '加入书架') + '</button></div>'
         ).join('');
       box.querySelectorAll('[data-addbook]').forEach((el) => {
         el.onclick = () => addBookToShelf(src, list[Number(el.dataset.addbook)], el);
