@@ -1,7 +1,7 @@
 // 学习机 Lite — 静态 PWA：内容来自 pack.json，进度存本地，AI 直连 OpenAI 兼容接口
 'use strict';
 
-const BUILD = '2026-10-31.7';
+const BUILD = '2026-10-31.8';
 
 const LS = {
   progress: 'zenus.progress.v1',
@@ -3751,16 +3751,26 @@ function sourceReady(src) {
   return true;
 }
 
+// 分级体检结果 → 一句话（搜索/目录/正文三段各走没走通）
+function stageText(r) {
+  if (!r) return '无返回';
+  const s = r.stage || '?';
+  if (s === 'ok') return '搜索 ' + (r.search || 0) + ' · 目录 ' + (r.toc || 0) + ' 章 · 正文 ' + (r.content || 0) + ' 字';
+  if (s === 'search-empty') return '搜索无结果';
+  if (s === 'toc-empty') return '目录为空';
+  const name = { search: '搜索', toc: '目录', content: '正文' }[s] || s;
+  return '卡在' + name + '：' + (r.error || '未知');
+}
+
 async function testSource(i) {
   const src = sources[i];
   if (!sourceReady(src)) return;
-  toast('测试中…');
+  toast('测试中（要跑搜索→目录→正文，稍等）…');
   try {
-    const r = await nativeCall('bookProbe', { source: src.raw, key: '' }, 40000);
-    SRC_TEST[src.url] = { ok: true, msg: (r.bytes || 0) + ' 字', engine: r.engine || 'html' };
-    const engine = r.engine === 'json' ? 'JSON 接口（暂不支持）' : 'HTML';
-    const entries = r.entries == null ? '' : ' / 抓到 ' + r.entries + ' 条';
-    toast('连通：' + (r.bytes || 0) + ' 字 / ' + engine + entries);
+    const r = await nativeCall('bookProbeFull', { source: src.raw, key: '' }, 120000);
+    const ok = !!(r && r.stage === 'ok');
+    SRC_TEST[src.url] = { ok, engine: ok ? 'reader' : 'html', msg: stageText(r) };
+    toast(ok ? '可用：' + stageText(r) : '不可用：' + stageText(r));
   } catch (e) {
     SRC_TEST[src.url] = { ok: false, msg: String((e && e.message) || e) };
     toast('测试失败：' + ((e && e.message) || e));
@@ -3784,9 +3794,10 @@ async function testAllSources() {
     const s = list[i];
     if (!s.raw) { skip++; continue; }
     try {
-      const r = await nativeCall('bookProbe', { source: s.raw, key: '' }, 40000);
-      SRC_TEST[s.url] = { ok: true, msg: (r.bytes || 0) + ' 字', engine: r.engine || 'html' };
-      ok++;
+      const r = await nativeCall('bookProbeFull', { source: s.raw, key: '' }, 120000);
+      const pass = !!(r && r.stage === 'ok');
+      SRC_TEST[s.url] = { ok: pass, engine: pass ? 'reader' : 'html', msg: stageText(r) };
+      if (pass) ok++; else bad++;
     } catch (e) {
       SRC_TEST[s.url] = { ok: false, msg: String((e && e.message) || e) };
       bad++;
