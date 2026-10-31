@@ -1,7 +1,7 @@
 // 学习机 Lite — 静态 PWA：内容来自 pack.json，进度存本地，AI 直连 OpenAI 兼容接口
 'use strict';
 
-const BUILD = '2026-10-31.14';
+const BUILD = '2026-10-31.15';
 
 const LS = {
   progress: 'zenus.progress.v1',
@@ -4022,11 +4022,85 @@ async function editSourceVars(i) {
   }
 }
 
+// ── 登录面板：把书源 loginUi 里的按钮画出来，点了调它 loginUrl 里的同名函数 ──
+const LOGIN = { idx: -1, items: [], busy: false, pendingAction: null };
+
+async function openLoginPanel(i) {
+  const src = sources[i];
+  if (!src || !src.raw) return;
+  toast('加载登录面板…');
+  try {
+    const items = (await nativeCall('bookLoginUi', { source: src.raw }, 60000)) || [];
+    LOGIN.idx = i; LOGIN.items = items;
+    renderLoginPanel();
+  } catch (e) {
+    toast('登录面板失败：' + (e.message || e));
+  }
+}
+
+function renderLoginPanel() {
+  const src = sources[LOGIN.idx] || {};
+  const rows = LOGIN.items.map((it, k) => {
+    if (it.type === 'button') {
+      return '<button class="btn ghost" data-lbtn="' + k + '" style="width:100%;margin:4px 0;padding:10px;font-size:13px">'
+        + esc(it.name || '按钮') + '</button>';
+    }
+    if (it.type === 'text') {
+      return '<div class="row" style="margin:6px 0;gap:8px"><span class="sub" style="min-width:76px">'
+        + esc(it.name || '') + '</span><input class="t" data-ltext="' + k + '" value="' + esc(it.value || '') + '"'
+        + ' style="flex:1;height:34px;min-height:34px;padding:4px 8px;font-size:13px"></div>';
+    }
+    return '<div class="sub" style="margin:6px 0">' + esc((it.type || '') + ' · ' + (it.name || '')) + '</div>';
+  }).join('');
+  view.innerHTML =
+    '<div class="meta"><span>登录 · ' + esc(src.name || '') + '</span><span>' + LOGIN.items.length + ' 项</span></div>'
+    + '<div class="row" style="margin:8px 0"><button class="btn ghost" id="loginBack">← 回书源</button>'
+    + '<button class="btn ghost" id="loginVars">查看变量</button></div>'
+    + (rows || '<div class="empty">这个源没有登录面板</div>')
+    + '<div class="hint" style="margin-top:10px">点「登录同步」会打开它的登录页；登录完成后回来再点一次，JWT 会自动写进变量。</div>';
+  document.getElementById('loginBack').onclick = () => renderSourceManager();
+  document.getElementById('loginVars').onclick = () => editSourceVars(LOGIN.idx);
+  view.querySelectorAll('[data-lbtn]').forEach((el) => {
+    el.onclick = () => runLoginAction(Number(el.dataset.lbtn));
+  });
+  view.scrollTop = 0;
+}
+
+async function runLoginAction(k) {
+  const it = LOGIN.items[k];
+  if (!it || LOGIN.busy) return;
+  if (!it.action) return toast('这个项没有动作');
+  LOGIN.busy = true;
+  toast('执行：' + (it.name || ''));
+  try {
+    const r = await nativeCall('bookLoginAction', { source: sources[LOGIN.idx].raw, action: it.action }, 90000);
+    const open = (r && r.open) || '';
+    const vars = (r && r.vars) || '';
+    if (open) {
+      await nativeCall('openLogin', { url: open, name: (sources[LOGIN.idx].name || ''), script: '' }, 8000);
+      LOGIN.pendingAction = it.action;
+      toast('请在弹出的页面完成登录，完成后回来会自动再执行一次');
+    } else if (vars) {
+      toast('已拿到变量：' + vars.slice(0, 60));
+    } else if (r && r.error) {
+      toast('脚本报错：' + r.error);
+    } else {
+      toast('执行完成（没有返回变量）');
+    }
+  } catch (e) {
+    toast('执行失败：' + (e.message || e));
+  } finally {
+    LOGIN.busy = false;
+  }
+}
+
 let pendingLoginUrl = null;
 
 async function openSourceLogin(i) {
   const src = sources[i];
   if (!src || !src.raw) return toast('这个书源没有登录配置');
+  // 有 loginUi 的源：直接开它自己的登录面板（Sigma 里那个界面）
+  if (src.raw.loginUi) return openLoginPanel(i);
   const raw = src.raw;
   const loginUrl = String(raw.loginUrl || '');
   const isUrl = /^https?:\/\//i.test(loginUrl);
@@ -5784,6 +5858,14 @@ document.addEventListener('visibilitychange', () => {
     // 从别的地方点「一键导入」再切回来：把收件箱里的书源接住
     setTimeout(pullSourceImports, 800);
     // 刚登录完切回来：自动重测那个源
+    if (LOGIN.pendingAction && LOGIN.idx >= 0) {
+      const act = LOGIN.pendingAction;
+      LOGIN.pendingAction = null;
+      setTimeout(() => {
+        const k = LOGIN.items.findIndex((x) => x.action === act);
+        if (k >= 0) runLoginAction(k);
+      }, 1200);
+    }
     if (pendingLoginUrl) {
       const idx = sources.findIndex((x) => x.url === pendingLoginUrl);
       pendingLoginUrl = null;
