@@ -1,7 +1,7 @@
 // 学习机 Lite — 静态 PWA：内容来自 pack.json，进度存本地，AI 直连 OpenAI 兼容接口
 'use strict';
 
-const BUILD = '2026-10-31.8';
+const BUILD = '2026-10-31.9';
 
 const LS = {
   progress: 'zenus.progress.v1',
@@ -3324,6 +3324,47 @@ function bindImageActions(img, ctx) {
 // 数据源就是材料库（IndexedDB），不另建一份，避免"两处各记一套"。
 let sources = loadJSON(LS.sources, []);
 
+// ── 书源存储：localStorage 装不下上千个（一个源约 19KB，5MB 就到顶）──
+// 以 IndexedDB 为准，localStorage 只做小体量镜像（兼容旧版本/冒烟测试）。
+const SRC_DB = 'zenus_sources';
+const SRC_STORE = 'kv';
+function srcDb() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(SRC_DB, 1);
+    req.onupgradeneeded = () => {
+      const db = req.result;
+      if (!db.objectStoreNames.contains(SRC_STORE)) db.createObjectStore(SRC_STORE);
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+async function srcSave() {
+  try {
+    const db = await srcDb();
+    await new Promise((resolve, reject) => {
+      const tx = db.transaction(SRC_STORE, 'readwrite');
+      tx.objectStore(SRC_STORE).put(sources, 'sources');
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+  } catch (e) { /* 隐私模式/配额：至少还有 localStorage 镜像 */ }
+  try { srcSave(); } catch (e) { /* 超过 5MB 就只留在 IDB */ }
+}
+async function srcLoad() {
+  try {
+    const db = await srcDb();
+    const rec = await new Promise((resolve, reject) => {
+      const tx = db.transaction(SRC_STORE, 'readonly');
+      const r = tx.objectStore(SRC_STORE).get('sources');
+      r.onsuccess = () => resolve(r.result);
+      r.onerror = () => reject(r.error);
+    });
+    if (Array.isArray(rec) && rec.length) { sources = rec; return; }
+  } catch (e) { /* 没有就退回 localStorage */ }
+  sources = loadJSON(LS.sources, []);
+}
+
 async function renderShelf() {
   window.__zenusMenuMode = '';
   let mats = [];
@@ -3457,7 +3498,9 @@ function renderSourceManager() {
     + ' placeholder="粘贴书源 JSON 数组"></textarea>'
     + '<div class="row" style="margin-top:8px"><button class="btn primary" id="srcAdd">导入书源</button>'
     + '<button class="btn" id="srcCat">源仓库</button>'
+    + '<button class="btn" id="srcFile">从文件导入</button>'
     + '<button class="btn ghost" id="srcBack">← 回书架</button></div>'
+    + '<input type="file" id="srcFileInput" accept=".json,.txt,application/json,text/plain" style="display:none">'
     + '<div class="row" style="margin-top:8px;flex-wrap:wrap;gap:8px">'
     + '<button class="btn ghost" id="srcTestAll" style="width:auto;padding:0 12px">测试全部</button>'
     + '<button class="btn ghost" id="srcDelBad" style="width:auto;padding:0 12px">删不可用</button>'
@@ -3473,6 +3516,22 @@ function renderSourceManager() {
   document.getElementById('srcCat').onclick = () => { CAT.page = 1; loadCatalogPage(true); };
   document.getElementById('srcTestAll').onclick = () => testAllSources();
   document.getElementById('srcDelBad').onclick = () => deleteBadSources();
+  // 从文件导入：电脑上整理好的大合集（几百上千个源）不用再贴到文本框里
+  document.getElementById('srcFile').onclick = () => document.getElementById('srcFileInput').click();
+  document.getElementById('srcFileInput').onchange = async (ev) => {
+    const f = ev.target.files && ev.target.files[0];
+    if (!f) return;
+    toast('读取 ' + f.name + '…');
+    try {
+      const text = await f.text();
+      const r = await importSources(text);
+      if (r.error) toast(r.error);
+      else toast('从文件导入：新增 ' + r.added + ' 个' + (r.upgraded ? '（升级 2.0 老格式 ' + r.upgraded + ' 个）' : ''));
+      renderSourceManager();
+    } catch (e) {
+      toast('读取失败：' + (e.message || e));
+    }
+  };
   document.getElementById('srcAdd').onclick = async () => {
     const raw = document.getElementById('srcBox').value.trim();
     if (!raw) return toast('先粘贴书源 JSON 或合集地址');
@@ -3504,7 +3563,7 @@ function renderSourceManager() {
   view.querySelectorAll('[data-sdel]').forEach((el) => {
     el.onclick = () => {
       sources.splice(Number(el.dataset.sdel), 1);
-      saveJSON(LS.sources, sources);
+      srcSave();
       renderSourceManager();
     };
   });
@@ -3531,6 +3590,41 @@ function normalizeSourcePayload(data) {
     if (data.bookSourceUrl || data.bookSourceName) return [data];
   }
   return [];
+}
+
+// 阅读 2.0 的老格式：规则是**扁平字段**（ruleSearchList / ruleSearchName / ruleBookContent…）；
+// 3.0 改成 ruleSearch / ruleBookInfo / ruleToc / ruleContent 四个对象。
+// 实测：老格式源在 3.x 里打不开，就是差这次改名。这里做等价映射（选择器语法两边一样）。
+function upgradeV2Source(s) {
+  if (!s || typeof s !== 'object') return s;
+  if (s.ruleSearch && (s.ruleSearch.bookList || s.ruleSearch.name)) return s;   // 已经 3.0
+  if (!s.ruleSearchList && !s.ruleBookContent && !s.ruleChapterList) return s;  // 不像 2.0
+  const g = (k) => (typeof s[k] === 'string' ? s[k] : '');
+  s.ruleSearch = {
+    bookList: g('ruleSearchList'),
+    name: g('ruleSearchName'),
+    author: g('ruleSearchAuthor'),
+    kind: g('ruleSearchKind'),
+    lastChapter: g('ruleSearchLastChapter'),
+    intro: g('ruleSearchIntroduce'),
+    coverUrl: g('ruleSearchCoverUrl'),
+    bookUrl: g('ruleSearchNoteUrl'),
+  };
+  s.ruleBookInfo = {
+    name: g('ruleBookName'),
+    author: g('ruleBookAuthor'),
+    intro: g('ruleIntroduce'),
+    coverUrl: g('ruleCoverUrl'),
+    tocUrl: g('ruleChapterUrl'),
+  };
+  s.ruleToc = {
+    chapterList: g('ruleChapterList'),
+    chapterName: g('ruleChapterName'),
+    chapterUrl: g('ruleContentUrl'),
+  };
+  s.ruleContent = { content: g('ruleBookContent') };
+  s.__upgradedFromV2 = true;
+  return s;
 }
 
 function sourceTypeLabel(type) {
@@ -3562,8 +3656,9 @@ async function importSources(raw) {
   const queue = normalizeSourcePayload(data);
   let added = 0;
   let collections = 0;
+  let upgraded = 0;
   let seen = 0;
-  for (let i = 0; i < queue.length && seen < 800; i++) {
+  for (let i = 0; i < queue.length && seen < 8000; i++) {
     const it = queue[i];
     if (it && it.__collectionUrl) {
       collections++;
@@ -3575,22 +3670,24 @@ async function importSources(raw) {
       continue;
     }
     seen++;
-    const name = it.bookSourceName || it.name;
-    const url = it.bookSourceUrl || it.url;
+    const src = upgradeV2Source(it);
+    const name = src.bookSourceName || src.name;
+    const url = src.bookSourceUrl || src.url;
     if (!name || !url) continue;
     if (sources.some((x) => x.url === url)) continue;
+    if (src.__upgradedFromV2) upgraded++;
     sources.push({
       name,
       url,
-      group: it.bookSourceGroup || '',
-      enabled: it.enabled !== false,
-      type: Number(it.bookSourceType || 0),
-      raw: it,
+      group: src.bookSourceGroup || '',
+      enabled: src.enabled !== false,
+      type: Number(src.bookSourceType || 0),
+      raw: src,
     });
     added++;
   }
-  saveJSON(LS.sources, sources);
-  return { added, collections };
+  srcSave();
+  return { added, collections, upgraded };
 }
 
 // ── 源仓库（yckceo）：目录浏览 + 一键导入 ────────────────
@@ -3817,7 +3914,7 @@ function deleteBadSources() {
   if (!bad.length) return toast('没有标记为不可用的书源（先点「测试全部」）');
   if (!confirm('删除 ' + bad.length + ' 个不可用书源？')) return;
   sources = sources.filter((s) => !(SRC_TEST[s.url] && SRC_TEST[s.url].ok === false));
-  saveJSON(LS.sources, sources);
+  srcSave();
   renderSourceManager();
   toast('已删除 ' + bad.length + ' 个');
 }

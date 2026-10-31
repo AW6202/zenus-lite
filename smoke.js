@@ -1101,6 +1101,31 @@ class CDP {
       cat.sCount === 100 && cat.cCount === 100 && cat.sFirst === '7743' && cat.cFirst === '1328'
       && cat.sTitleOk && cat.cTitleOk && cat.unique, cat);
 
+    // 阅读 2.0 老格式 → 3.0 结构（实测：老格式在 3.x 里打不开，就差这次改名）
+    const v2 = await probe('书源2.0升级', `
+      const s = upgradeV2Source({
+        bookSourceName: '老源', bookSourceUrl: 'https://old.test',
+        ruleSearchList: 'class.item', ruleSearchName: 'class.name@text',
+        ruleChapterUrl: 'class.all@href', ruleChapterList: 'class.ch',
+        ruleChapterName: 'tag.a@text', ruleContentUrl: 'tag.a@href',
+        ruleBookContent: 'id.content@text'
+      });
+      return {
+        hasSearch: !!(s.ruleSearch && s.ruleSearch.bookList),
+        name: s.ruleSearch && s.ruleSearch.name,
+        tocUrl: s.ruleBookInfo && s.ruleBookInfo.tocUrl,
+        chapters: s.ruleToc && s.ruleToc.chapterList,
+        chapterUrl: s.ruleToc && s.ruleToc.chapterUrl,
+        content: s.ruleContent && s.ruleContent.content,
+        flag: !!s.__upgradedFromV2,
+        untouched: upgradeV2Source({ bookSourceName: 'x', ruleSearch: { bookList: 'a' } }).__upgradedFromV2 || false
+      };
+    `);
+    check('书源 2.0 老格式能升级成 3.0 结构（3.0 源不被误改）',
+      v2.hasSearch && v2.name === 'class.name@text' && v2.tocUrl === 'class.all@href'
+      && v2.chapters === 'class.ch' && v2.chapterUrl === 'tag.a@href'
+      && v2.content === 'id.content@text' && v2.flag === true && v2.untouched === false, v2);
+
     // 卡片模型 v2：同词只留一条 / 课本已有不重复建 / 手动结论不被复习覆盖
     const cards = await probe('卡片模型', `
       const before = userCards.length;
