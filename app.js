@@ -1,7 +1,7 @@
 // 学习机 Lite — 静态 PWA：内容来自 pack.json，进度存本地，AI 直连 OpenAI 兼容接口
 'use strict';
 
-const BUILD = '2026-10-31.20';
+const BUILD = '2026-10-31.21';
 
 const LS = {
   progress: 'zenus.progress.v1',
@@ -192,6 +192,8 @@ async function persistMaterial(kind) {
       savedAt: Date.now(),
       bytes: json.length,
       chapters: payload,
+      // origin 里存着书源 JSON / 目录地址：丢了就再也抓不了后面几章（以前每次重开都会丢）
+      origin: RDR.book.origin || null,
     });
     const all = await matAll();
     if (all.length > MAT_MAX) {
@@ -210,7 +212,7 @@ async function openStoredMaterial(id) {
     if (rec.kind === 'comic') { openComicMaterial(rec); return; }
     resetBook();
     RDR.kind = rec.kind === 'epub' ? 'epub' : (rec.kind === 'md' ? 'md' : 'text');
-    RDR.book = { name: rec.name, chapters: rec.chapters };
+    RDR.book = { id: rec.id, name: rec.name, chapters: rec.chapters, origin: rec.origin || null };
     RDR.ch = 0;
     RDR.key = rec.id;
     RDR.pageIdx = 0;
@@ -4099,9 +4101,18 @@ async function runLoginAction(k) {
     const open = (r && r.open) || '';
     const vars = (r && r.vars) || '';
     if (open) {
-      await nativeCall('openLogin', { url: open, name: (sources[LOGIN.idx].name || ''), script: '' }, 8000);
+      // 把源和动作名一起交给原生：登录窗关掉后，原生会自己再跑一次这个动作
+      // （那时 cookie 已经落盘，syncLogin 就能读到 CYJapiToken 并写进源变量）。
+      // 以前只传 url，回来还得用户手动再点一次，而且会多弹一次登录窗。
+      await nativeCall('openLogin', {
+        url: open,
+        name: (sources[LOGIN.idx].name || ''),
+        script: '',
+        source: JSON.stringify(sources[LOGIN.idx].raw || {}),
+        action: it.action,
+      }, 8000);
       LOGIN.pendingAction = it.action;
-      toast('请在弹出的页面完成登录，完成后回来会自动再执行一次');
+      toast('请在弹出的页面完成登录；关掉登录窗后会自动同步 token');
     } else if (vars) {
       toast('已拿到变量：' + vars.slice(0, 60));
     } else if (r && r.error) {
@@ -4300,9 +4311,9 @@ async function addBookToShelf(src, book, btn) {
       savedAt: Date.now(),
       bytes: payload.length,
       chapters,
-      origin: { source: src.name || '', bookUrl: book.bookUrl || '', tocUrl, raw: src.raw || null },
+      origin: { source: src.name || '', bookUrl: book.bookUrl || '', tocUrl, raw: src.raw || null, tocCount: toc.length },
     });
-    toast('已加入书架（抓到 ' + chapters.length + ' 章 / 共 ' + toc.length + ' 章）');
+    toast('已加入书架（抓到 ' + chapters.length + ' 章 / 共 ' + toc.length + ' 章，目录里可「继续抓」）');
     if (btn) { btn.disabled = false; btn.textContent = '已加入'; }
   } catch (e) {
     // 正文抓不到（多半是站点靠 JS 出正文）：别让用户卡死在这里，
@@ -4313,6 +4324,67 @@ async function addBookToShelf(src, book, btn) {
       btn.textContent = '浏览器打开';
       btn.onclick = () => openInBrowser(book.bookUrl);
     }
+  }
+}
+
+// 「继续抓下一批」：书源的书一次只抓前几章存成本地材料（省流量、快），
+// 但用户读到第 5 章就没路了。这里按 origin 里存的书源/目录地址，接着往后抓一批并落库。
+// 注意：origin 里既有源 JSON（抓正文用），也有 tocUrl（拿完整目录用），两样缺一不可。
+const MORE_BATCH = 20;
+
+async function fetchMoreChapters(n) {
+  const b = RDR.book;
+  if (!b) return;
+  const o = b.origin || null;
+  const btn = document.getElementById('moreCh');
+  if (!o || !o.raw) { toast('这本书没有书源信息（可能是导入的文件），抓不了后面的章节'); return; }
+  if (!o.tocUrl) { toast('这本书没记目录地址，抓不了后面的章节'); return; }
+  const have = (b.chapters || []).length;
+  const want = Math.max(1, n || MORE_BATCH);
+  if (btn) { btn.disabled = true; btn.textContent = '抓取中…'; }
+  try {
+    const toc = await nativeCall('bookToc', { source: o.raw, url: o.tocUrl }, 90000);
+    if (!toc || !toc.length) throw new Error('目录是空的');
+    if (have >= toc.length) { toast('已经抓到最后一章了（共 ' + toc.length + ' 章）'); return; }
+    const take = Math.min(want, toc.length - have);
+    const slice = toc.slice(have, have + take);
+    const urls = slice.map((c) => c.url).filter(Boolean);
+    if (!urls.length) throw new Error('后面这些章节没有可用地址');
+    const got = await nativeCall('bookChapters', { source: o.raw, urls, limit: take }, 300000);
+    const added = [];
+    (got || []).forEach((g, i) => {
+      if (!g || !g.text) return;
+      const c = slice[i] || {};
+      added.push({
+        title: (b.name || '未命名') + ' · ' + (c.title || ('第 ' + (have + i + 1) + ' 章')),
+        text: g.text,
+        url: g.url || c.url || '',
+      });
+    });
+    if (!added.length) {
+      const why = (got && got[0] && got[0].error) ? ('（' + got[0].error + '）') : '';
+      throw new Error('这一批都没抓到正文' + why);
+    }
+    b.chapters = (b.chapters || []).concat(added);
+    o.tocCount = toc.length;
+    b.origin = o;
+    RDR.book = b;
+    const payload = b.chapters.map((c) => ({ title: c.title || '', text: c.text || '', html: c.html || '' }));
+    await matPut({
+      id: RDR.key,
+      name: b.name || '未命名材料',
+      kind: 'text',
+      savedAt: Date.now(),
+      bytes: JSON.stringify(payload).length,
+      chapters: payload,
+      origin: o,
+    });
+    toast('又抓了 ' + added.length + ' 章（现有 ' + b.chapters.length + ' / ' + toc.length + ' 章）');
+    if (document.getElementById('bookText')) renderTextBook(); else showBookToc();
+  } catch (e) {
+    toast('抓取失败：' + (e.message || e));
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '继续抓 ' + MORE_BATCH + ' 章'; }
   }
 }
 
@@ -5230,12 +5302,19 @@ function renderTextBook() {
   const ownHeading = /^\s*<h[1-4][\s>]/i.test(html);
   const box = '<div class="bookText' + (isHtml ? '' : ' plain') + '" id="bookText"'
     + ' style="font-size:' + settings.readFont + 'px;line-height:' + settings.readLine + '">' + html + '</div>';
+  // 读到「已抓到的最后一章」时给条明路：书源的书是一次一批抓下来的，
+  // 不提示的话用户会以为这本书到这就完了（实测：加入书架只抓前 5 章）。
+  const atTail = RDR.ch >= b.chapters.length - 1;
+  const tailHint = atTail && b.origin && b.origin.raw && b.origin.tocUrl
+    ? '<div class="hint" style="margin:14px 0 40px">已是已抓到的最后一章（' + b.chapters.length + ' 章）。'
+      + '去「目录」点「继续抓 ' + MORE_BATCH + ' 章」往后读。</div>'
+    : '';
   view.innerHTML =
     '<div class="meta"><span>' + esc(b.name) + '</span><span id="pageLabel">'
     + (RDR.paged ? (RDR.pageIdx + 1) + ' / ' + (RDR.pages || 1) : (RDR.ch + 1) + ' / ' + b.chapters.length)
     + '</span></div>'
     + (ownHeading ? '' : '<h2 class="chTitle">' + esc(ch.title) + '</h2>')
-    + (RDR.paged ? '<div id="pageViewport">' + box + '</div>' : box)
+    + (RDR.paged ? '<div id="pageViewport">' + box + '</div>' : box + tailHint)
     + '<div class="floating pager' + (RDR.toolsVisible ? ' show' : '') + '" id="bookTools">'
     + '<button id="prevCh">◀</button><button id="nextCh">▶</button>'
     + '<button id="tocBtn">目录</button>'
@@ -5500,8 +5579,10 @@ function showBookToc() {
     '<div class="meta"><span>目录</span><span>' + b.chapters.length + ' 节</span></div>'
     + '<div class="row" style="margin:6px 0 10px"><button class="btn ghost" id="tocBack">← 回正文</button>'
     + '<button class="btn ghost" id="tocJump">跳到第…节</button>'
+    + (b.origin && b.origin.raw && b.origin.tocUrl
+      ? '<button class="btn" id="moreCh">继续抓 ' + MORE_BATCH + ' 章</button>' : '')
     + (b.chapters[cur] && b.chapters[cur].url && !isSourceSpecUrl(b.chapters[cur].url)
-      ? '<button class="btn" id="tocBrowser">浏览器打开本章</button>' : '')
+      ? '<button class="btn ghost" id="tocBrowser">浏览器打开本章</button>' : '')
     + '</div>'
     + '<div class="list">' + b.chapters.map((c, i) =>
       '<button class="tocItem' + (i === cur ? ' on' : '') + '" data-i="' + i + '">'
@@ -5510,6 +5591,8 @@ function showBookToc() {
   document.getElementById('tocBack').onclick = () => renderTextBook();
   const tb = document.getElementById('tocBrowser');
   if (tb) tb.onclick = () => openChapterInBrowser(b.chapters[cur] && b.chapters[cur].url);
+  const mc = document.getElementById('moreCh');
+  if (mc) mc.onclick = () => fetchMoreChapters(MORE_BATCH);
   document.getElementById('tocJump').onclick = () => {
     const n = Number(prompt('跳到第几节？（共 ' + b.chapters.length + ' 节）', String(cur + 1)));
     if (n && n >= 1) { RDR.pageIdx = 0; gotoChapter(n - 1, 'first'); }
