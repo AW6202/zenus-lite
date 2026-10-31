@@ -1,7 +1,7 @@
 // 学习机 Lite — 静态 PWA：内容来自 pack.json，进度存本地，AI 直连 OpenAI 兼容接口
 'use strict';
 
-const BUILD = '2026-10-31.13';
+const BUILD = '2026-10-31.14';
 
 const LS = {
   progress: 'zenus.progress.v1',
@@ -3949,9 +3949,18 @@ async function openExplore(i) {
 
 function renderExplore() {
   const src = sources[EXP.idx] || {};
-  const chips = EXP.entries.map((e, k) =>
-    '<button class="btn ghost" data-exp="' + k + '" style="width:auto;padding:6px 10px;font-size:12px">'
-    + esc(e.title || e.url || ('入口 ' + (k + 1))) + '</button>').join(' ');
+  const chips = EXP.entries.map((e, k) => {
+    const hasUrl = !!(e.url && String(e.url).trim());
+    return '<button class="btn ghost" data-exp="' + k + '"'
+      + (hasUrl ? '' : ' disabled')
+      + ' style="width:auto;padding:6px 10px;font-size:12px' + (hasUrl ? '' : ';opacity:.45') + '">'
+      + esc(e.title || e.url || ('入口 ' + (k + 1))) + '</button>';
+  }).join(' ');
+  const noUrl = EXP.entries.filter((e) => !(e.url && String(e.url).trim())).length;
+  const tip = noUrl === EXP.entries.length && EXP.entries.length
+    ? '<div class="hint" style="margin-top:10px">这些是书源的「发现设置」按钮，不是分类。'
+      + '真正的分类列表要登录后才会返回（这个源的接口会回「请先于【登录页】登录账号」）。</div>'
+    : '';
   const books = EXP.books.map((b, k) =>
     '<div class="it" style="display:flex;align-items:center;gap:8px">'
     + '<div style="flex:1;min-width:0"><div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'
@@ -3963,6 +3972,7 @@ function renderExplore() {
     '<div class="meta"><span>发现 · ' + esc(src.name || '') + '</span><span>' + EXP.entries.length + ' 个入口</span></div>'
     + '<div class="row" style="margin:8px 0"><button class="btn ghost" id="expBack">← 回书源</button></div>'
     + '<div style="display:flex;flex-wrap:wrap;gap:8px">' + (chips || '<div class="empty">这个源没有发现入口</div>') + '</div>'
+    + tip
     + '<div id="expBooks" style="margin-top:12px">' + (books || '') + '</div>';
   document.getElementById('expBack').onclick = () => renderSourceManager();
   view.querySelectorAll('[data-exp]').forEach((el) => {
@@ -4002,7 +4012,7 @@ async function editSourceVars(i) {
     const r = await nativeCall('loginVars', { url: src.url }, 6000);
     cur = (r && r.vars) || '';
   } catch { /* 没登录过就是空 */ }
-  const v = prompt('书源变量（每行 key=value，可从浏览器复制 token 粘贴）', cur);
+  const v = prompt('书源变量：每行 key=value；只有一串 JWT/token 就直接粘（整串当变量）', cur);
   if (v === null) return;
   try {
     const n = await nativeCall('sourceVarsSet', { url: src.url, vars: v }, 8000);
