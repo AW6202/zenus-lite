@@ -1,7 +1,7 @@
 // 学习机 Lite — 静态 PWA：内容来自 pack.json，进度存本地，AI 直连 OpenAI 兼容接口
 'use strict';
 
-const BUILD = '2026-10-31.10';
+const BUILD = '2026-10-31.11';
 
 const LS = {
   progress: 'zenus.progress.v1',
@@ -3486,6 +3486,7 @@ function renderSourceManager() {
     + (needLogin(src)
       ? '<button class="btn ghost" data-slogin="' + i + '" style="width:auto;padding:6px 10px;font-size:12px">登录</button>'
       : '')
+    + '<button class="btn ghost" data-svars="' + i + '" style="width:auto;padding:6px 10px;font-size:12px">变量</button>'
     + '<button class="btn ghost" data-sopen="' + i + '" style="width:auto;padding:6px 10px;font-size:12px">源站</button>'
     + '<button class="btn ghost" data-stest="' + i + '" style="width:auto;padding:6px 10px;font-size:12px">测试</button>'
     + '<button class="btn ghost" data-sdel="' + i + '" style="width:auto;padding:6px 10px;font-size:12px">删除</button></div>'
@@ -3551,6 +3552,9 @@ function renderSourceManager() {
   };
   view.querySelectorAll('[data-stest]').forEach((el) => {
     el.onclick = () => testSource(Number(el.dataset.stest));
+  });
+  view.querySelectorAll('[data-svars]').forEach((el) => {
+    el.onclick = () => editSourceVars(Number(el.dataset.svars));
   });
   view.querySelectorAll('[data-slogin]').forEach((el) => {
     el.onclick = () => openSourceLogin(Number(el.dataset.slogin));
@@ -3870,6 +3874,26 @@ function needLogin(src) {
   const raw = src && src.raw;
   if (!raw) return false;
   return !!(raw.loginUrl || raw.loginUi || raw.enabledCookieJar);
+}
+
+// 书源变量：登录源（loginUi 面板）常常需要一个 JWT/token，允许手动填进来
+async function editSourceVars(i) {
+  const src = sources[i];
+  if (!src) return;
+  if (!nativePort()) return toast('只能在 App 里改书源变量');
+  let cur = '';
+  try {
+    const r = await nativeCall('loginVars', { url: src.url }, 6000);
+    cur = (r && r.vars) || '';
+  } catch { /* 没登录过就是空 */ }
+  const v = prompt('书源变量（每行 key=value，可从浏览器复制 token 粘贴）', cur);
+  if (v === null) return;
+  try {
+    const n = await nativeCall('sourceVarsSet', { url: src.url, vars: v }, 8000);
+    toast('已保存 ' + (n || 0) + ' 个变量');
+  } catch (e) {
+    toast('保存失败：' + (e.message || e));
+  }
 }
 
 let pendingLoginUrl = null;
