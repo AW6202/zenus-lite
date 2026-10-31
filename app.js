@@ -1,7 +1,7 @@
 // 学习机 Lite — 静态 PWA：内容来自 pack.json，进度存本地，AI 直连 OpenAI 兼容接口
 'use strict';
 
-const BUILD = '2026-10-31.4';
+const BUILD = '2026-10-31.5';
 
 const LS = {
   progress: 'zenus.progress.v1',
@@ -3371,7 +3371,7 @@ function renderSourceManager() {
     + (Number(src.type) === 2 ? ' <span class="sub" style="color:#c60">（漫画源暂不支持正文）</span>' : '')
     + (src.raw ? '' : ' <span class="sub">（旧版只存了名字，请重新导入）</span>') + '</div>'
     + '<div class="sub">' + esc(src.url || '') + '</div></div>'
-    + '<button class="btn ghost" data-sopen="' + i + '" style="width:auto;padding:6px 10px;font-size:12px">站点</button>'
+    + '<button class="btn ghost" data-sopen="' + i + '" style="width:auto;padding:6px 10px;font-size:12px">源站</button>'
     + '<button class="btn ghost" data-stest="' + i + '" style="width:auto;padding:6px 10px;font-size:12px">测试</button>'
     + '<button class="btn ghost" data-sdel="' + i + '" style="width:auto;padding:6px 10px;font-size:12px">删除</button></div>'
   ).join('');
@@ -3420,7 +3420,15 @@ function renderSourceManager() {
     el.onclick = () => testSource(Number(el.dataset.stest));
   });
   view.querySelectorAll('[data-sopen]').forEach((el) => {
-    el.onclick = () => openInBrowser(sources[Number(el.dataset.sopen)].url);
+    el.onclick = () => {
+      const s = sources[Number(el.dataset.sopen)];
+      // 很多源的 bookSourceUrl 只是**接口地址**（比如 cyj.vv9v.cn，根路径直接回 {"code":-1,"msg":"Cannot GET /"}），
+      // 不是能读的网页。先提醒一句，免得以为是 App 坏了。
+      if (/^https?:\/\/[^/]+\/?$/i.test(String(s.url || ''))) {
+        toast('这是源站地址。若打开是 JSON 或报错，说明它只是接口；读正文请用「搜索 → 浏览器打开」');
+      }
+      openInBrowser(s.url);
+    };
   });
   view.querySelectorAll('[data-sdel]').forEach((el) => {
     el.onclick = () => {
