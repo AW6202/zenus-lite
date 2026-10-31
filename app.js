@@ -1,7 +1,7 @@
 // 学习机 Lite — 静态 PWA：内容来自 pack.json，进度存本地，AI 直连 OpenAI 兼容接口
 'use strict';
 
-const BUILD = '2026-10-31.2';
+const BUILD = '2026-10-31.3';
 
 const LS = {
   progress: 'zenus.progress.v1',
@@ -3351,13 +3351,23 @@ async function refetchMaterial(id, btn) {
 
 // 书源管理：导入 / 测试连通性 / 按规则搜一本书放进书架。
 // 规则解析在原生侧（ZenusBookSource.kt）——网页 fetch 别人的站会被 CORS 挡死，只能走桥。
+const SRC_TEST = {};   // url -> { ok, msg }：本次会话的测试结果（不落盘）
+
 function renderSourceManager() {
   window.__zenusMenuBoxMode = '';
+  const badge = (s) => {
+    const st = SRC_TEST[s.url];
+    if (!st) return '';
+    return st.ok
+      ? ' <span class="sub" style="color:#2a7">✅ ' + esc(st.msg) + '</span>'
+      : ' <span class="sub" style="color:#c33" title="' + esc(st.msg) + '">❌ 不可用</span>';
+  };
   const rows = sources.map((src, i) =>
     '<div class="it" style="display:flex;align-items:center;gap:8px">'
     + '<div style="flex:1;min-width:0"><div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'
     + esc(src.name || '未命名书源')
     + ' <span class="sub">[' + sourceTypeLabel(src.type) + ']</span>'
+    + badge(src)
     + (Number(src.type) === 2 ? ' <span class="sub" style="color:#c60">（漫画源暂不支持正文）</span>' : '')
     + (src.raw ? '' : ' <span class="sub">（旧版只存了名字，请重新导入）</span>') + '</div>'
     + '<div class="sub">' + esc(src.url || '') + '</div></div>'
@@ -3376,6 +3386,10 @@ function renderSourceManager() {
     + '<div class="row" style="margin-top:8px"><button class="btn primary" id="srcAdd">导入书源</button>'
     + '<button class="btn" id="srcCat">源仓库</button>'
     + '<button class="btn ghost" id="srcBack">← 回书架</button></div>'
+    + '<div class="row" style="margin-top:8px;flex-wrap:wrap;gap:8px">'
+    + '<button class="btn ghost" id="srcTestAll" style="width:auto;padding:0 12px">测试全部</button>'
+    + '<button class="btn ghost" id="srcDelBad" style="width:auto;padding:0 12px">删不可用</button>'
+    + '<span class="sub" id="srcTestMsg" style="align-self:center;flex:1"></span></div>'
     + '<div class="row" style="margin-top:12px;gap:8px;flex-wrap:nowrap">'
     + '<select class="t" id="srcPick" style="flex:1;height:36px;min-height:36px;padding:4px 8px;font-size:12px">'
     + pickOptions + '</select>'
@@ -3385,6 +3399,8 @@ function renderSourceManager() {
     + (rows || '<div class="empty" style="margin-top:14px">还没有书源</div>');
   document.getElementById('srcBack').onclick = () => renderShelf();
   document.getElementById('srcCat').onclick = () => { CAT.page = 1; loadCatalogPage(true); };
+  document.getElementById('srcTestAll').onclick = () => testAllSources();
+  document.getElementById('srcDelBad').onclick = () => deleteBadSources();
   document.getElementById('srcAdd').onclick = async () => {
     const raw = document.getElementById('srcBox').value.trim();
     if (!raw) return toast('先粘贴书源 JSON 或合集地址');
@@ -3658,12 +3674,58 @@ async function testSource(i) {
   toast('测试中…');
   try {
     const r = await nativeCall('bookProbe', { source: src.raw, key: '' }, 40000);
+    SRC_TEST[src.url] = { ok: true, msg: (r.bytes || 0) + ' 字' };
     const engine = r.engine === 'json' ? 'JSON 接口（暂不支持）' : 'HTML';
     const entries = r.entries == null ? '' : ' / 抓到 ' + r.entries + ' 条';
     toast('连通：' + (r.bytes || 0) + ' 字 / ' + engine + entries);
   } catch (e) {
-    toast('测试失败：' + (e.message || e));
+    SRC_TEST[src.url] = { ok: false, msg: String((e && e.message) || e) };
+    toast('测试失败：' + ((e && e.message) || e));
   }
+  const st = view.scrollTop;
+  renderSourceManager();
+  view.scrollTop = st;
+}
+
+// 批量测试：几百个源时手动一个个点不现实。结果只存本次会话（不落盘），
+// 「删不可用」只删确定失败的，没测过的不动。
+async function testAllSources() {
+  if (!sources.length) return toast('还没有书源');
+  if (!nativePort()) return toast('测试要在 App 里用');
+  const btn = document.getElementById('srcTestAll');
+  const msg = document.getElementById('srcTestMsg');
+  const list = sources.slice();
+  let ok = 0, bad = 0, skip = 0;
+  btn.disabled = true;
+  for (let i = 0; i < list.length; i++) {
+    const s = list[i];
+    if (!s.raw) { skip++; continue; }
+    try {
+      const r = await nativeCall('bookProbe', { source: s.raw, key: '' }, 40000);
+      SRC_TEST[s.url] = { ok: true, msg: (r.bytes || 0) + ' 字' };
+      ok++;
+    } catch (e) {
+      SRC_TEST[s.url] = { ok: false, msg: String((e && e.message) || e) };
+      bad++;
+    }
+    if (msg) msg.textContent = (i + 1) + '/' + list.length + ' · 可用 ' + ok + ' / 不可用 ' + bad;
+    if (i % 10 === 9) { const st = view.scrollTop; renderSourceManager(); view.scrollTop = st; }
+  }
+  btn.disabled = false;
+  toast('测试完成：可用 ' + ok + ' / 不可用 ' + bad + (skip ? ' / 跳过(旧版) ' + skip : ''));
+  const st = view.scrollTop;
+  renderSourceManager();
+  view.scrollTop = st;
+}
+
+function deleteBadSources() {
+  const bad = sources.filter((s) => SRC_TEST[s.url] && SRC_TEST[s.url].ok === false);
+  if (!bad.length) return toast('没有标记为不可用的书源（先点「测试全部」）');
+  if (!confirm('删除 ' + bad.length + ' 个不可用书源？')) return;
+  sources = sources.filter((s) => !(SRC_TEST[s.url] && SRC_TEST[s.url].ok === false));
+  saveJSON(LS.sources, sources);
+  renderSourceManager();
+  toast('已删除 ' + bad.length + ' 个');
 }
 
 async function searchInSource(i, key) {
