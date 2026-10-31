@@ -1,7 +1,7 @@
 // 学习机 Lite — 静态 PWA：内容来自 pack.json，进度存本地，AI 直连 OpenAI 兼容接口
 'use strict';
 
-const BUILD = '2026-10-31.1';
+const BUILD = '2026-10-31.2';
 
 const LS = {
   progress: 'zenus.progress.v1',
@@ -3374,6 +3374,7 @@ function renderSourceManager() {
     + '<textarea class="t" id="srcBox" rows="6" style="height:auto;min-height:120px;font-size:12px"'
     + ' placeholder="粘贴书源 JSON 数组"></textarea>'
     + '<div class="row" style="margin-top:8px"><button class="btn primary" id="srcAdd">导入书源</button>'
+    + '<button class="btn" id="srcCat">源仓库</button>'
     + '<button class="btn ghost" id="srcBack">← 回书架</button></div>'
     + '<div class="row" style="margin-top:12px;gap:8px;flex-wrap:nowrap">'
     + '<select class="t" id="srcPick" style="flex:1;height:36px;min-height:36px;padding:4px 8px;font-size:12px">'
@@ -3383,6 +3384,7 @@ function renderSourceManager() {
     + '<div id="srcResults"></div>'
     + (rows || '<div class="empty" style="margin-top:14px">还没有书源</div>');
   document.getElementById('srcBack').onclick = () => renderShelf();
+  document.getElementById('srcCat').onclick = () => { CAT.page = 1; loadCatalogPage(true); };
   document.getElementById('srcAdd').onclick = async () => {
     const raw = document.getElementById('srcBox').value.trim();
     if (!raw) return toast('先粘贴书源 JSON 或合集地址');
@@ -3492,7 +3494,157 @@ async function importSources(raw) {
   return { added, collections };
 }
 
-// 书源相关动作的前置检查：统一说清「为什么现在不能用」，而不是静默失败
+// ── 源仓库（yckceo）：目录浏览 + 一键导入 ────────────────
+// 站点结构（2026-10-31 实测）：
+//   单个书源：列表 /yuedu/shuyuan/index.html?page=N（约 59 页 × 100）、数据 /yuedu/shuyuan/json/id/<id>.json
+//   书源合集：列表 /yuedu/shuyuans/index.html?page=N（约 9 页 × 100）、数据 /yuedu/shuyuans/json/id/<id>.json
+// 详情页里的「3.x一键导入」是 yuedu://booksource/importonline?src=<json>，App 已注册这个 scheme，
+// 点它就会进 [pullSourceImports] 那条链路。这里做的是「不点网页也能在 App 里翻目录」。
+const YCK = {
+  singleList: (p) => 'https://www.yckceo.com/yuedu/shuyuan/index.html?page=' + p,
+  collectionList: (p) => 'https://www.yckceo.com/yuedu/shuyuans/index.html?page=' + p,
+  singleJson: (id) => 'https://www.yckceo.com/yuedu/shuyuan/json/id/' + id + '.json',
+  collectionJson: (id) => 'https://www.yckceo.com/yuedu/shuyuans/json/id/' + id + '.json',
+  maxPage: { single: 59, collection: 9 },
+};
+
+const CAT = { kind: 'single', page: 1, items: [], loading: false, error: '' };
+
+function parseCatalogHtml(html, kind) {
+  const re = /href="[^"]*content\/id\/(\d+)\.html"[^>]*>([\s\S]{0,600}?)<\/a>/g;
+  const seen = new Map();
+  let m;
+  while ((m = re.exec(String(html || '')))) {
+    const id = m[1];
+    if (seen.has(id)) continue;
+    let title = m[2].replace(/<[^>]+>/g, ' ').replace(/&[a-z]+;/gi, ' ').replace(/\s+/g, ' ').trim();
+    if (!title) title = (kind === 'collection' ? '合集 ' : '书源 ') + id;
+    seen.set(id, title.slice(0, 80));
+  }
+  return [...seen.entries()].map(([id, title]) => ({ id, title }));
+}
+
+async function loadCatalogPage(reset) {
+  if (!nativePort()) { CAT.error = '源仓库要在 App 里用（浏览器会被跨域挡住）'; renderSourceCatalog(); return; }
+  if (CAT.loading) return;
+  CAT.loading = true;
+  CAT.error = '';
+  if (reset) CAT.items = [];
+  renderSourceCatalog();
+  try {
+    const url = CAT.kind === 'single' ? YCK.singleList(CAT.page) : YCK.collectionList(CAT.page);
+    const html = await nativeCall('sourceFetch', { url }, 60000);
+    CAT.items = parseCatalogHtml(html, CAT.kind);
+    if (!CAT.items.length) CAT.error = '这一页没解析出条目（站点可能改版了）';
+  } catch (e) {
+    CAT.error = '拉取目录失败：' + (e.message || e) + '\n（这个站可能要走代理；也可以直接在浏览器里打开它，点「一键导入」）';
+  } finally {
+    CAT.loading = false;
+    renderSourceCatalog();
+  }
+}
+
+function renderSourceCatalog() {
+  window.__zenusMenuBoxMode = '';
+  const rows = CAT.items.map((it, i) =>
+    '<div class="it" style="display:flex;align-items:center;gap:8px">'
+    + '<div style="flex:1;min-width:0"><div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'
+    + esc(it.title || ('#' + it.id)) + '</div>'
+    + '<div class="sub">id ' + esc(it.id) + '</div></div>'
+    + '<button class="btn ghost" data-cat="' + i + '" style="width:auto;padding:6px 10px;font-size:12px">导入</button></div>'
+  ).join('');
+
+  view.innerHTML =
+    '<div class="meta"><span>源仓库</span><span>第 ' + CAT.page + ' / ' + YCK.maxPage[CAT.kind] + ' 页</span></div>'
+    + '<div class="hint">yckceo 源仓库。单源约 5900 个、合集约 900 个；导入只存你选中的，'
+    + '同一个书源地址不会重复入库。</div>'
+    + '<div class="row" style="margin:8px 0;flex-wrap:wrap">'
+    + '<button class="btn ' + (CAT.kind === 'single' ? 'primary' : 'ghost') + '" id="catSingle">单个书源</button>'
+    + '<button class="btn ' + (CAT.kind === 'collection' ? 'primary' : 'ghost') + '" id="catColl">书源合集</button>'
+    + '<button class="btn ghost" id="catBack">← 回书源管理</button></div>'
+    + '<div class="row" style="margin:8px 0;flex-wrap:nowrap;gap:8px">'
+    + '<button class="btn ghost" id="catPrev" style="width:auto;padding:0 12px">‹ 上页</button>'
+    + '<button class="btn ghost" id="catNext" style="width:auto;padding:0 12px">下页 ›</button>'
+    + '<button class="btn primary" id="catAll" style="flex:1">导入本页全部（' + CAT.items.length + '）</button></div>'
+    + '<div id="catMsg" class="sub" style="margin:6px 0">' + esc(CAT.loading ? '加载中…' : (CAT.error || '')) + '</div>'
+    + (rows || (CAT.loading ? '' : '<div class="empty">这一页没有条目</div>'));
+
+  document.getElementById('catBack').onclick = () => renderSourceManager();
+  document.getElementById('catSingle').onclick = () => { CAT.kind = 'single'; CAT.page = 1; loadCatalogPage(true); };
+  document.getElementById('catColl').onclick = () => { CAT.kind = 'collection'; CAT.page = 1; loadCatalogPage(true); };
+  document.getElementById('catPrev').onclick = () => {
+    if (CAT.page <= 1) return toast('已经是第一页');
+    CAT.page--; loadCatalogPage(true);
+  };
+  document.getElementById('catNext').onclick = () => {
+    if (CAT.page >= YCK.maxPage[CAT.kind]) return toast('已经是最后一页');
+    CAT.page++; loadCatalogPage(true);
+  };
+  document.getElementById('catAll').onclick = () => importCatalogAll();
+  view.querySelectorAll('[data-cat]').forEach((el) => {
+    el.onclick = async () => {
+      const it = CAT.items[Number(el.dataset.cat)];
+      if (!it) return;
+      el.disabled = true;
+      try {
+        const n = await importCatalogItem(it.id);
+        el.textContent = n > 0 ? '已导入 ' + n : '已存在';
+      } catch (e) {
+        toast('导入失败：' + (e.message || e));
+      } finally {
+        el.disabled = false;
+      }
+    };
+  });
+  view.scrollTop = 0;
+}
+
+async function importCatalogItem(id, kind) {
+  const k = kind || CAT.kind;
+  const url = k === 'single' ? YCK.singleJson(id) : YCK.collectionJson(id);
+  const r = await importSources(url);
+  if (r.error) throw new Error(r.error);
+  return r.added;
+}
+
+async function importCatalogAll() {
+  const list = CAT.items.slice();
+  if (!list.length) return toast('这一页没有可导入的');
+  const msg = document.getElementById('catMsg');
+  let added = 0, done = 0, failed = 0;
+  for (const it of list) {
+    try {
+      added += await importCatalogItem(it.id);
+    } catch { failed++; }
+    done++;
+    if (msg) msg.textContent = '导入中 ' + done + '/' + list.length + '（新增 ' + added + '，失败 ' + failed + '）';
+  }
+  toast('本页导入完成：新增 ' + added + ' 个书源' + (failed ? '，失败 ' + failed : ''));
+  renderSourceCatalog();
+}
+
+// yuedu:// 一键导入：App 收到链接后把 src 存进收件箱，学习机起来时取走
+async function pullSourceImports() {
+  if (!nativePort()) return;
+  let list = [];
+  try {
+    const raw = await nativeCall('sourcePending', {}, 6000);
+    list = JSON.parse(raw || '[]');
+  } catch { return; }
+  if (!Array.isArray(list) || !list.length) return;
+  let added = 0, failed = 0;
+  for (const u of list) {
+    try {
+      const r = await importSources(String(u));
+      if (r.error) failed++;
+      else added += r.added || 0;
+    } catch { failed++; }
+  }
+  toast('一键导入：新增 ' + added + ' 个书源' + (failed ? '，失败 ' + failed : ''));
+  if (document.getElementById('srcBox')) renderSourceManager();
+}
+
+
 function sourceReady(src) {
   if (!nativePort()) { toast('书源抓取只能在 App 里用（浏览器会被跨域挡住）'); return false; }
   if (!src) { toast('先选一个书源'); return false; }
@@ -5166,6 +5318,8 @@ document.addEventListener('visibilitychange', () => {
     // 切回学习机时再看一眼：刚在浏览器里「存到书架 / 存为漫画」的话，这里直接接过来。
     // 不然学习机标签一直挂着时，新存的材料要等下次重开页面才出现。
     setTimeout(() => { if (!RDR.book && !RDR.pdf && !(RDR.comicUrls || []).length) openPendingFile(); }, 600);
+    // 从别的地方点「一键导入」再切回来：把收件箱里的书源接住
+    setTimeout(pullSourceImports, 800);
   }
 });
 
@@ -5440,6 +5594,9 @@ async function pullWebCards() {
     pullWebCards();
     setTimeout(pullWebCards, 1500);
     setTimeout(pullWebCards, 6000);
+    // yuedu:// 一键导入：App 收到链接后放进了收件箱，这里取走并入库
+    pullSourceImports();
+    setTimeout(pullSourceImports, 2500);
     // 浏览器下载的可读文件：有就自动进阅读器
     openPendingFile();
     setTimeout(openPendingFile, 2000);
