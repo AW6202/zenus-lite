@@ -1,7 +1,7 @@
 // 学习机 Lite — 静态 PWA：内容来自 pack.json，进度存本地，AI 直连 OpenAI 兼容接口
 'use strict';
 
-const BUILD = '2026-10-31.15';
+const BUILD = '2026-10-31.16';
 
 const LS = {
   progress: 'zenus.progress.v1',
@@ -3512,11 +3512,17 @@ function renderSourceManager() {
       ? ' <span class="sub" style="color:#2a7">✅ ' + esc(st.msg) + '</span>'
       : ' <span class="sub" style="color:#c33" title="' + esc(st.msg) + '">❌ 不可用</span>';
   };
-  const rows = sources.map((src, i) =>
-    '<div class="it" style="display:flex;align-items:center;gap:8px">'
+  const rows = sources
+    .map((src, i) => ({ src: src, i: i }))
+    .filter((x) => !state.onlyFreeSources || !needLogin(x.src))
+    .map((x) => {
+      const src = x.src;
+      const i = x.i;
+      return '<div class="it" style="display:flex;align-items:center;gap:8px">'
     + '<div style="flex:1;min-width:0"><div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'
     + esc(src.name || '未命名书源')
     + ' <span class="sub">[' + sourceTypeLabel(src.type) + ']</span>'
+    + (needLogin(src) ? ' <span class="sub" style="color:#c60">🔑</span>' : '')
     + badge(src)
     + (Number(src.type) === 2 ? ' <span class="sub" style="color:#c60">（漫画源暂不支持正文）</span>' : '')
     + (src.raw ? '' : ' <span class="sub">（旧版只存了名字，请重新导入）</span>') + '</div>'
@@ -3530,8 +3536,9 @@ function renderSourceManager() {
     + '<button class="btn ghost" data-svars="' + i + '" style="width:auto;padding:6px 10px;font-size:12px">变量</button>'
     + '<button class="btn ghost" data-sopen="' + i + '" style="width:auto;padding:6px 10px;font-size:12px">源站</button>'
     + '<button class="btn ghost" data-stest="' + i + '" style="width:auto;padding:6px 10px;font-size:12px">测试</button>'
-    + '<button class="btn ghost" data-sdel="' + i + '" style="width:auto;padding:6px 10px;font-size:12px">删除</button></div>'
-  ).join('');
+    + '<button class="btn ghost" data-sdel="' + i + '" style="width:auto;padding:6px 10px;font-size:12px">删除</button></div>';
+    })
+    .join('');
   const pickOptions = sources.length
     ? sources.map((s, i) => '<option value="' + i + '">' + esc(s.name || ('书源 ' + (i + 1))) + '</option>').join('')
     : '<option value="-1">（先导入书源）</option>';
@@ -3545,6 +3552,8 @@ function renderSourceManager() {
     + '<div class="row" style="margin-top:8px"><button class="btn primary" id="srcAdd">导入书源</button>'
     + '<button class="btn" id="srcCat">源仓库</button>'
     + '<button class="btn" id="srcFile">从文件导入</button>'
+    + '<button class="btn ghost" id="srcOnlyFree" style="width:auto;padding:0 10px">'
+    + (state.onlyFreeSources ? '显示全部' : '只看免登录') + '</button>'
     + '<button class="btn ghost" id="srcReset">清空</button>'
     + '<button class="btn ghost" id="srcBack">← 回书架</button></div>'
     + '<input type="file" id="srcFileInput" accept=".json,.txt,application/json,text/plain" style="display:none">'
@@ -3560,6 +3569,10 @@ function renderSourceManager() {
     + '<div id="srcResults"></div>'
     + (rows || '<div class="empty" style="margin-top:14px">还没有书源</div>');
   document.getElementById('srcBack').onclick = () => renderShelf();
+  document.getElementById('srcOnlyFree').onclick = () => {
+    state.onlyFreeSources = !state.onlyFreeSources;
+    renderSourceManager();
+  };
   document.getElementById('srcReset').onclick = async () => {
     if (!confirm('清空全部书源？不可撤销。')) return;
     await srcClearAll();
@@ -3631,7 +3644,16 @@ function renderSourceManager() {
       else toast('已删除，剩 ' + sources.length + ' 个');
     };
   });
-  document.getElementById('srcSearch').onclick = () => {
+  document.getElementById('srcSearch').onclick = async () => {
+    const pickEl = document.getElementById('srcPick');
+    const idx = Number(pickEl ? pickEl.value : -1);
+    const picked = sources[idx];
+    if (picked && needLogin(picked) && nativePort()) {
+      try {
+        const v = await nativeCall('loginVars', { url: picked.url }, 4000);
+        if (!v || !v.has) toast('这个源要登录：先点「登录」，否则多半 401');
+      } catch { /* 忽略 */ }
+    }
     const pick = document.getElementById('srcPick');
     const key = (document.getElementById('srcKey').value || '').trim() || '斗破苍穹';
     searchInSource(Number(pick ? pick.value : -1), key);
