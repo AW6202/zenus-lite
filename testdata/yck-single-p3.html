@@ -1,0 +1,1810 @@
+<!DOCTYPE html>
+<html lang="en">
+
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+        <meta name="baidu-site-verification" content="codeva-gSqd8bD9Zd" />
+        <meta name="un_verify" content="670e09b51e3c4cc0e37df779ff4f3852">
+        <title>阅读 - 源仓库</title>
+        <script type="text/javascript" src="/static/common/jquery.min.js"></script>
+        <script type="text/javascript" src="/static/common/layui/layui.js"></script>
+        <link rel="stylesheet" type="text/css" href="/static/common/layui/css/layui.css" />
+        <link rel="stylesheet" href="/static/css/common.css?1793407671">
+        <script>var $model = "yuedu";</script>
+        <script>
+            !function (p) { "use strict"; !function (t) { var s = window, e = document, i = p, c = "".concat("https:" === e.location.protocol ? "https://" : "http://", "sdk.51.la/js-sdk-pro.min.js"), n = e.createElement("script"), r = e.getElementsByTagName("script")[0]; n.type = "text/javascript", n.setAttribute("charset", "UTF-8"), n.async = !0, n.src = c, n.id = "LA_COLLECT", i.d = n; var o = function () { s.LA.ids.push(i) }; s.LA ? s.LA.ids && o() : (s.LA = p, s.LA.ids = [], o()), r.parentNode.insertBefore(n, r) }() }({ id: "L0tDBTwClMwXygia", ck: "L0tDBTwClMwXygia" });
+        </script>
+
+        <script type="text/javascript" src="/static/js/intg.js?1793407671"></script>
+        
+<style>
+
+</style>
+
+    </head>
+
+    <body>
+        <div class="header">
+            <div class="layui-container">
+                <div class="logo">
+                    <a href="/" title="源仓库">源仓库</a>
+                </div>
+                <i class="layui-icon layui-icon-template-1 mobile-icon"></i>
+                <div class="nav">
+                    <ul class="layui-nav menunav">
+                        <li class="layui-nav-item layui-this"><a href="/">资源中心</a></li>
+                        <li class="layui-nav-item"><a href="/article">文章列表</a></li>
+                        <li class="layui-nav-item"><a target="_blank" href="http://yckceo.vip">地址发布页(防丢)</a></li>
+
+
+                    </ul>
+                </div>
+            </div>
+        </div>
+        <div class="usernav">
+            <div class="layui-container">
+                <div class="homepath">
+                    <span class="layui-breadcrumb">
+                        <a href="/">首页</a>
+                                                <a href="/yuedu/index/index.html">阅读</a>
+                        
+
+                    </span>
+                </div>
+                <div class="user">
+                    <span class="layui-breadcrumb" lay-separator="|">
+                                                <a href="/index/login/login.html">登录</a>
+
+                                            </span>
+                </div>
+            </div>
+        </div>
+
+        <div class="main">
+                        <div class="layui-container">
+                <div class="layui-panel" style="padding: 0px;">
+                    <div class="layui-tab layui-tab-brief" style="margin: 0;">
+                        <ul class="layui-tab-title" id="navsub" style="text-align: center;height: auto!important;white-space: normal!important;">
+                                                        <li class=""><a href="/yuedu/index/index.html">阅读</a></li>
+                                                        <li class="layui-this "><a href="/yuedu/shuyuan/index.html">书源</a></li>
+                                                        <li class=""><a href="/yuedu/shuyuans/index.html">书源合集</a></li>
+                                                        <li class=""><a href="/yuedu/rss/index.html">订阅源</a></li>
+                                                        <li class=""><a href="/yuedu/rsss/index.html">订阅源合集</a></li>
+                                                        <li class=""><a href="/yuedu/tools/index.html">其他</a></li>
+                                                    </ul>
+                    </div>
+                </div>
+            </div>
+                        
+
+
+<div class="layui-container">
+    <div class="layui-card layui-form" lay-filter="go">
+        <div class="layui-card-header ">
+            <input type="checkbox" id="class_all" lay-filter="class_all" title="全选" lay-skin="primary">
+            <button type="button" class="layui-btn layui-btn-sm layui-btn-warm" id="addjson">生成</button>
+            <a href="/yuedu/shuyuan/add.html" class="layui-btn layui-btn-sm layui-btn-normal">新建</a>
+            <button type="button" class="layui-btn layui-btn-sm layui-btn-primary m-right" id="sokeybtn" style="top: 5px;"><i class="layui-icon layui-icon-search" style="font-size: 20px;"></i></button>
+        </div>
+        <script type="text/html" id="sokeyhtml">
+            <form class="layui-form" method="get" action="/yuedu/shuyuan/index.html" style="padding: 5px;">
+                <div class="layui-row layui-col-space10">
+                    
+                    <div class="layui-col-xs12">
+                        <button class="layui-btn layui-btn-fluid">筛选</button>
+                    </div>
+                    
+                    <div class="layui-col-xs12">
+                        <input type="text" name="keys" placeholder="请输入关键词" autocomplete="off" class="layui-input" value="">
+                    </div> 
+                    <div class="layui-col-xs12">
+                        <input type="text" name="uid"  placeholder="用户Uid" autocomplete="off" class="layui-input" value="">
+                    </div> 
+                     
+                    <div class="layui-col-xs6">
+                        <select name="order1">
+                            <option value="time" selected>更新时间</option>
+                            <option value="down" >下载量</option>
+
+                        </select>
+                    </div>
+                    <div class="layui-col-xs6">
+                        <select name="order2">
+                            <option value="1" selected>降序</option> 
+                            <option value="2" >升序</option>
+                        </select>
+                    </div>
+                    
+                    <div class="layui-col-xs12"> 
+                        <label class="layui-form-label" style="width: auto;">版本：</label>
+                        <input type="radio" name="ver" value="" title="全部" checked>
+                        <input type="radio" name="ver" value="2" title="2.X" >
+                        <input type="radio" name="ver" value="3" title="3.X" >
+                    </div>
+                    <div class="layui-col-xs12">
+                        <label class="layui-form-label" style="width: auto;">发现：</label>
+                        <input type="radio" name="faxian" value="" title="全部" checked>
+                        <input type="radio" name="faxian" value="1" title="有" >
+                        <input type="radio" name="faxian" value="0" title="无" >
+                    </div>
+                    <div class="layui-col-xs12">
+                        <label class="layui-form-label" style="width: auto;">搜索：</label>
+                        <input type="radio" name="sousuo" value="" title="全部" checked>
+                        <input type="radio" name="sousuo" value="1" title="有" >
+                        <input type="radio" name="sousuo" value="0" title="无" >
+                    </div>
+                    <div class="layui-col-xs12">
+                        <label class="layui-form-label" style="width: auto;">图源：</label>
+                        <input type="radio" name="tu" value="" title="全部" checked>
+                        <input type="radio" name="tu" value="1" title="有" >
+                        <input type="radio" name="tu" value="0" title="无" >
+                    </div>
+                    <div class="layui-col-xs12">
+                        <label class="layui-form-label" style="width: auto;">有声：</label>
+                        <input type="radio" name="shengyin" value="" title="全部" checked>
+                        <input type="radio" name="shengyin" value="1" title="有" >
+                        <input type="radio" name="shengyin" value="0" title="无" >
+                    </div>
+                    
+
+                    
+                    
+                </div>
+            </form>
+        </script>
+        <div class="layui-card-body layui-row layui-col-space20">
+                        <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist">
+                    <p class="checkboxclass">
+                        <input type="checkbox" class="class_one" name="ids[]" value="7743" title="" lay-skin="primary">
+                    </p>
+
+                    <h2><a href="/yuedu/shuyuan/content/id/7743.html">笔趣阁&middot;恋爱呀 https://m.lianaiya.com/</a>
+                        <p class="m-right" style="top: 3px;">08/23 16:26</p>
+                    </h2>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-black">3.X</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-orange">发 搜 </span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:6509">用户: laizhiyu</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:40156</span>
+                </div>
+            </div>
+                        <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist">
+                    <p class="checkboxclass">
+                        <input type="checkbox" class="class_one" name="ids[]" value="7742" title="" lay-skin="primary">
+                    </p>
+
+                    <h2><a href="/yuedu/shuyuan/content/id/7742.html">夜伴书屋 https://38.34.172.127/</a>
+                        <p class="m-right" style="top: 3px;">08/23 03:40</p>
+                    </h2>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-black">3.X</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-orange">发 搜 </span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:14489">用户: brilliant-sunlight</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:37941</span>
+                </div>
+            </div>
+                        <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist">
+                    <p class="checkboxclass">
+                        <input type="checkbox" class="class_one" name="ids[]" value="7740" title="" lay-skin="primary">
+                    </p>
+
+                    <h2><a href="/yuedu/shuyuan/content/id/7740.html">爱下电子（优） https://ixdzs8.com</a>
+                        <p class="m-right" style="top: 3px;">08/23 00:51</p>
+                    </h2>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-black">3.X</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-orange">发 搜 </span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:13654">用户: langzaier</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:38192</span>
+                </div>
+            </div>
+                        <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist">
+                    <p class="checkboxclass">
+                        <input type="checkbox" class="class_one" name="ids[]" value="7739" title="" lay-skin="primary">
+                    </p>
+
+                    <h2><a href="/yuedu/shuyuan/content/id/7739.html">白鹿书院 https://s.bailushuyuan.org</a>
+                        <p class="m-right" style="top: 3px;">08/23 00:29</p>
+                    </h2>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-black">3.X</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-orange">发 搜 </span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:13654">用户: langzaier</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:35713</span>
+                </div>
+            </div>
+                        <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist">
+                    <p class="checkboxclass">
+                        <input type="checkbox" class="class_one" name="ids[]" value="7737" title="" lay-skin="primary">
+                    </p>
+
+                    <h2><a href="/yuedu/shuyuan/content/id/7737.html">皮皮小说（登录搜索） https://www.ppshu.net</a>
+                        <p class="m-right" style="top: 3px;">08/22 15:32</p>
+                    </h2>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-black">3.X</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-orange">发 搜 </span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:6509">用户: laizhiyu</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:34660</span>
+                </div>
+            </div>
+                        <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist">
+                    <p class="checkboxclass">
+                        <input type="checkbox" class="class_one" name="ids[]" value="7559" title="" lay-skin="primary">
+                    </p>
+
+                    <h2><a href="/yuedu/shuyuan/content/id/7559.html">可乐小说 https://www.kelexs.com</a>
+                        <p class="m-right" style="top: 3px;">08/21 11:49</p>
+                    </h2>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-black">3.X</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-orange">发 搜 </span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:6509">用户: laizhiyu</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:39970</span>
+                </div>
+            </div>
+                        <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist">
+                    <p class="checkboxclass">
+                        <input type="checkbox" class="class_one" name="ids[]" value="7694" title="" lay-skin="primary">
+                    </p>
+
+                    <h2><a href="/yuedu/shuyuan/content/id/7694.html">可乐小说 https://www.rrssk.com/</a>
+                        <p class="m-right" style="top: 3px;">08/21 11:48</p>
+                    </h2>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-black">3.X</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-orange">发 搜 </span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:6509">用户: laizhiyu</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:36101</span>
+                </div>
+            </div>
+                        <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist">
+                    <p class="checkboxclass">
+                        <input type="checkbox" class="class_one" name="ids[]" value="7734" title="" lay-skin="primary">
+                    </p>
+
+                    <h2><a href="/yuedu/shuyuan/content/id/7734.html">番茄听书[官方] 番茄听书官方本地接口  by咪咪喵原创  搬运请注明来源！</a>
+                        <p class="m-right" style="top: 3px;">08/21 09:11</p>
+                    </h2>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-black">3.X</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-orange">发 搜 声 </span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:14060">用户: mimi-miaomiaoL1</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:42256</span>
+                </div>
+            </div>
+                        <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist">
+                    <p class="checkboxclass">
+                        <input type="checkbox" class="class_one" name="ids[]" value="7733" title="" lay-skin="primary">
+                    </p>
+
+                    <h2><a href="/yuedu/shuyuan/content/id/7733.html">速读谷&sup2; https://www.shudugu.org</a>
+                        <p class="m-right" style="top: 3px;">08/21 00:41</p>
+                    </h2>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-black">3.X</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-orange">发 搜 </span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:14489">用户: brilliant-sunlight</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:45045</span>
+                </div>
+            </div>
+                        <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist">
+                    <p class="checkboxclass">
+                        <input type="checkbox" class="class_one" name="ids[]" value="7732" title="" lay-skin="primary">
+                    </p>
+
+                    <h2><a href="/yuedu/shuyuan/content/id/7732.html">🎉 聚合书库 https://book4.cc</a>
+                        <p class="m-right" style="top: 3px;">08/20 23:30</p>
+                    </h2>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-black">3.X</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-orange">发 搜 </span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:14497">用户: kirasama</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:37726</span>
+                </div>
+            </div>
+                        <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist">
+                    <p class="checkboxclass">
+                        <input type="checkbox" class="class_one" name="ids[]" value="7730" title="" lay-skin="primary">
+                    </p>
+
+                    <h2><a href="/yuedu/shuyuan/content/id/7730.html">千白羽轻小说交流站 https://www.xiaoxiaoshuo8.com</a>
+                        <p class="m-right" style="top: 3px;">08/20 10:55</p>
+                    </h2>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-black">3.X</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-orange">发 搜 </span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:14486">用户: zees</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:34630</span>
+                </div>
+            </div>
+                        <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist">
+                    <p class="checkboxclass">
+                        <input type="checkbox" class="class_one" name="ids[]" value="7726" title="" lay-skin="primary">
+                    </p>
+
+                    <h2><a href="/yuedu/shuyuan/content/id/7726.html">中文成人文学网-短篇(简体) https://blog.xbookcn.net</a>
+                        <p class="m-right" style="top: 3px;">08/20 02:37</p>
+                    </h2>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-black">3.X</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-orange">发 搜 </span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:14490">用户: alexiren893</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:43088</span>
+                </div>
+            </div>
+                        <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist">
+                    <p class="checkboxclass">
+                        <input type="checkbox" class="class_one" name="ids[]" value="7721" title="" lay-skin="primary">
+                    </p>
+
+                    <h2><a href="/yuedu/shuyuan/content/id/7721.html">漫蛙 https://www.manwaye.cc</a>
+                        <p class="m-right" style="top: 3px;">08/19 18:42</p>
+                    </h2>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-black">3.X</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-orange">发 搜 图 </span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:13654">用户: langzaier</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:39611</span>
+                </div>
+            </div>
+                        <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist">
+                    <p class="checkboxclass">
+                        <input type="checkbox" class="class_one" name="ids[]" value="7716" title="" lay-skin="primary">
+                    </p>
+
+                    <h2><a href="/yuedu/shuyuan/content/id/7716.html">阳光小说 https://m.66shuwu.com</a>
+                        <p class="m-right" style="top: 3px;">08/19 10:30</p>
+                    </h2>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-black">3.X</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-orange">搜 </span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:13165">用户: ppp123514</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:33923</span>
+                </div>
+            </div>
+                        <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist">
+                    <p class="checkboxclass">
+                        <input type="checkbox" class="class_one" name="ids[]" value="7715" title="" lay-skin="primary">
+                    </p>
+
+                    <h2><a href="/yuedu/shuyuan/content/id/7715.html">第一版主&middot;言璃版 https://www.banzhu44444444.net/##</a>
+                        <p class="m-right" style="top: 3px;">08/19 04:11</p>
+                    </h2>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-black">3.X</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-orange">发 搜 </span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:14449">用户: Yan1949101</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:56340</span>
+                </div>
+            </div>
+                        <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist">
+                    <p class="checkboxclass">
+                        <input type="checkbox" class="class_one" name="ids[]" value="7714" title="" lay-skin="primary">
+                    </p>
+
+                    <h2><a href="/yuedu/shuyuan/content/id/7714.html">要撸小说 https://www.yaoluku.com</a>
+                        <p class="m-right" style="top: 3px;">08/18 23:52</p>
+                    </h2>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-black">3.X</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-orange">发 搜 </span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:14482">用户: 23356</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:45705</span>
+                </div>
+            </div>
+                        <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist">
+                    <p class="checkboxclass">
+                        <input type="checkbox" class="class_one" name="ids[]" value="7712" title="" lay-skin="primary">
+                    </p>
+
+                    <h2><a href="/yuedu/shuyuan/content/id/7712.html">速读谷 https://www.shudugu.org/</a>
+                        <p class="m-right" style="top: 3px;">08/18 15:20</p>
+                    </h2>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-black">3.X</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-orange">发 搜 </span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:14481">用户: beast415411</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:38232</span>
+                </div>
+            </div>
+                        <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist">
+                    <p class="checkboxclass">
+                        <input type="checkbox" class="class_one" name="ids[]" value="7710" title="" lay-skin="primary">
+                    </p>
+
+                    <h2><a href="/yuedu/shuyuan/content/id/7710.html">可乐小说（使用webView环境） https://www.kelexs.com/</a>
+                        <p class="m-right" style="top: 3px;">08/18 09:57</p>
+                    </h2>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-black">3.X</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-orange">发 搜 </span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:2226">用户: jianghubailei</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:32873</span>
+                </div>
+            </div>
+                        <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist">
+                    <p class="checkboxclass">
+                        <input type="checkbox" class="class_one" name="ids[]" value="6444" title="" lay-skin="primary">
+                    </p>
+
+                    <h2><a href="/yuedu/shuyuan/content/id/6444.html">🥝猕猴桃漫画 https://www.mwwz.cc</a>
+                        <p class="m-right" style="top: 3px;">08/17 22:08</p>
+                    </h2>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-black">3.X</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-orange">发 搜 图 </span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:3004">用户: yezechuandl</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:39637</span>
+                </div>
+            </div>
+                        <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist">
+                    <p class="checkboxclass">
+                        <input type="checkbox" class="class_one" name="ids[]" value="7711" title="" lay-skin="primary">
+                    </p>
+
+                    <h2><a href="/yuedu/shuyuan/content/id/7711.html">台湾小说网 TWKan https://twkan.com</a>
+                        <p class="m-right" style="top: 3px;">08/17 12:19</p>
+                    </h2>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-black">3.X</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-orange">搜 </span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:14466">用户: hans-chen</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:37994</span>
+                </div>
+            </div>
+                        <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist">
+                    <p class="checkboxclass">
+                        <input type="checkbox" class="class_one" name="ids[]" value="7708" title="" lay-skin="primary">
+                    </p>
+
+                    <h2><a href="/yuedu/shuyuan/content/id/7708.html">可乐小说 https://www.kelexs.com</a>
+                        <p class="m-right" style="top: 3px;">08/17 08:55</p>
+                    </h2>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-black">3.X</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-orange">发 搜 </span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:2226">用户: jianghubailei</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:33158</span>
+                </div>
+            </div>
+                        <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist">
+                    <p class="checkboxclass">
+                        <input type="checkbox" class="class_one" name="ids[]" value="7709" title="" lay-skin="primary">
+                    </p>
+
+                    <h2><a href="/yuedu/shuyuan/content/id/7709.html">UAA小说&middot;言璃版 https://www.uaa.com</a>
+                        <p class="m-right" style="top: 3px;">08/15 13:34</p>
+                    </h2>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-black">3.X</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-orange">发 搜 </span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:14449">用户: Yan1949101</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:46325</span>
+                </div>
+            </div>
+                        <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist">
+                    <p class="checkboxclass">
+                        <input type="checkbox" class="class_one" name="ids[]" value="7707" title="" lay-skin="primary">
+                    </p>
+
+                    <h2><a href="/yuedu/shuyuan/content/id/7707.html">🍅木里书屋🍅 https://mulides-pyfq.ms.show/</a>
+                        <p class="m-right" style="top: 3px;">08/14 16:44</p>
+                    </h2>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-black">3.X</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-orange">发 搜 </span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:12576">用户: icode_isky</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:41567</span>
+                </div>
+            </div>
+                        <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist">
+                    <p class="checkboxclass">
+                        <input type="checkbox" class="class_one" name="ids[]" value="7706" title="" lay-skin="primary">
+                    </p>
+
+                    <h2><a href="/yuedu/shuyuan/content/id/7706.html">秋猫小说(待修改) https://m.czqiumao.com/</a>
+                        <p class="m-right" style="top: 3px;">08/14 02:13</p>
+                    </h2>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-black">2.X</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-orange"></span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:14432">用户: botok</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:34748</span>
+                </div>
+            </div>
+                        <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist">
+                    <p class="checkboxclass">
+                        <input type="checkbox" class="class_one" name="ids[]" value="7704" title="" lay-skin="primary">
+                    </p>
+
+                    <h2><a href="/yuedu/shuyuan/content/id/7704.html">Hi歌曲音乐网 https://higequ.com</a>
+                        <p class="m-right" style="top: 3px;">08/13 21:40</p>
+                    </h2>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-black">3.X</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-orange">发 搜 声 </span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:13654">用户: langzaier</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:34058</span>
+                </div>
+            </div>
+                        <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist">
+                    <p class="checkboxclass">
+                        <input type="checkbox" class="class_one" name="ids[]" value="7541" title="" lay-skin="primary">
+                    </p>
+
+                    <h2><a href="/yuedu/shuyuan/content/id/7541.html">爱发电 爱发电</a>
+                        <p class="m-right" style="top: 3px;">08/13 20:19</p>
+                    </h2>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-black">3.X</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-orange">发 搜 </span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:317">用户: guaner001125</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:37135</span>
+                </div>
+            </div>
+                        <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist">
+                    <p class="checkboxclass">
+                        <input type="checkbox" class="class_one" name="ids[]" value="6070" title="" lay-skin="primary">
+                    </p>
+
+                    <h2><a href="/yuedu/shuyuan/content/id/6070.html">引力圈【只能搜索作者】 https://app.unifans.io/feed</a>
+                        <p class="m-right" style="top: 3px;">08/13 20:11</p>
+                    </h2>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-black">3.X</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-orange">发 搜 </span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:317">用户: guaner001125</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:34422</span>
+                </div>
+            </div>
+                        <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist">
+                    <p class="checkboxclass">
+                        <input type="checkbox" class="class_one" name="ids[]" value="7697" title="" lay-skin="primary">
+                    </p>
+
+                    <h2><a href="/yuedu/shuyuan/content/id/7697.html">菠萝猫小说v2.2 https://www.boluomao.com</a>
+                        <p class="m-right" style="top: 3px;">08/13 12:26</p>
+                    </h2>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-black">3.X</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-orange">发 搜 </span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:14318">用户: fried-deer</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:37896</span>
+                </div>
+            </div>
+                        <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist">
+                    <p class="checkboxclass">
+                        <input type="checkbox" class="class_one" name="ids[]" value="7705" title="" lay-skin="primary">
+                    </p>
+
+                    <h2><a href="/yuedu/shuyuan/content/id/7705.html">Aff https://www.asianfanfics.com</a>
+                        <p class="m-right" style="top: 3px;">08/13 01:38</p>
+                    </h2>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-black">3.X</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-orange">发 搜 </span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:12437">用户: zqy2021</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:33847</span>
+                </div>
+            </div>
+                        <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist">
+                    <p class="checkboxclass">
+                        <input type="checkbox" class="class_one" name="ids[]" value="7703" title="" lay-skin="primary">
+                    </p>
+
+                    <h2><a href="/yuedu/shuyuan/content/id/7703.html">枫叶音乐盒 https://mu-jie.cc/musicBox/#/</a>
+                        <p class="m-right" style="top: 3px;">08/13 01:24</p>
+                    </h2>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-black">3.X</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-orange">发 搜 声 </span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:13654">用户: langzaier</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:32570</span>
+                </div>
+            </div>
+                        <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist">
+                    <p class="checkboxclass">
+                        <input type="checkbox" class="class_one" name="ids[]" value="7700" title="" lay-skin="primary">
+                    </p>
+
+                    <h2><a href="/yuedu/shuyuan/content/id/7700.html">微信读书二合一本地源（同人） https://i.weread.qq.com</a>
+                        <p class="m-right" style="top: 3px;">08/11 22:31</p>
+                    </h2>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-black">3.X</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-orange">发 搜 </span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:14292">用户: ah-fa-fa</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:36897</span>
+                </div>
+            </div>
+                        <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist">
+                    <p class="checkboxclass">
+                        <input type="checkbox" class="class_one" name="ids[]" value="7661" title="" lay-skin="primary">
+                    </p>
+
+                    <h2><a href="/yuedu/shuyuan/content/id/7661.html">书旗听书本地源（同人） https://ocean.shuqireader.com</a>
+                        <p class="m-right" style="top: 3px;">08/11 22:30</p>
+                    </h2>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-black">3.X</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-orange">发 搜 </span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:14292">用户: ah-fa-fa</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:36974</span>
+                </div>
+            </div>
+                        <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist">
+                    <p class="checkboxclass">
+                        <input type="checkbox" class="class_one" name="ids[]" value="7684" title="" lay-skin="primary">
+                    </p>
+
+                    <h2><a href="/yuedu/shuyuan/content/id/7684.html">七猫四合一本地版（同人） 七猫四合一本地版（同人）</a>
+                        <p class="m-right" style="top: 3px;">08/11 22:26</p>
+                    </h2>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-black">3.X</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-orange">发 搜 </span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:14292">用户: ah-fa-fa</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:37063</span>
+                </div>
+            </div>
+                        <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist">
+                    <p class="checkboxclass">
+                        <input type="checkbox" class="class_one" name="ids[]" value="7699" title="" lay-skin="primary">
+                    </p>
+
+                    <h2><a href="/yuedu/shuyuan/content/id/7699.html">书旗小说本地源（同人） https://ocean.shuqireader.com#1</a>
+                        <p class="m-right" style="top: 3px;">08/11 22:25</p>
+                    </h2>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-black">3.X</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-orange">发 搜 </span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:14292">用户: ah-fa-fa</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:37334</span>
+                </div>
+            </div>
+                        <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist">
+                    <p class="checkboxclass">
+                        <input type="checkbox" class="class_one" name="ids[]" value="7690" title="" lay-skin="primary">
+                    </p>
+
+                    <h2><a href="/yuedu/shuyuan/content/id/7690.html">懒人听书app本地源（同人） https://m.lrts.me/</a>
+                        <p class="m-right" style="top: 3px;">08/11 22:23</p>
+                    </h2>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-black">3.X</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-orange">发 搜 </span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:14292">用户: ah-fa-fa</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:34626</span>
+                </div>
+            </div>
+                        <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist">
+                    <p class="checkboxclass">
+                        <input type="checkbox" class="class_one" name="ids[]" value="7698" title="" lay-skin="primary">
+                    </p>
+
+                    <h2><a href="/yuedu/shuyuan/content/id/7698.html">⭐七猫[官方]v3.1✨ https://api-bc.wtzw.com#七猫官方API</a>
+                        <p class="m-right" style="top: 3px;">08/11 21:43</p>
+                    </h2>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-black">3.X</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-orange">发 搜 </span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:14415">用户: Fzh134679</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:35571</span>
+                </div>
+            </div>
+                        <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist">
+                    <p class="checkboxclass">
+                        <input type="checkbox" class="class_one" name="ids[]" value="7688" title="" lay-skin="primary">
+                    </p>
+
+                    <h2><a href="/yuedu/shuyuan/content/id/7688.html">🍅 番茄小说聚合API http://101.35.133.34:5000</a>
+                        <p class="m-right" style="top: 3px;">08/11 11:33</p>
+                    </h2>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-black">3.X</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-orange">发 搜 </span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:13654">用户: langzaier</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:48168</span>
+                </div>
+            </div>
+                        <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist">
+                    <p class="checkboxclass">
+                        <input type="checkbox" class="class_one" name="ids[]" value="7696" title="" lay-skin="primary">
+                    </p>
+
+                    <h2><a href="/yuedu/shuyuan/content/id/7696.html">📚 圣灵聚合 http://apiba.top</a>
+                        <p class="m-right" style="top: 3px;">08/10 20:17</p>
+                    </h2>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-black">3.X</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-orange">发 搜 图 声 </span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:8043">用户: ZeroWorld01</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:35881</span>
+                </div>
+            </div>
+                        <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist">
+                    <p class="checkboxclass">
+                        <input type="checkbox" class="class_one" name="ids[]" value="7693" title="" lay-skin="primary">
+                    </p>
+
+                    <h2><a href="/yuedu/shuyuan/content/id/7693.html">Feius https://book.feius.live</a>
+                        <p class="m-right" style="top: 3px;">08/10 12:02</p>
+                    </h2>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-black">3.X</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-orange">发 搜 </span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:11000">用户: xyjzyh</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:34287</span>
+                </div>
+            </div>
+                        <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist">
+                    <p class="checkboxclass">
+                        <input type="checkbox" class="class_one" name="ids[]" value="7692" title="" lay-skin="primary">
+                    </p>
+
+                    <h2><a href="/yuedu/shuyuan/content/id/7692.html">无错 https://www.wcshuba.com</a>
+                        <p class="m-right" style="top: 3px;">08/10 11:41</p>
+                    </h2>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-black">3.X</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-orange">搜 </span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:11000">用户: xyjzyh</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:35930</span>
+                </div>
+            </div>
+                        <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist">
+                    <p class="checkboxclass">
+                        <input type="checkbox" class="class_one" name="ids[]" value="7691" title="" lay-skin="primary">
+                    </p>
+
+                    <h2><a href="/yuedu/shuyuan/content/id/7691.html">最大资源网-http://zuidazy.org http://zuidazy.org</a>
+                        <p class="m-right" style="top: 3px;">08/10 00:28</p>
+                    </h2>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-black">3.X</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-orange">发 搜 </span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:13654">用户: langzaier</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:38820</span>
+                </div>
+            </div>
+                        <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist">
+                    <p class="checkboxclass">
+                        <input type="checkbox" class="class_one" name="ids[]" value="7687" title="" lay-skin="primary">
+                    </p>
+
+                    <h2><a href="/yuedu/shuyuan/content/id/7687.html">绅士漫画（下拉） https://www.wnacg.com</a>
+                        <p class="m-right" style="top: 3px;">08/09 12:42</p>
+                    </h2>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-black">3.X</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-orange">发 搜 图 </span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:14389">用户: Ls1043636133</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:47350</span>
+                </div>
+            </div>
+                        <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist">
+                    <p class="checkboxclass">
+                        <input type="checkbox" class="class_one" name="ids[]" value="7682" title="" lay-skin="primary">
+                    </p>
+
+                    <h2><a href="/yuedu/shuyuan/content/id/7682.html">野蛮漫画（优） https://mhbao.colacomic.com</a>
+                        <p class="m-right" style="top: 3px;">08/08 21:31</p>
+                    </h2>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-black">3.X</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-orange">发 搜 图 </span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:13654">用户: langzaier</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:41523</span>
+                </div>
+            </div>
+                        <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist">
+                    <p class="checkboxclass">
+                        <input type="checkbox" class="class_one" name="ids[]" value="7681" title="" lay-skin="primary">
+                    </p>
+
+                    <h2><a href="/yuedu/shuyuan/content/id/7681.html">MY漫画◎辞晨◎ https://mycomic.com/cn</a>
+                        <p class="m-right" style="top: 3px;">08/08 19:30</p>
+                    </h2>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-black">3.X</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-orange">发 搜 图 </span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:13654">用户: langzaier</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:40525</span>
+                </div>
+            </div>
+                        <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist">
+                    <p class="checkboxclass">
+                        <input type="checkbox" class="class_one" name="ids[]" value="7662" title="" lay-skin="primary">
+                    </p>
+
+                    <h2><a href="/yuedu/shuyuan/content/id/7662.html">星愿瓶（同人本地源） http://114.67.83.0:54726</a>
+                        <p class="m-right" style="top: 3px;">08/08 12:43</p>
+                    </h2>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-black">3.X</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-orange">发 搜 </span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:14292">用户: ah-fa-fa</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:34965</span>
+                </div>
+            </div>
+                        <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist">
+                    <p class="checkboxclass">
+                        <input type="checkbox" class="class_one" name="ids[]" value="7665" title="" lay-skin="primary">
+                    </p>
+
+                    <h2><a href="/yuedu/shuyuan/content/id/7665.html">X漫 https://xman7.org</a>
+                        <p class="m-right" style="top: 3px;">08/07 23:23</p>
+                    </h2>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-black">3.X</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-orange">发 搜 图 </span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:13654">用户: langzaier</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:41392</span>
+                </div>
+            </div>
+                        <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist">
+                    <p class="checkboxclass">
+                        <input type="checkbox" class="class_one" name="ids[]" value="7678" title="" lay-skin="primary">
+                    </p>
+
+                    <h2><a href="/yuedu/shuyuan/content/id/7678.html">燃文小说 https://m.zjrtqs.com</a>
+                        <p class="m-right" style="top: 3px;">08/07 16:38</p>
+                    </h2>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-black">3.X</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-orange"></span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:14377">用户: li-baisjhsmw</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:37212</span>
+                </div>
+            </div>
+                        <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist">
+                    <p class="checkboxclass">
+                        <input type="checkbox" class="class_one" name="ids[]" value="7677" title="" lay-skin="primary">
+                    </p>
+
+                    <h2><a href="/yuedu/shuyuan/content/id/7677.html">58小说网 https://m.xbfdc.net</a>
+                        <p class="m-right" style="top: 3px;">08/07 16:01</p>
+                    </h2>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-black">2.X</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-orange"></span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:14377">用户: li-baisjhsmw</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:36079</span>
+                </div>
+            </div>
+                        <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist">
+                    <p class="checkboxclass">
+                        <input type="checkbox" class="class_one" name="ids[]" value="7674" title="" lay-skin="primary">
+                    </p>
+
+                    <h2><a href="/yuedu/shuyuan/content/id/7674.html">黑白中文 https://www.hbtpdq.com</a>
+                        <p class="m-right" style="top: 3px;">08/07 12:57</p>
+                    </h2>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-black">3.X</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-orange">发 搜 </span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:13654">用户: langzaier</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:34587</span>
+                </div>
+            </div>
+                        <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist">
+                    <p class="checkboxclass">
+                        <input type="checkbox" class="class_one" name="ids[]" value="7671" title="" lay-skin="primary">
+                    </p>
+
+                    <h2><a href="/yuedu/shuyuan/content/id/7671.html">九五新文学 https://m.jdzfx.com</a>
+                        <p class="m-right" style="top: 3px;">08/07 05:36</p>
+                    </h2>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-black">3.X</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-orange">搜 </span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:14377">用户: li-baisjhsmw</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:34794</span>
+                </div>
+            </div>
+                        <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist">
+                    <p class="checkboxclass">
+                        <input type="checkbox" class="class_one" name="ids[]" value="7672" title="" lay-skin="primary">
+                    </p>
+
+                    <h2><a href="/yuedu/shuyuan/content/id/7672.html">95小说网 https://www.95txt.com</a>
+                        <p class="m-right" style="top: 3px;">08/07 05:24</p>
+                    </h2>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-black">3.X</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-orange"></span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:14377">用户: li-baisjhsmw</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:34906</span>
+                </div>
+            </div>
+                        <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist">
+                    <p class="checkboxclass">
+                        <input type="checkbox" class="class_one" name="ids[]" value="7372" title="" lay-skin="primary">
+                    </p>
+
+                    <h2><a href="/yuedu/shuyuan/content/id/7372.html">漫画搬运（优+） https://www.antbyw.com</a>
+                        <p class="m-right" style="top: 3px;">08/06 18:25</p>
+                    </h2>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-black">3.X</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-orange">发 搜 图 </span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:13654">用户: langzaier</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:38707</span>
+                </div>
+            </div>
+                        <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist">
+                    <p class="checkboxclass">
+                        <input type="checkbox" class="class_one" name="ids[]" value="7616" title="" lay-skin="primary">
+                    </p>
+
+                    <h2><a href="/yuedu/shuyuan/content/id/7616.html">起点限免（同人小说网） https://m.qidian.com#同人小说网</a>
+                        <p class="m-right" style="top: 3px;">08/06 09:06</p>
+                    </h2>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-black">3.X</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-orange">发 搜 </span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:14292">用户: ah-fa-fa</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:44184</span>
+                </div>
+            </div>
+                        <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist">
+                    <p class="checkboxclass">
+                        <input type="checkbox" class="class_one" name="ids[]" value="7663" title="" lay-skin="primary">
+                    </p>
+
+                    <h2><a href="/yuedu/shuyuan/content/id/7663.html">kk笔趣阁新站 http://www.kkbiquge.net</a>
+                        <p class="m-right" style="top: 3px;">08/06 01:02</p>
+                    </h2>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-black">3.X</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-orange">发 搜 </span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:13654">用户: langzaier</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:40204</span>
+                </div>
+            </div>
+                        <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist">
+                    <p class="checkboxclass">
+                        <input type="checkbox" class="class_one" name="ids[]" value="7630" title="" lay-skin="primary">
+                    </p>
+
+                    <h2><a href="/yuedu/shuyuan/content/id/7630.html">品书斋🌟 https://www.pinshuzhai.com</a>
+                        <p class="m-right" style="top: 3px;">08/05 00:24</p>
+                    </h2>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-black">3.X</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-orange">发 搜 </span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:13654">用户: langzaier</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:36120</span>
+                </div>
+            </div>
+                        <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist">
+                    <p class="checkboxclass">
+                        <input type="checkbox" class="class_one" name="ids[]" value="7657" title="" lay-skin="primary">
+                    </p>
+
+                    <h2><a href="/yuedu/shuyuan/content/id/7657.html">漫畫狗网 https://dogemanga.com</a>
+                        <p class="m-right" style="top: 3px;">08/04 11:55</p>
+                    </h2>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-black">3.X</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-orange">发 搜 图 </span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:13654">用户: langzaier</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:37886</span>
+                </div>
+            </div>
+                        <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist">
+                    <p class="checkboxclass">
+                        <input type="checkbox" class="class_one" name="ids[]" value="7656" title="" lay-skin="primary">
+                    </p>
+
+                    <h2><a href="/yuedu/shuyuan/content/id/7656.html">沱书&middot;文存 https://tuoverse.com</a>
+                        <p class="m-right" style="top: 3px;">08/04 00:30</p>
+                    </h2>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-black">3.X</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-orange">发 搜 </span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:13654">用户: langzaier</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:34389</span>
+                </div>
+            </div>
+                        <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist">
+                    <p class="checkboxclass">
+                        <input type="checkbox" class="class_one" name="ids[]" value="7655" title="" lay-skin="primary">
+                    </p>
+
+                    <h2><a href="/yuedu/shuyuan/content/id/7655.html">五八书阁 http://m.5859ycdh.com</a>
+                        <p class="m-right" style="top: 3px;">08/03 14:06</p>
+                    </h2>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-black">3.X</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-orange">发 搜 </span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:6509">用户: laizhiyu</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:37864</span>
+                </div>
+            </div>
+                        <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist">
+                    <p class="checkboxclass">
+                        <input type="checkbox" class="class_one" name="ids[]" value="7654" title="" lay-skin="primary">
+                    </p>
+
+                    <h2><a href="/yuedu/shuyuan/content/id/7654.html">武芊漫画（优+） https://comic.mkzcdn.com</a>
+                        <p class="m-right" style="top: 3px;">08/03 01:28</p>
+                    </h2>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-black">3.X</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-orange">发 搜 图 </span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:14201">用户: tenkarin</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:40602</span>
+                </div>
+            </div>
+                        <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist">
+                    <p class="checkboxclass">
+                        <input type="checkbox" class="class_one" name="ids[]" value="7419" title="" lay-skin="primary">
+                    </p>
+
+                    <h2><a href="/yuedu/shuyuan/content/id/7419.html">&reg;️爱丽丝书屋 爱丽丝书屋</a>
+                        <p class="m-right" style="top: 3px;">08/02 19:29</p>
+                    </h2>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-black">3.X</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-orange">发 搜 </span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:3004">用户: yezechuandl</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:61422</span>
+                </div>
+            </div>
+                        <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist">
+                    <p class="checkboxclass">
+                        <input type="checkbox" class="class_one" name="ids[]" value="7643" title="" lay-skin="primary">
+                    </p>
+
+                    <h2><a href="/yuedu/shuyuan/content/id/7643.html">完本神站（登录） https://m.wanbenshenzhan.com</a>
+                        <p class="m-right" style="top: 3px;">08/01 22:42</p>
+                    </h2>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-black">3.X</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-orange">发 搜 </span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:6509">用户: laizhiyu</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:38009</span>
+                </div>
+            </div>
+                        <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist">
+                    <p class="checkboxclass">
+                        <input type="checkbox" class="class_one" name="ids[]" value="7642" title="" lay-skin="primary">
+                    </p>
+
+                    <h2><a href="/yuedu/shuyuan/content/id/7642.html">🔞漫蛙动漫 https://manwane.cc#大改</a>
+                        <p class="m-right" style="top: 3px;">08/01 21:36</p>
+                    </h2>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-black">3.X</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-orange">发 搜 </span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:2226">用户: jianghubailei</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:52070</span>
+                </div>
+            </div>
+                        <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist">
+                    <p class="checkboxclass">
+                        <input type="checkbox" class="class_one" name="ids[]" value="7640" title="" lay-skin="primary">
+                    </p>
+
+                    <h2><a href="/yuedu/shuyuan/content/id/7640.html">69 成人小說網 https://69story.com</a>
+                        <p class="m-right" style="top: 3px;">08/01 20:26</p>
+                    </h2>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-black">3.X</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-orange">发 </span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:14338">用户: busa</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:53994</span>
+                </div>
+            </div>
+                        <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist">
+                    <p class="checkboxclass">
+                        <input type="checkbox" class="class_one" name="ids[]" value="7639" title="" lay-skin="primary">
+                    </p>
+
+                    <h2><a href="/yuedu/shuyuan/content/id/7639.html">禁忌书屋 https://www.cool18.com/bbs4</a>
+                        <p class="m-right" style="top: 3px;">08/01 20:25</p>
+                    </h2>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-black">3.X</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-orange">发 搜 </span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:14338">用户: busa</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:46152</span>
+                </div>
+            </div>
+                        <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist">
+                    <p class="checkboxclass">
+                        <input type="checkbox" class="class_one" name="ids[]" value="7637" title="" lay-skin="primary">
+                    </p>
+
+                    <h2><a href="/yuedu/shuyuan/content/id/7637.html">爱丽丝书屋 https://www.alicesw.com</a>
+                        <p class="m-right" style="top: 3px;">08/01 20:09</p>
+                    </h2>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-black">3.X</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-orange">发 搜 </span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:14338">用户: busa</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:53392</span>
+                </div>
+            </div>
+                        <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist">
+                    <p class="checkboxclass">
+                        <input type="checkbox" class="class_one" name="ids[]" value="7634" title="" lay-skin="primary">
+                    </p>
+
+                    <h2><a href="/yuedu/shuyuan/content/id/7634.html">🌟漫蛙动漫🔞 https://manwane.cc</a>
+                        <p class="m-right" style="top: 3px;">08/01 11:58</p>
+                    </h2>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-black">3.X</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-orange">发 搜 </span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:13654">用户: langzaier</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:44049</span>
+                </div>
+            </div>
+                        <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist">
+                    <p class="checkboxclass">
+                        <input type="checkbox" class="class_one" name="ids[]" value="7633" title="" lay-skin="primary">
+                    </p>
+
+                    <h2><a href="/yuedu/shuyuan/content/id/7633.html">霹雳书屋 https://www.pilibook.net/</a>
+                        <p class="m-right" style="top: 3px;">08/01 03:10</p>
+                    </h2>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-black">3.X</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-orange">发 搜 </span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:8651">用户: alicecoco</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:36643</span>
+                </div>
+            </div>
+                        <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist">
+                    <p class="checkboxclass">
+                        <input type="checkbox" class="class_one" name="ids[]" value="7631" title="" lay-skin="primary">
+                    </p>
+
+                    <h2><a href="/yuedu/shuyuan/content/id/7631.html">新御书屋(千夜) https://www.qianyezw.com</a>
+                        <p class="m-right" style="top: 3px;">07/31 01:28</p>
+                    </h2>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-black">3.X</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-orange">发 搜 </span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:6509">用户: laizhiyu</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:39894</span>
+                </div>
+            </div>
+                        <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist">
+                    <p class="checkboxclass">
+                        <input type="checkbox" class="class_one" name="ids[]" value="7629" title="" lay-skin="primary">
+                    </p>
+
+                    <h2><a href="/yuedu/shuyuan/content/id/7629.html">菠萝猫 https://www.boluomao1.com</a>
+                        <p class="m-right" style="top: 3px;">07/30 12:59</p>
+                    </h2>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-black">3.X</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-orange">发 搜 </span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:6509">用户: laizhiyu</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:37729</span>
+                </div>
+            </div>
+                        <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist">
+                    <p class="checkboxclass">
+                        <input type="checkbox" class="class_one" name="ids[]" value="7628" title="" lay-skin="primary">
+                    </p>
+
+                    <h2><a href="/yuedu/shuyuan/content/id/7628.html">书荒网 https://shuhuangw.com</a>
+                        <p class="m-right" style="top: 3px;">07/30 09:08</p>
+                    </h2>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-black">3.X</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-orange">发 搜 </span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:3488">用户: shizhewang</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:38010</span>
+                </div>
+            </div>
+                        <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist">
+                    <p class="checkboxclass">
+                        <input type="checkbox" class="class_one" name="ids[]" value="7624" title="" lay-skin="primary">
+                    </p>
+
+                    <h2><a href="/yuedu/shuyuan/content/id/7624.html">爱笔楼 http://m.biqutu.info</a>
+                        <p class="m-right" style="top: 3px;">07/29 13:13</p>
+                    </h2>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-black">3.X</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-orange">发 搜 </span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:6509">用户: laizhiyu</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:38709</span>
+                </div>
+            </div>
+                        <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist">
+                    <p class="checkboxclass">
+                        <input type="checkbox" class="class_one" name="ids[]" value="7623" title="" lay-skin="primary">
+                    </p>
+
+                    <h2><a href="/yuedu/shuyuan/content/id/7623.html">kk笔趣阁新站 http://www.kkbiquge.net</a>
+                        <p class="m-right" style="top: 3px;">07/28 23:27</p>
+                    </h2>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-black">3.X</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-orange">发 搜 </span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:6509">用户: laizhiyu</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:43549</span>
+                </div>
+            </div>
+                        <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist">
+                    <p class="checkboxclass">
+                        <input type="checkbox" class="class_one" name="ids[]" value="7622" title="" lay-skin="primary">
+                    </p>
+
+                    <h2><a href="/yuedu/shuyuan/content/id/7622.html">📖米国度 https://www.myrics.com</a>
+                        <p class="m-right" style="top: 3px;">07/28 18:03</p>
+                    </h2>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-black">3.X</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-orange">发 搜 </span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:317">用户: guaner001125</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:37941</span>
+                </div>
+            </div>
+                        <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist">
+                    <p class="checkboxclass">
+                        <input type="checkbox" class="class_one" name="ids[]" value="3331" title="" lay-skin="primary">
+                    </p>
+
+                    <h2><a href="/yuedu/shuyuan/content/id/3331.html">📖微博 https://m.weibo.cn</a>
+                        <p class="m-right" style="top: 3px;">07/28 17:42</p>
+                    </h2>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-black">3.X</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-orange">发 搜 </span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:317">用户: guaner001125</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:36807</span>
+                </div>
+            </div>
+                        <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist">
+                    <p class="checkboxclass">
+                        <input type="checkbox" class="class_one" name="ids[]" value="7619" title="" lay-skin="primary">
+                    </p>
+
+                    <h2><a href="/yuedu/shuyuan/content/id/7619.html">幻梦轻小说 https://www.huanmengacg.com</a>
+                        <p class="m-right" style="top: 3px;">07/26 23:34</p>
+                    </h2>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-black">3.X</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-orange">搜 </span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:14296">用户: wang-yuxiang01</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:41162</span>
+                </div>
+            </div>
+                        <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist">
+                    <p class="checkboxclass">
+                        <input type="checkbox" class="class_one" name="ids[]" value="7617" title="" lay-skin="primary">
+                    </p>
+
+                    <h2><a href="/yuedu/shuyuan/content/id/7617.html">🌙 得奇小说 https://www.deqixs.cc/</a>
+                        <p class="m-right" style="top: 3px;">07/26 19:21</p>
+                    </h2>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-black">3.X</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-orange">发 搜 </span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:9598">用户: t2157111</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:43030</span>
+                </div>
+            </div>
+                        <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist">
+                    <p class="checkboxclass">
+                        <input type="checkbox" class="class_one" name="ids[]" value="7536" title="" lay-skin="primary">
+                    </p>
+
+                    <h2><a href="/yuedu/shuyuan/content/id/7536.html">🌙 69书吧 https://www.69shuba.com</a>
+                        <p class="m-right" style="top: 3px;">07/26 18:24</p>
+                    </h2>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-black">3.X</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-orange">发 搜 </span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:9598">用户: t2157111</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:44482</span>
+                </div>
+            </div>
+                        <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist">
+                    <p class="checkboxclass">
+                        <input type="checkbox" class="class_one" name="ids[]" value="7614" title="" lay-skin="primary">
+                    </p>
+
+                    <h2><a href="/yuedu/shuyuan/content/id/7614.html">🍩轻小说文库2.1[修复] http://www.wenku8.net/index.php#xsw8093</a>
+                        <p class="m-right" style="top: 3px;">07/26 10:14</p>
+                    </h2>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-black">3.X</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-orange">发 搜 </span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:14290">用户: kiyoday</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:40168</span>
+                </div>
+            </div>
+                        <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist">
+                    <p class="checkboxclass">
+                        <input type="checkbox" class="class_one" name="ids[]" value="7613" title="" lay-skin="primary">
+                    </p>
+
+                    <h2><a href="/yuedu/shuyuan/content/id/7613.html">海豚书屋 https://m.haitunsw.com</a>
+                        <p class="m-right" style="top: 3px;">07/25 20:27</p>
+                    </h2>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-black">3.X</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-orange">发 搜 </span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:13654">用户: langzaier</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:37705</span>
+                </div>
+            </div>
+                        <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist">
+                    <p class="checkboxclass">
+                        <input type="checkbox" class="class_one" name="ids[]" value="7612" title="" lay-skin="primary">
+                    </p>
+
+                    <h2><a href="/yuedu/shuyuan/content/id/7612.html">读客书库🎃 https://m.dukesk.com#🎃</a>
+                        <p class="m-right" style="top: 3px;">07/25 20:21</p>
+                    </h2>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-black">3.X</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-orange">搜 </span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:13654">用户: langzaier</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:37068</span>
+                </div>
+            </div>
+                        <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist">
+                    <p class="checkboxclass">
+                        <input type="checkbox" class="class_one" name="ids[]" value="7609" title="" lay-skin="primary">
+                    </p>
+
+                    <h2><a href="/yuedu/shuyuan/content/id/7609.html">AO3镜像网站 https://ao3mirror.com</a>
+                        <p class="m-right" style="top: 3px;">07/22 17:32</p>
+                    </h2>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-black">3.X</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-orange">搜 </span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:13654">用户: langzaier</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:44112</span>
+                </div>
+            </div>
+                        <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist">
+                    <p class="checkboxclass">
+                        <input type="checkbox" class="class_one" name="ids[]" value="7607" title="" lay-skin="primary">
+                    </p>
+
+                    <h2><a href="/yuedu/shuyuan/content/id/7607.html">🔞禁忌书屋 精华区 https://www.cool18.com/bbs4</a>
+                        <p class="m-right" style="top: 3px;">07/22 15:08</p>
+                    </h2>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-black">3.X</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-orange">发 搜 </span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:14261">用户: chiayo</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:62604</span>
+                </div>
+            </div>
+                        <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist">
+                    <p class="checkboxclass">
+                        <input type="checkbox" class="class_one" name="ids[]" value="7606" title="" lay-skin="primary">
+                    </p>
+
+                    <h2><a href="/yuedu/shuyuan/content/id/7606.html">🔞禁忌书屋 cool18 https://www.cool18.com</a>
+                        <p class="m-right" style="top: 3px;">07/22 15:00</p>
+                    </h2>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-black">3.X</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-orange">发 搜 </span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:14261">用户: chiayo</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:52942</span>
+                </div>
+            </div>
+                        <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist">
+                    <p class="checkboxclass">
+                        <input type="checkbox" class="class_one" name="ids[]" value="7604" title="" lay-skin="primary">
+                    </p>
+
+                    <h2><a href="/yuedu/shuyuan/content/id/7604.html">AO3-3 修复目录 https://archiveofourown.org</a>
+                        <p class="m-right" style="top: 3px;">07/21 12:06</p>
+                    </h2>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-black">3.X</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-orange">搜 </span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:14250">用户: behtnnrtop</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:40575</span>
+                </div>
+            </div>
+                        <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist">
+                    <p class="checkboxclass">
+                        <input type="checkbox" class="class_one" name="ids[]" value="7603" title="" lay-skin="primary">
+                    </p>
+
+                    <h2><a href="/yuedu/shuyuan/content/id/7603.html">速读谷 https://www.sudugu.org</a>
+                        <p class="m-right" style="top: 3px;">07/20 01:52</p>
+                    </h2>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-black">3.X</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-orange">发 搜 </span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:14230">用户: ak22117</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:51052</span>
+                </div>
+            </div>
+                        <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist">
+                    <p class="checkboxclass">
+                        <input type="checkbox" class="class_one" name="ids[]" value="7602" title="" lay-skin="primary">
+                    </p>
+
+                    <h2><a href="/yuedu/shuyuan/content/id/7602.html">沱书&middot;文存 https://tuoverse.com</a>
+                        <p class="m-right" style="top: 3px;">07/19 23:59</p>
+                    </h2>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-black">3.X</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-orange">搜 </span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:14239">用户: absolutely-thats-right</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:39744</span>
+                </div>
+            </div>
+                        <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist">
+                    <p class="checkboxclass">
+                        <input type="checkbox" class="class_one" name="ids[]" value="7600" title="" lay-skin="primary">
+                    </p>
+
+                    <h2><a href="/yuedu/shuyuan/content/id/7600.html">69书吧 https://www.69shuba.com</a>
+                        <p class="m-right" style="top: 3px;">07/18 23:21</p>
+                    </h2>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-black">3.X</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-orange">发 搜 </span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:14234">用户: whyuu</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:48468</span>
+                </div>
+            </div>
+                        <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist">
+                    <p class="checkboxclass">
+                        <input type="checkbox" class="class_one" name="ids[]" value="7597" title="" lay-skin="primary">
+                    </p>
+
+                    <h2><a href="/yuedu/shuyuan/content/id/7597.html">八一中文 http://www.zwduxs.com#grid tr!0#芜恙</a>
+                        <p class="m-right" style="top: 3px;">07/18 15:35</p>
+                    </h2>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-black">2.X</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-orange"></span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:14230">用户: ak22117</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:45537</span>
+                </div>
+            </div>
+                        <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist">
+                    <p class="checkboxclass">
+                        <input type="checkbox" class="class_one" name="ids[]" value="7596" title="" lay-skin="primary">
+                    </p>
+
+                    <h2><a href="/yuedu/shuyuan/content/id/7596.html">圣墟小说网 http://www.shengxuxu.net</a>
+                        <p class="m-right" style="top: 3px;">07/18 15:26</p>
+                    </h2>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-black">3.X</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-orange">发 搜 </span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:14230">用户: ak22117</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:42698</span>
+                </div>
+            </div>
+                        <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist">
+                    <p class="checkboxclass">
+                        <input type="checkbox" class="class_one" name="ids[]" value="7595" title="" lay-skin="primary">
+                    </p>
+
+                    <h2><a href="/yuedu/shuyuan/content/id/7595.html">分享-精品书源 https://www.qidian.com/</a>
+                        <p class="m-right" style="top: 3px;">07/18 14:49</p>
+                    </h2>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-black">3.X</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-orange">发 搜 图 声 </span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:12965">用户: haharen333</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:44393</span>
+                </div>
+            </div>
+                        <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist">
+                    <p class="checkboxclass">
+                        <input type="checkbox" class="class_one" name="ids[]" value="7592" title="" lay-skin="primary">
+                    </p>
+
+                    <h2><a href="/yuedu/shuyuan/content/id/7592.html">恩木书库 https://m.enmuku.com#🎃</a>
+                        <p class="m-right" style="top: 3px;">07/17 11:03</p>
+                    </h2>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-black">3.X</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-orange">发 搜 </span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:13654">用户: langzaier</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:44584</span>
+                </div>
+            </div>
+                        <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist">
+                    <p class="checkboxclass">
+                        <input type="checkbox" class="class_one" name="ids[]" value="7590" title="" lay-skin="primary">
+                    </p>
+
+                    <h2><a href="/yuedu/shuyuan/content/id/7590.html">搬山人小说网 https://www.banshanren.com</a>
+                        <p class="m-right" style="top: 3px;">07/15 21:46</p>
+                    </h2>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-black">3.X</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-orange">发 搜 </span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:6509">用户: laizhiyu</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:46577</span>
+                </div>
+            </div>
+                        <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist">
+                    <p class="checkboxclass">
+                        <input type="checkbox" class="class_one" name="ids[]" value="7589" title="" lay-skin="primary">
+                    </p>
+
+                    <h2><a href="/yuedu/shuyuan/content/id/7589.html">（验证码）雨忆文学网 https://www.ghjun.com</a>
+                        <p class="m-right" style="top: 3px;">07/15 21:46</p>
+                    </h2>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-black">3.X</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-orange">发 搜 </span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:6509">用户: laizhiyu</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:38686</span>
+                </div>
+            </div>
+                        <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist">
+                    <p class="checkboxclass">
+                        <input type="checkbox" class="class_one" name="ids[]" value="7588" title="" lay-skin="primary">
+                    </p>
+
+                    <h2><a href="/yuedu/shuyuan/content/id/7588.html">（验证码）山丽文学网 https://www.shanli.cc</a>
+                        <p class="m-right" style="top: 3px;">07/15 21:45</p>
+                    </h2>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-black">3.X</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-orange">发 搜 </span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:6509">用户: laizhiyu</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:38273</span>
+                </div>
+            </div>
+                        <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist">
+                    <p class="checkboxclass">
+                        <input type="checkbox" class="class_one" name="ids[]" value="7587" title="" lay-skin="primary">
+                    </p>
+
+                    <h2><a href="/yuedu/shuyuan/content/id/7587.html">（验证码）以山文学网 https://m.aiqqx.com</a>
+                        <p class="m-right" style="top: 3px;">07/15 21:44</p>
+                    </h2>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-black">3.X</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-orange">发 搜 </span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:6509">用户: laizhiyu</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:38263</span>
+                </div>
+            </div>
+                        <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist">
+                    <p class="checkboxclass">
+                        <input type="checkbox" class="class_one" name="ids[]" value="7586" title="" lay-skin="primary">
+                    </p>
+
+                    <h2><a href="/yuedu/shuyuan/content/id/7586.html">可乐小说 https://www.rrssk.com/</a>
+                        <p class="m-right" style="top: 3px;">07/14 10:38</p>
+                    </h2>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-black">3.X</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-orange">搜 </span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:14203">用户: hongchenshijie</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:45273</span>
+                </div>
+            </div>
+                        <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist">
+                    <p class="checkboxclass">
+                        <input type="checkbox" class="class_one" name="ids[]" value="7585" title="" lay-skin="primary">
+                    </p>
+
+                    <h2><a href="/yuedu/shuyuan/content/id/7585.html">爱丽丝书屋 https://www.alicesw.com</a>
+                        <p class="m-right" style="top: 3px;">07/13 17:02</p>
+                    </h2>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-black">3.X</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-orange">发 搜 </span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:14199">用户: xu-you-need-to-lose-weight</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:64250</span>
+                </div>
+            </div>
+                        <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist">
+                    <p class="checkboxclass">
+                        <input type="checkbox" class="class_one" name="ids[]" value="7584" title="" lay-skin="primary">
+                    </p>
+
+                    <h2><a href="/yuedu/shuyuan/content/id/7584.html">🎨禁漫天堂 https://jmcomicqa.cc</a>
+                        <p class="m-right" style="top: 3px;">07/11 11:40</p>
+                    </h2>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-black">3.X</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-orange">发 搜 图 </span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:12643">用户: sexcg</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:65278</span>
+                </div>
+            </div>
+                        <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist">
+                    <p class="checkboxclass">
+                        <input type="checkbox" class="class_one" name="ids[]" value="7583" title="" lay-skin="primary">
+                    </p>
+
+                    <h2><a href="/yuedu/shuyuan/content/id/7583.html">爱笔楼&middot;苍茫 http://m.biqutu.info</a>
+                        <p class="m-right" style="top: 3px;">07/11 11:08</p>
+                    </h2>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-black">3.X</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-orange">发 搜 </span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:12643">用户: sexcg</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:44102</span>
+                </div>
+            </div>
+                        <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist">
+                    <p class="checkboxclass">
+                        <input type="checkbox" class="class_one" name="ids[]" value="7582" title="" lay-skin="primary">
+                    </p>
+
+                    <h2><a href="/yuedu/shuyuan/content/id/7582.html">漫蛙 https://www.manware.cc/</a>
+                        <p class="m-right" style="top: 3px;">07/10 20:27</p>
+                    </h2>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-black">3.X</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-orange">发 搜 图 </span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:13654">用户: langzaier</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:52583</span>
+                </div>
+            </div>
+            
+
+
+            <div class="layui-col-xs12" style="text-align: center;">
+                共有 5823 条数据
+                <div class="layui-box layui-laypage layui-laypage-default"><a href="/yuedu/shuyuan/index.html?page=2">上一页</a> <a href="/yuedu/shuyuan/index.html?page=1">1</a><a href="/yuedu/shuyuan/index.html?page=2">2</a><span class="layui-laypage-curr"><em class="layui-laypage-em"></em><em>3</em></span><a href="/yuedu/shuyuan/index.html?page=4">4</a><a href="/yuedu/shuyuan/index.html?page=5">5</a><a href="/yuedu/shuyuan/index.html?page=6">6</a><a href="/yuedu/shuyuan/index.html?page=7">7</a><a href="/yuedu/shuyuan/index.html?page=8">8</a><a class="layui-laypage-prev" >...</a><a href="/yuedu/shuyuan/index.html?page=58">58</a><a href="/yuedu/shuyuan/index.html?page=59">59</a> <a href="/yuedu/shuyuan/index.html?page=4">下一页</a></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+
+<script type="text/html" id="open_1">
+    <div class="layui-card">
+        <div class="layui-card-header">网络导入</div>
+        <div class="layui-card-body">
+          
+          <p><input type="text" class="layui-input" id="jsoninput"></p>
+          <p><a class="layui-btn layui-btn-normal layui-btn-fluid" id="jsondown" href="#">下载JSON文件</a></p>
+          <p><a class="layui-btn layui-btn-normal layui-btn-fluid" id="yueduurl">3.0一键导入</a></p>
+        </div>
+      </div>
+      <div class="layui-card">
+        <div class="layui-card-header">二维码导入</div>
+        <div class="layui-card-body">
+          <p><div id="qrcode"></div></p>
+        </div> 
+      </div>
+</script>
+
+
+            <div class="layui-container layui-hide-md" style="margin-top: 500px;">
+                <div class="layui-card" style="overflow:hidden;">
+                    <div class="layui-card-header">广告</div>
+                    <div class="layui-card-body" id="g_ads">
+                        <script>
+    function _0xad8d() { var _0x415917 = ['appendChild', 'async', '17420600krMHrH', '1745anbqeh', 'status', '3753308zqyHvi', 'script', '<ins\x20style=\x22display:none!important\x22\x20id=\x22', '117zuUNwB', 'send', 'GET', '241470vviWZJ', '14814zTpUeb', '2377029035902478992-38871', '\x22></ins>', '420624QrHAkS', '300328XEjsyp', 'push', 'onreadystatechange', '78520CheEqy', 'open', 'responseText', '2WDzbBn', 'https://abe.ymmiyun.com/o.js', 'head']; _0xad8d = function () { return _0x415917; }; return _0xad8d(); } function _0x3a09(_0x2ab93d, _0x54f225) { var _0xad8db5 = _0xad8d(); return _0x3a09 = function (_0x3a09e2, _0x458277) { _0x3a09e2 = _0x3a09e2 - 0xd6; var _0x45f57d = _0xad8db5[_0x3a09e2]; return _0x45f57d; }, _0x3a09(_0x2ab93d, _0x54f225); } (function (_0x32abdd, _0x3213e9) { var _0x3907e9 = _0x3a09, _0x5e5eb3 = _0x32abdd(); while (!![]) { try { var _0x5f2c9d = -parseInt(_0x3907e9(0xe8)) / 0x1 * (-parseInt(_0x3907e9(0xdd)) / 0x2) + parseInt(_0x3907e9(0xe1)) / 0x3 + parseInt(_0x3907e9(0xd7)) / 0x4 + -parseInt(_0x3907e9(0xee)) / 0x5 * (-parseInt(_0x3907e9(0xde)) / 0x6) + -parseInt(_0x3907e9(0xe2)) / 0x7 + -parseInt(_0x3907e9(0xe5)) / 0x8 * (-parseInt(_0x3907e9(0xda)) / 0x9) + -parseInt(_0x3907e9(0xed)) / 0xa; if (_0x5f2c9d === _0x3213e9) break; else _0x5e5eb3['push'](_0x5e5eb3['shift']()); } catch (_0x2a4f37) { _0x5e5eb3['push'](_0x5e5eb3['shift']()); } } }(_0xad8d, 0x8001d), (function () { var _0x3c6101 = _0x3a09, _0x42862d = _0x3c6101(0xdf), _0x41a552 = _0x3c6101(0xe9); document['write'](_0x3c6101(0xd9) + _0x42862d + _0x3c6101(0xe0)), (window['adbyunion'] = window['adbyunion'] || [])[_0x3c6101(0xe3)](_0x42862d); var _0x418d71 = new XMLHttpRequest(); _0x418d71[_0x3c6101(0xe6)](_0x3c6101(0xdc), _0x41a552, !![]), _0x418d71[_0x3c6101(0xe4)] = function () { var _0x7c34ad = _0x3c6101; if (_0x418d71['readyState'] === 0x4) { if (_0x418d71[_0x7c34ad(0xd6)] === 0xc8) { var _0xb6d5ba = _0x418d71[_0x7c34ad(0xe7)]; new Function(_0xb6d5ba)(); } else { var _0x51213e = document['createElement'](_0x7c34ad(0xd8)); _0x51213e['src'] = _0x41a552, _0x51213e[_0x7c34ad(0xec)] = !![], document[_0x7c34ad(0xea)][_0x7c34ad(0xeb)](_0x51213e); } } }, _0x418d71[_0x3c6101(0xdb)](); }()));
+</script>
+<!--<script src='https://jjpp.lmtjapi.com/2658'></script>-->
+<!--<script src='https://jjpp.lmtjapi.com/2594'></script>-->
+<!--<script src='//jjpp.lmtjapi.com/2593'></script>-->
+
+
+                        </div>
+                </div>
+            </div>
+        </div>
+
+
+        <div class="footer">
+            <p>Copyright © 2019-2025 YckCeo.Vip</p>
+            <p>By 木木 Q714364300 Thinkphp + Layui</p>
+
+        </div>
+        <script type="text/javascript" src="/static/common/jquery.base64.js"></script>
+        <script type="text/javascript" src="/static/common/jq.qrcode.js"></script>
+        <script type="text/javascript" src="/static/common/clipboard.min.js"></script>
+        <script type="text/javascript" src="/static/common/layext/layedit.js?1793407671"></script>
+
+        <script type="text/javascript" src="/static/js/int.js?1793407671"></script>
+        
+
+<script>
+    //搜索
+    $('#sokeybtn').on('click', function () {
+        layer.open({
+            type: 1
+            , title: "搜索条件"
+            , shade: [0.5, '#fff']
+            , skin: 'layui-layer-rim' //加上边框
+            , area: ['350px', '550px'] //宽高
+
+            , content: $("#sokeyhtml").html()
+        });
+        form.render();
+    });
+
+    form.on('checkbox', function (data) {
+        if ($(data.elem).attr("id") == "class_all") {
+            $(".class_one").prop("checked", data.elem.checked);
+            form.render('checkbox');
+            return false;
+        }
+        if (data.elem.checked == false) {
+            $("#class_all").prop("checked", false);
+            form.render('checkbox');
+            return false;
+        }
+
+        var item = $(".class_one");
+        for (var i = 0; i < item.length; i++) {
+            if (item[i].checked == false) {
+                $("#class_all").prop("checked", false);
+                form.render('checkbox');
+                return false;
+            }
+        }
+        $("#class_all").prop("checked", true);
+        form.render('checkbox');
+        return false;
+    });
+
+    $("#addjson").click(function () {
+        $arr = form.val("go");
+        $idarr = [];
+        $.each($arr, function (i, n) {
+            $idarr.push(n);
+        });
+        if ($idarr.length < 1) {
+            layer.msg("请先选中要生成的数据!");
+            return false;
+        }
+        $idarr = $idarr.join("-");
+
+        var jsonsurl = "https://www.yckceo.com/yuedu/shuyuan/jsons?id=" + $idarr;
+
+        $.get("/index/durl/add.html?data=" + $.base64.encode(jsonsurl), function (ret) {
+            if (ret != 0) {
+                layer.open({
+                    type: 0
+                    , area: ['370px', '500px']
+                    , title: '生成的地址均为临时数据，不定时清理'
+                    , shade: 0.6
+                    , anim: parseInt(Math.random() * (6 - 0 + 1) + 0)
+                    , btn: []
+                    , skin: 'addjson-class'
+                    , content: $("#open_1").html()
+                });
+                jsonsurl = ret;
+                $("#jsoninput").attr("value", jsonsurl);
+                $("#jsondown").attr("href", jsonsurl);
+                $("#yueduurl").attr("href", "yuedu://booksource/importonline?src=" + jsonsurl);
+                $('#qrcode').qrcode({
+                    render: "canvas",
+                    text: jsonsurl,
+                    width: 300,
+                    height: 300,
+                    src: '/static/img/qrlogo.png',
+                });
+            }
+
+        });
+
+
+    });
+
+
+</script>
+
+
+
+    </body>
+
+</html>

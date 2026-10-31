@@ -1087,8 +1087,8 @@ class CDP {
 
     // 源仓库目录解析（2026-10-31）：用真实抓下来的两个页面当夹具，锁住「id + 标题」的抽取
     const cat = await probe('源仓库解析', `
-      const singleHtml = await (await fetch('${base}yck-single-p3.html')).text();
-      const collHtml = await (await fetch('${base}yck-collection-p1.html')).text();
+      const singleHtml = await (await fetch('${base}../../testdata/yck-single-p3.html')).text().catch(() => '');
+      const collHtml = await (await fetch('${base}../../testdata/yck-collection-p1.html')).text().catch(() => '');
       const s = parseCatalogHtml(singleHtml, 'single');
       const c = parseCatalogHtml(collHtml, 'collection');
       return {

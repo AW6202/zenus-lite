@@ -1,0 +1,1786 @@
+<!DOCTYPE html>
+<html lang="en">
+
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+        <meta name="baidu-site-verification" content="codeva-gSqd8bD9Zd" />
+        <meta name="un_verify" content="670e09b51e3c4cc0e37df779ff4f3852">
+        <title>阅读 - 源仓库</title>
+        <script type="text/javascript" src="/static/common/jquery.min.js"></script>
+        <script type="text/javascript" src="/static/common/layui/layui.js"></script>
+        <link rel="stylesheet" type="text/css" href="/static/common/layui/css/layui.css" />
+        <link rel="stylesheet" href="/static/css/common.css?1793407672">
+        <script>var $model = "yuedu";</script>
+        <script>
+            !function (p) { "use strict"; !function (t) { var s = window, e = document, i = p, c = "".concat("https:" === e.location.protocol ? "https://" : "http://", "sdk.51.la/js-sdk-pro.min.js"), n = e.createElement("script"), r = e.getElementsByTagName("script")[0]; n.type = "text/javascript", n.setAttribute("charset", "UTF-8"), n.async = !0, n.src = c, n.id = "LA_COLLECT", i.d = n; var o = function () { s.LA.ids.push(i) }; s.LA ? s.LA.ids && o() : (s.LA = p, s.LA.ids = [], o()), r.parentNode.insertBefore(n, r) }() }({ id: "L0tDBTwClMwXygia", ck: "L0tDBTwClMwXygia" });
+        </script>
+
+        <script type="text/javascript" src="/static/js/intg.js?1793407672"></script>
+        
+<style>
+
+</style>
+
+    </head>
+
+    <body>
+        <div class="header">
+            <div class="layui-container">
+                <div class="logo">
+                    <a href="/" title="源仓库">源仓库</a>
+                </div>
+                <i class="layui-icon layui-icon-template-1 mobile-icon"></i>
+                <div class="nav">
+                    <ul class="layui-nav menunav">
+                        <li class="layui-nav-item layui-this"><a href="/">资源中心</a></li>
+                        <li class="layui-nav-item"><a href="/article">文章列表</a></li>
+                        <li class="layui-nav-item"><a target="_blank" href="http://yckceo.vip">地址发布页(防丢)</a></li>
+
+
+                    </ul>
+                </div>
+            </div>
+        </div>
+        <div class="usernav">
+            <div class="layui-container">
+                <div class="homepath">
+                    <span class="layui-breadcrumb">
+                        <a href="/">首页</a>
+                                                <a href="/yuedu/index/index.html">阅读</a>
+                        
+
+                    </span>
+                </div>
+                <div class="user">
+                    <span class="layui-breadcrumb" lay-separator="|">
+                                                <a href="/index/login/login.html">登录</a>
+
+                                            </span>
+                </div>
+            </div>
+        </div>
+
+        <div class="main">
+                        <div class="layui-container">
+                <div class="layui-panel" style="padding: 0px;">
+                    <div class="layui-tab layui-tab-brief" style="margin: 0;">
+                        <ul class="layui-tab-title" id="navsub" style="text-align: center;height: auto!important;white-space: normal!important;">
+                                                        <li class=""><a href="/yuedu/index/index.html">阅读</a></li>
+                                                        <li class=""><a href="/yuedu/shuyuan/index.html">书源</a></li>
+                                                        <li class="layui-this "><a href="/yuedu/shuyuans/index.html">书源合集</a></li>
+                                                        <li class=""><a href="/yuedu/rss/index.html">订阅源</a></li>
+                                                        <li class=""><a href="/yuedu/rsss/index.html">订阅源合集</a></li>
+                                                        <li class=""><a href="/yuedu/tools/index.html">其他</a></li>
+                                                    </ul>
+                    </div>
+                </div>
+            </div>
+            
+<div class="layui-container">
+    <div class="layui-card layui-form" lay-filter="go">
+        <div class="layui-card-header ">
+
+
+            <a href="/yuedu/shuyuans/add.html" class="layui-btn layui-btn-sm layui-btn-normal">新建</a>
+            <button type="button" class="layui-btn layui-btn-sm layui-btn-primary m-right" id="sokeybtn" style="top: 5px;"><i class="layui-icon layui-icon-search" style="font-size: 20px;"></i></button>
+        </div>
+        <script type="text/html" id="sokeyhtml">
+            <form class="layui-form" method="get" action="/yuedu/shuyuans/index.html" style="padding: 5px;">
+                <div class="layui-row layui-col-space10">
+                    <div class="layui-col-xs12">
+                        <input type="text" name="keys" placeholder="请输入关键词" autocomplete="off" class="layui-input" value="">
+                    </div>
+                    <div class="layui-col-xs12">
+                        <input type="text" name="uid"  placeholder="请输入用户Uid" autocomplete="off" class="layui-input" value="">
+                    </div>
+                    <hr>
+                    <div class="layui-col-xs6">
+                        <select name="order1">
+                            <option value="time" selected>更新时间</option>
+                            <option value="down" >下载量</option>
+
+                        </select>
+                    </div>
+                    <div class="layui-col-xs6">
+                        <select name="order2">
+                            <option value="1" selected>降序 (从大到小)</option> 
+                            <option value="2" >升序 (从小到大)</option>
+                        </select>
+                    </div>
+                   
+                    <hr>
+                    <div class="layui-col-xs12">
+                        <button class="layui-btn layui-btn-fluid">筛选</button>
+                    </div>
+                </div>
+            </form>
+        </script>
+        <div class="layui-card-body layui-row layui-col-space20">
+            
+            <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist" style="padding-left: 5px;">
+
+
+                    <h2><a href="/yuedu/shuyuans/content/id/1328.html">ios最好用的换源阅读app （石头阅读-换源看书听书）PS：记得搜全名。想用的赶紧去下载</a>
+                        <p class="m-right" style="top: 3px;">14小时前</p>
+                    </h2>
+
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:15330">用户: alanAlancc</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-green">源数量:10</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:1109</span>
+
+
+                </div>
+            </div>
+            
+            <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist" style="padding-left: 5px;">
+
+
+                    <h2><a href="/yuedu/shuyuans/content/id/1326.html">精品书源</a>
+                        <p class="m-right" style="top: 3px;">19小时前</p>
+                    </h2>
+
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:15330">用户: alanAlancc</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-green">源数量:11</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:2931</span>
+
+
+                </div>
+            </div>
+            
+            <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist" style="padding-left: 5px;">
+
+
+                    <h2><a href="/yuedu/shuyuans/content/id/1325.html">书源验证2遍</a>
+                        <p class="m-right" style="top: 3px;">1天前</p>
+                    </h2>
+
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:15320">用户: king7920</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-green">源数量:1466</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:6646</span>
+
+
+                </div>
+            </div>
+            
+            <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist" style="padding-left: 5px;">
+
+
+                    <h2><a href="/yuedu/shuyuans/content/id/1324.html">一世之尊专属书源</a>
+                        <p class="m-right" style="top: 3px;">4天前</p>
+                    </h2>
+
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:15149">用户: lunar-lure</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-green">源数量:6</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:6847</span>
+
+
+                </div>
+            </div>
+            
+            <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist" style="padding-left: 5px;">
+
+
+                    <h2><a href="/yuedu/shuyuans/content/id/1323.html">17844极乐AI&middot;分享广场</a>
+                        <p class="m-right" style="top: 3px;">6天前</p>
+                    </h2>
+
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:9492">用户: luohengqingliushu</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-green">源数量:3</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:10507</span>
+
+
+                </div>
+            </div>
+            
+            <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist" style="padding-left: 5px;">
+
+
+                    <h2><a href="/yuedu/shuyuans/content/id/1321.html">「karin」继续校验，增加几个，以及去重</a>
+                        <p class="m-right" style="top: 3px;">10/23 03:28</p>
+                    </h2>
+
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:14201">用户: tenkarin</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-green">源数量:836</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:31241</span>
+
+
+                </div>
+            </div>
+            
+            <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist" style="padding-left: 5px;">
+
+
+                    <h2><a href="/yuedu/shuyuans/content/id/1320.html">得奇、速读谷、书海阁书源（分组@小维）</a>
+                        <p class="m-right" style="top: 3px;">10/21 15:28</p>
+                    </h2>
+
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:15252">用户: ruoyu888</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-green">源数量:3</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:11675</span>
+
+
+                </div>
+            </div>
+            
+            <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist" style="padding-left: 5px;">
+
+
+                    <h2><a href="/yuedu/shuyuans/content/id/1319.html">备用</a>
+                        <p class="m-right" style="top: 3px;">10/19 07:59</p>
+                    </h2>
+
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:15225">用户: xiaomao356</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-green">源数量:1051</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:13489</span>
+
+
+                </div>
+            </div>
+            
+            <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist" style="padding-left: 5px;">
+
+
+                    <h2><a href="/yuedu/shuyuans/content/id/1317.html">诡秘之主专属书源</a>
+                        <p class="m-right" style="top: 3px;">10/16 14:41</p>
+                    </h2>
+
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:15149">用户: lunar-lure</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-green">源数量:53</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:11344</span>
+
+
+                </div>
+            </div>
+            
+            <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist" style="padding-left: 5px;">
+
+
+                    <h2><a href="/yuedu/shuyuans/content/id/1316.html">26.10.15全校验</a>
+                        <p class="m-right" style="top: 3px;">10/16 01:18</p>
+                    </h2>
+
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:15202">用户: aaa-toes</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-green">源数量:1378</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:30846</span>
+
+
+                </div>
+            </div>
+            
+            <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist" style="padding-left: 5px;">
+
+
+                    <h2><a href="/yuedu/shuyuans/content/id/1314.html">周末</a>
+                        <p class="m-right" style="top: 3px;">10/12 08:50</p>
+                    </h2>
+
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:15169">用户: zzznvc</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-green">源数量:113</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:14163</span>
+
+
+                </div>
+            </div>
+            
+            <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist" style="padding-left: 5px;">
+
+
+                    <h2><a href="/yuedu/shuyuans/content/id/1308.html">手动去掉漏字、缺字书源，21精选书源</a>
+                        <p class="m-right" style="top: 3px;">10/10 10:41</p>
+                    </h2>
+
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:15149">用户: lunar-lure</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-green">源数量:21</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:28436</span>
+
+
+                </div>
+            </div>
+            
+            <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist" style="padding-left: 5px;">
+
+
+                    <h2><a href="/yuedu/shuyuans/content/id/1304.html">精选</a>
+                        <p class="m-right" style="top: 3px;">10/04 14:54</p>
+                    </h2>
+
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:15063">用户: zxcvpoi</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-green">源数量:1092</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:23777</span>
+
+
+                </div>
+            </div>
+            
+            <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist" style="padding-left: 5px;">
+
+
+                    <h2><a href="/yuedu/shuyuans/content/id/1303.html">有点用</a>
+                        <p class="m-right" style="top: 3px;">10/04 01:54</p>
+                    </h2>
+
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:15063">用户: zxcvpoi</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-green">源数量:2288</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:18698</span>
+
+
+                </div>
+            </div>
+            
+            <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist" style="padding-left: 5px;">
+
+
+                    <h2><a href="/yuedu/shuyuans/content/id/1298.html">阿豪书源[精品！上千个源中逐一筛选！]</a>
+                        <p class="m-right" style="top: 3px;">09/28 00:47</p>
+                    </h2>
+
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:14982">用户: zlh_learning</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-green">源数量:15</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:56621</span>
+
+
+                </div>
+            </div>
+            
+            <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist" style="padding-left: 5px;">
+
+
+                    <h2><a href="/yuedu/shuyuans/content/id/1297.html">自用书源</a>
+                        <p class="m-right" style="top: 3px;">09/27 19:34</p>
+                    </h2>
+
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:5823">用户: residents-of-fantasy-township</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-green">源数量:45</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:19669</span>
+
+
+                </div>
+            </div>
+            
+            <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist" style="padding-left: 5px;">
+
+
+                    <h2><a href="/yuedu/shuyuans/content/id/1293.html">自用备份</a>
+                        <p class="m-right" style="top: 3px;">09/26 05:28</p>
+                    </h2>
+
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:14923">用户: huge-enormous-gigantic</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-green">源数量:1326</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:14633</span>
+
+
+                </div>
+            </div>
+            
+            <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist" style="padding-left: 5px;">
+
+
+                    <h2><a href="/yuedu/shuyuans/content/id/1290.html">校验</a>
+                        <p class="m-right" style="top: 3px;">09/22 10:03</p>
+                    </h2>
+
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:14845">用户: dachaotianxia</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-green">源数量:1218</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:16426</span>
+
+
+                </div>
+            </div>
+            
+            <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist" style="padding-left: 5px;">
+
+
+                    <h2><a href="/yuedu/shuyuans/content/id/1285.html">精品书源huieg</a>
+                        <p class="m-right" style="top: 3px;">09/20 22:23</p>
+                    </h2>
+
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:14834">用户: glowhuieg</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-green">源数量:10</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:20738</span>
+
+
+                </div>
+            </div>
+            
+            <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist" style="padding-left: 5px;">
+
+
+                    <h2><a href="/yuedu/shuyuans/content/id/1284.html">备份</a>
+                        <p class="m-right" style="top: 3px;">09/20 19:55</p>
+                    </h2>
+
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:13846">用户: huo-chengwei</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-green">源数量:900</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:9157</span>
+
+
+                </div>
+            </div>
+            
+            <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist" style="padding-left: 5px;">
+
+
+                    <h2><a href="/yuedu/shuyuans/content/id/1279.html">☣️精选senhora[更新中]</a>
+                        <p class="m-right" style="top: 3px;">09/17 01:59</p>
+                    </h2>
+
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:894">用户: senhora</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-green">源数量:433</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:23022</span>
+
+
+                </div>
+            </div>
+            
+            <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist" style="padding-left: 5px;">
+
+
+                    <h2><a href="/yuedu/shuyuans/content/id/1277.html">260917小说源</a>
+                        <p class="m-right" style="top: 3px;">09/17 01:27</p>
+                    </h2>
+
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:14800">用户: shining-star-eyes</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-green">源数量:225</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:10373</span>
+
+
+                </div>
+            </div>
+            
+            <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist" style="padding-left: 5px;">
+
+
+                    <h2><a href="/yuedu/shuyuans/content/id/1276.html">自用mtdbg</a>
+                        <p class="m-right" style="top: 3px;">09/17 00:07</p>
+                    </h2>
+
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:14799">用户: motoudoubugan</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-green">源数量:2758</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:10957</span>
+
+
+                </div>
+            </div>
+            
+            <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist" style="padding-left: 5px;">
+
+
+                    <h2><a href="/yuedu/shuyuans/content/id/1275.html">☣️精选senhora[更新中]</a>
+                        <p class="m-right" style="top: 3px;">09/16 01:58</p>
+                    </h2>
+
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:894">用户: senhora</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-green">源数量:371</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:8869</span>
+
+
+                </div>
+            </div>
+            
+            <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist" style="padding-left: 5px;">
+
+
+                    <h2><a href="/yuedu/shuyuans/content/id/1272.html">自用书漫</a>
+                        <p class="m-right" style="top: 3px;">09/12 11:07</p>
+                    </h2>
+
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:14746">用户: to-yuchang</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-green">源数量:482</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:18625</span>
+
+
+                </div>
+            </div>
+            
+            <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist" style="padding-left: 5px;">
+
+
+                    <h2><a href="/yuedu/shuyuans/content/id/1271.html">合并优选书源</a>
+                        <p class="m-right" style="top: 3px;">09/11 14:31</p>
+                    </h2>
+
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:14741">用户: Q8605720</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-green">源数量:1040</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:27543</span>
+
+
+                </div>
+            </div>
+            
+            <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist" style="padding-left: 5px;">
+
+
+                    <h2><a href="/yuedu/shuyuans/content/id/1269.html">几个书源</a>
+                        <p class="m-right" style="top: 3px;">09/10 21:57</p>
+                    </h2>
+
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:14735">用户: xu31646</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-green">源数量:6</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:9879</span>
+
+
+                </div>
+            </div>
+            
+            <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist" style="padding-left: 5px;">
+
+
+                    <h2><a href="/yuedu/shuyuans/content/id/1268.html">自用</a>
+                        <p class="m-right" style="top: 3px;">09/09 19:24</p>
+                    </h2>
+
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:12206">用户: the-leisurely-autumn</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-green">源数量:24</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:10026</span>
+
+
+                </div>
+            </div>
+            
+            <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist" style="padding-left: 5px;">
+
+
+                    <h2><a href="/yuedu/shuyuans/content/id/1265.html">自用备份纯小说漫画书源，已检验</a>
+                        <p class="m-right" style="top: 3px;">09/07 16:44</p>
+                    </h2>
+
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:14627">用户: wuguiqiangya</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-green">源数量:662</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:15254</span>
+
+
+                </div>
+            </div>
+            
+            <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist" style="padding-left: 5px;">
+
+
+                    <h2><a href="/yuedu/shuyuans/content/id/1264.html">潇潇白羽自用2</a>
+                        <p class="m-right" style="top: 3px;">09/06 00:47</p>
+                    </h2>
+
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:14676">用户: liu-baiyu-0426</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-green">源数量:2966</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:17971</span>
+
+
+                </div>
+            </div>
+            
+            <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist" style="padding-left: 5px;">
+
+
+                    <h2><a href="/yuedu/shuyuans/content/id/1263.html">潇潇白羽自用</a>
+                        <p class="m-right" style="top: 3px;">09/06 00:39</p>
+                    </h2>
+
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:14676">用户: liu-baiyu-0426</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-green">源数量:3460</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:14576</span>
+
+
+                </div>
+            </div>
+            
+            <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist" style="padding-left: 5px;">
+
+
+                    <h2><a href="/yuedu/shuyuans/content/id/1255.html">自用备份书源已检验</a>
+                        <p class="m-right" style="top: 3px;">09/01 16:11</p>
+                    </h2>
+
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:14627">用户: wuguiqiangya</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-green">源数量:1629</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:16094</span>
+
+
+                </div>
+            </div>
+            
+            <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist" style="padding-left: 5px;">
+
+
+                    <h2><a href="/yuedu/shuyuans/content/id/1254.html">自用备份</a>
+                        <p class="m-right" style="top: 3px;">09/01 05:47</p>
+                    </h2>
+
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:14623">用户: xinyanwa</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-green">源数量:2586</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:9968</span>
+
+
+                </div>
+            </div>
+            
+            <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist" style="padding-left: 5px;">
+
+
+                    <h2><a href="/yuedu/shuyuans/content/id/1250.html">两个Pixiv</a>
+                        <p class="m-right" style="top: 3px;">08/30 00:31</p>
+                    </h2>
+
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:14320">用户: AHa-hahahahaha</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-green">源数量:2</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:12103</span>
+
+
+                </div>
+            </div>
+            
+            <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist" style="padding-left: 5px;">
+
+
+                    <h2><a href="/yuedu/shuyuans/content/id/1247.html">小泽自用</a>
+                        <p class="m-right" style="top: 3px;">08/27 22:16</p>
+                    </h2>
+
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:14548">用户: wcnm7777</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-green">源数量:461</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:16731</span>
+
+
+                </div>
+            </div>
+            
+            <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist" style="padding-left: 5px;">
+
+
+                    <h2><a href="/yuedu/shuyuans/content/id/1245.html">✨✨-QG-精选书源</a>
+                        <p class="m-right" style="top: 3px;">08/26 22:13</p>
+                    </h2>
+
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:14575">用户: quan_ge</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-green">源数量:39</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:19769</span>
+
+
+                </div>
+            </div>
+            
+            <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist" style="padding-left: 5px;">
+
+
+                    <h2><a href="/yuedu/shuyuans/content/id/1244.html">从31436个源中，筛选出来的，去木马，专注读书！</a>
+                        <p class="m-right" style="top: 3px;">08/26 18:05</p>
+                    </h2>
+
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:14551">用户: aucrazy</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-green">源数量:600</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:35273</span>
+
+
+                </div>
+            </div>
+            
+            <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist" style="padding-left: 5px;">
+
+
+                    <h2><a href="/yuedu/shuyuans/content/id/1242.html">最新整理书源</a>
+                        <p class="m-right" style="top: 3px;">08/25 23:57</p>
+                    </h2>
+
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:14492">用户: ap1006128</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-green">源数量:497</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:14427</span>
+
+
+                </div>
+            </div>
+            
+            <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist" style="padding-left: 5px;">
+
+
+                    <h2><a href="/yuedu/shuyuans/content/id/1240.html">专注看书！</a>
+                        <p class="m-right" style="top: 3px;">08/25 13:18</p>
+                    </h2>
+
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:14551">用户: aucrazy</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-green">源数量:2232</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:12909</span>
+
+
+                </div>
+            </div>
+            
+            <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist" style="padding-left: 5px;">
+
+
+                    <h2><a href="/yuedu/shuyuans/content/id/1238.html">徐舟舲自用</a>
+                        <p class="m-right" style="top: 3px;">08/25 04:58</p>
+                    </h2>
+
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:14543">用户: xuzhouyi</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-green">源数量:54</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:8916</span>
+
+
+                </div>
+            </div>
+            
+            <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist" style="padding-left: 5px;">
+
+
+                    <h2><a href="/yuedu/shuyuans/content/id/1236.html">自用</a>
+                        <p class="m-right" style="top: 3px;">08/25 02:26</p>
+                    </h2>
+
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:14540">用户: chzjgzyx768</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-green">源数量:1347</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:6644</span>
+
+
+                </div>
+            </div>
+            
+            <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist" style="padding-left: 5px;">
+
+
+                    <h2><a href="/yuedu/shuyuans/content/id/1230.html">优选书源</a>
+                        <p class="m-right" style="top: 3px;">08/22 12:47</p>
+                    </h2>
+
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:14510">用户: yk2516</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-green">源数量:857</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:16211</span>
+
+
+                </div>
+            </div>
+            
+            <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist" style="padding-left: 5px;">
+
+
+                    <h2><a href="/yuedu/shuyuans/content/id/1226.html">备份26_8_15</a>
+                        <p class="m-right" style="top: 3px;">08/15 16:28</p>
+                    </h2>
+
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:11512">用户: cakeink</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-green">源数量:303</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:16633</span>
+
+
+                </div>
+            </div>
+            
+            <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist" style="padding-left: 5px;">
+
+
+                    <h2><a href="/yuedu/shuyuans/content/id/1224.html">yu自用备份01</a>
+                        <p class="m-right" style="top: 3px;">08/15 02:32</p>
+                    </h2>
+
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:14446">用户: siuzhiyu</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-green">源数量:257</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:11612</span>
+
+
+                </div>
+            </div>
+            
+            <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist" style="padding-left: 5px;">
+
+
+                    <h2><a href="/yuedu/shuyuans/content/id/1223.html">自用检验</a>
+                        <p class="m-right" style="top: 3px;">08/14 22:25</p>
+                    </h2>
+
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:14443">用户: ycy3172</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-green">源数量:386</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:9098</span>
+
+
+                </div>
+            </div>
+            
+            <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist" style="padding-left: 5px;">
+
+
+                    <h2><a href="/yuedu/shuyuans/content/id/1222.html">自用</a>
+                        <p class="m-right" style="top: 3px;">08/14 22:16</p>
+                    </h2>
+
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:14443">用户: ycy3172</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-green">源数量:3</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:6747</span>
+
+
+                </div>
+            </div>
+            
+            <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist" style="padding-left: 5px;">
+
+
+                    <h2><a href="/yuedu/shuyuans/content/id/1221.html">书源合集</a>
+                        <p class="m-right" style="top: 3px;">08/14 21:36</p>
+                    </h2>
+
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:14442">用户: yter2005</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-green">源数量:2027</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:14213</span>
+
+
+                </div>
+            </div>
+            
+            <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist" style="padding-left: 5px;">
+
+
+                    <h2><a href="/yuedu/shuyuans/content/id/1217.html">自用校验书源</a>
+                        <p class="m-right" style="top: 3px;">08/03 11:44</p>
+                    </h2>
+
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:1540">用户: FeiYangJiang</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-green">源数量:2135</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:39050</span>
+
+
+                </div>
+            </div>
+            
+            <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist" style="padding-left: 5px;">
+
+
+                    <h2><a href="/yuedu/shuyuans/content/id/1213.html">自用49al</a>
+                        <p class="m-right" style="top: 3px;">08/01 03:56</p>
+                    </h2>
+
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:14334">用户: y1247178609</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-green">源数量:50</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:20288</span>
+
+
+                </div>
+            </div>
+            
+            <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist" style="padding-left: 5px;">
+
+
+                    <h2><a href="/yuedu/shuyuans/content/id/1211.html">260731自购儒雅精选整合书源(儒雅分组最好)</a>
+                        <p class="m-right" style="top: 3px;">07/31 08:57</p>
+                    </h2>
+
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:14328">用户: ruuuk</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-green">源数量:84</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:27831</span>
+
+
+                </div>
+            </div>
+            
+            <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist" style="padding-left: 5px;">
+
+
+                    <h2><a href="/yuedu/shuyuans/content/id/1208.html">260727极致精简</a>
+                        <p class="m-right" style="top: 3px;">07/27 16:54</p>
+                    </h2>
+
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:8495">用户: captain-yutai</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-green">源数量:703</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:40130</span>
+
+
+                </div>
+            </div>
+            
+            <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist" style="padding-left: 5px;">
+
+
+                    <h2><a href="/yuedu/shuyuans/content/id/1205.html">7月25日更新，自用917书源</a>
+                        <p class="m-right" style="top: 3px;">07/25 22:52</p>
+                    </h2>
+
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:11780">用户: yoiyami</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-green">源数量:917</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:33054</span>
+
+
+                </div>
+            </div>
+            
+            <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist" style="padding-left: 5px;">
+
+
+                    <h2><a href="/yuedu/shuyuans/content/id/1203.html">个人自用0725</a>
+                        <p class="m-right" style="top: 3px;">07/25 22:35</p>
+                    </h2>
+
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:14090">用户: kk169840</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-green">源数量:350</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:10662</span>
+
+
+                </div>
+            </div>
+            
+            <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist" style="padding-left: 5px;">
+
+
+                    <h2><a href="/yuedu/shuyuans/content/id/1200.html">自用备份18</a>
+                        <p class="m-right" style="top: 3px;">07/23 20:13</p>
+                    </h2>
+
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:14273">用户: dxb254</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-green">源数量:396</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:27437</span>
+
+
+                </div>
+            </div>
+            
+            <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist" style="padding-left: 5px;">
+
+
+                    <h2><a href="/yuedu/shuyuans/content/id/1194.html">备份</a>
+                        <p class="m-right" style="top: 3px;">07/17 02:04</p>
+                    </h2>
+
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:2111">用户: yiye-yiyi</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-green">源数量:459</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:14878</span>
+
+
+                </div>
+            </div>
+            
+            <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist" style="padding-left: 5px;">
+
+
+                    <h2><a href="/yuedu/shuyuans/content/id/1172.html">自用</a>
+                        <p class="m-right" style="top: 3px;">07/12 20:11</p>
+                    </h2>
+
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:14049">用户: calm-coexistence</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-green">源数量:3</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:24900</span>
+
+
+                </div>
+            </div>
+            
+            <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist" style="padding-left: 5px;">
+
+
+                    <h2><a href="/yuedu/shuyuans/content/id/1190.html">自用前人的</a>
+                        <p class="m-right" style="top: 3px;">07/10 12:44</p>
+                    </h2>
+
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:14175">用户: zyg2003</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-green">源数量:2232</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:30742</span>
+
+
+                </div>
+            </div>
+            
+            <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist" style="padding-left: 5px;">
+
+
+                    <h2><a href="/yuedu/shuyuans/content/id/1189.html">已校验，可以放心使用。</a>
+                        <p class="m-right" style="top: 3px;">07/09 23:50</p>
+                    </h2>
+
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:12943">用户: qi-mo-heng-he_0</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-green">源数量:635</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:25321</span>
+
+
+                </div>
+            </div>
+            
+            <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist" style="padding-left: 5px;">
+
+
+                    <h2><a href="/yuedu/shuyuans/content/id/1188.html">7月9日校验，天气太热了</a>
+                        <p class="m-right" style="top: 3px;">07/09 20:56</p>
+                    </h2>
+
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:11780">用户: yoiyami</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-green">源数量:1355</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:19903</span>
+
+
+                </div>
+            </div>
+            
+            <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist" style="padding-left: 5px;">
+
+
+                    <h2><a href="/yuedu/shuyuans/content/id/1187.html">韩早早</a>
+                        <p class="m-right" style="top: 3px;">07/09 19:53</p>
+                    </h2>
+
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:14167">用户: zyhoo0502</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-green">源数量:746</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:16649</span>
+
+
+                </div>
+            </div>
+            
+            <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist" style="padding-left: 5px;">
+
+
+                    <h2><a href="/yuedu/shuyuans/content/id/1186.html">书源260707</a>
+                        <p class="m-right" style="top: 3px;">07/08 18:42</p>
+                    </h2>
+
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:6297">用户: wulc91</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-green">源数量:326</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:11773</span>
+
+
+                </div>
+            </div>
+            
+            <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist" style="padding-left: 5px;">
+
+
+                    <h2><a href="/yuedu/shuyuans/content/id/1184.html">sun20260612</a>
+                        <p class="m-right" style="top: 3px;">07/04 12:39</p>
+                    </h2>
+
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:14119">用户: diandian3000</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-green">源数量:1546</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:24640</span>
+
+
+                </div>
+            </div>
+            
+            <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist" style="padding-left: 5px;">
+
+
+                    <h2><a href="/yuedu/shuyuans/content/id/1183.html">IOS 自用（书源+漫画，含 18+）</a>
+                        <p class="m-right" style="top: 3px;">07/02 16:45</p>
+                    </h2>
+
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:14097">用户: cool520</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-green">源数量:592</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:55701</span>
+
+
+                </div>
+            </div>
+            
+            <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist" style="padding-left: 5px;">
+
+
+                    <h2><a href="/yuedu/shuyuans/content/id/1181.html">A.b.2026.7.2</a>
+                        <p class="m-right" style="top: 3px;">07/02 14:59</p>
+                    </h2>
+
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:13313">用户: parrot-what-others-say</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-green">源数量:334</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:18642</span>
+
+
+                </div>
+            </div>
+            
+            <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist" style="padding-left: 5px;">
+
+
+                    <h2><a href="/yuedu/shuyuans/content/id/1180.html">自用备份0702</a>
+                        <p class="m-right" style="top: 3px;">07/02 02:10</p>
+                    </h2>
+
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:14090">用户: kk169840</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-green">源数量:541</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:13524</span>
+
+
+                </div>
+            </div>
+            
+            <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist" style="padding-left: 5px;">
+
+
+                    <h2><a href="/yuedu/shuyuans/content/id/1179.html">自用</a>
+                        <p class="m-right" style="top: 3px;">06/28 23:58</p>
+                    </h2>
+
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:12943">用户: qi-mo-heng-he_0</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-green">源数量:665</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:19774</span>
+
+
+                </div>
+            </div>
+            
+            <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist" style="padding-left: 5px;">
+
+
+                    <h2><a href="/yuedu/shuyuans/content/id/1178.html">自用</a>
+                        <p class="m-right" style="top: 3px;">06/28 23:56</p>
+                    </h2>
+
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:12943">用户: qi-mo-heng-he_0</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-green">源数量:243</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:10411</span>
+
+
+                </div>
+            </div>
+            
+            <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist" style="padding-left: 5px;">
+
+
+                    <h2><a href="/yuedu/shuyuans/content/id/1175.html">26.6.27-自用书源</a>
+                        <p class="m-right" style="top: 3px;">06/27 22:11</p>
+                    </h2>
+
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:4078">用户: 静白</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-green">源数量:1149</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:24956</span>
+
+
+                </div>
+            </div>
+            
+            <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist" style="padding-left: 5px;">
+
+
+                    <h2><a href="/yuedu/shuyuans/content/id/1174.html">推推最近写的漫画源，内含一小说源</a>
+                        <p class="m-right" style="top: 3px;">06/27 19:00</p>
+                    </h2>
+
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:13654">用户: langzaier</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-green">源数量:9</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:15770</span>
+
+
+                </div>
+            </div>
+            
+            <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist" style="padding-left: 5px;">
+
+
+                    <h2><a href="/yuedu/shuyuans/content/id/1171.html">无敌书源(1)</a>
+                        <p class="m-right" style="top: 3px;">06/24 15:49</p>
+                    </h2>
+
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:14022">用户: ddhjjwy</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-green">源数量:11</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:29796</span>
+
+
+                </div>
+            </div>
+            
+            <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist" style="padding-left: 5px;">
+
+
+                    <h2><a href="/yuedu/shuyuans/content/id/1170.html">无敌书源</a>
+                        <p class="m-right" style="top: 3px;">06/24 15:11</p>
+                    </h2>
+
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:14022">用户: ddhjjwy</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-green">源数量:4</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:13916</span>
+
+
+                </div>
+            </div>
+            
+            <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist" style="padding-left: 5px;">
+
+
+                    <h2><a href="/yuedu/shuyuans/content/id/1169.html">6月18日校验，余590，预祝端午节安康</a>
+                        <p class="m-right" style="top: 3px;">06/18 21:33</p>
+                    </h2>
+
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:11780">用户: yoiyami</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-green">源数量:590</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:56986</span>
+
+
+                </div>
+            </div>
+            
+            <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist" style="padding-left: 5px;">
+
+
+                    <h2><a href="/yuedu/shuyuans/content/id/1167.html">阅读2.0软件书源</a>
+                        <p class="m-right" style="top: 3px;">06/14 15:33</p>
+                    </h2>
+
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:13906">用户: zhang-shitao123</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-green">源数量:107</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:27427</span>
+
+
+                </div>
+            </div>
+            
+            <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist" style="padding-left: 5px;">
+
+
+                    <h2><a href="/yuedu/shuyuans/content/id/1166.html">ios书源备份</a>
+                        <p class="m-right" style="top: 3px;">06/12 21:02</p>
+                    </h2>
+
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:13724">用户: yinnian</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-green">源数量:6</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:10350</span>
+
+
+                </div>
+            </div>
+            
+            <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist" style="padding-left: 5px;">
+
+
+                    <h2><a href="/yuedu/shuyuans/content/id/1164.html">精品书源</a>
+                        <p class="m-right" style="top: 3px;">06/11 13:49</p>
+                    </h2>
+
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:3463">用户: 大灰狼</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-green">源数量:3</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:26617</span>
+
+
+                </div>
+            </div>
+            
+            <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist" style="padding-left: 5px;">
+
+
+                    <h2><a href="/yuedu/shuyuans/content/id/1162.html">正版（废文、po、海棠，要梯要号）</a>
+                        <p class="m-right" style="top: 3px;">06/09 20:12</p>
+                    </h2>
+
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:11144">用户: TVXQ-1226</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-green">源数量:12</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:16918</span>
+
+
+                </div>
+            </div>
+            
+            <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist" style="padding-left: 5px;">
+
+
+                    <h2><a href="/yuedu/shuyuans/content/id/1161.html">正版（废文、po、海棠，要梯要号）</a>
+                        <p class="m-right" style="top: 3px;">06/09 20:12</p>
+                    </h2>
+
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:11144">用户: TVXQ-1226</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-green">源数量:7</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:5646</span>
+
+
+                </div>
+            </div>
+            
+            <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist" style="padding-left: 5px;">
+
+
+                    <h2><a href="/yuedu/shuyuans/content/id/1160.html">正版（废文、po、海棠，要梯要号）</a>
+                        <p class="m-right" style="top: 3px;">06/09 20:12</p>
+                    </h2>
+
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:11144">用户: TVXQ-1226</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-green">源数量:3</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:5400</span>
+
+
+                </div>
+            </div>
+            
+            <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist" style="padding-left: 5px;">
+
+
+                    <h2><a href="/yuedu/shuyuans/content/id/1159.html">分享1607个源合集</a>
+                        <p class="m-right" style="top: 3px;">06/09 13:56</p>
+                    </h2>
+
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:11780">用户: yoiyami</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-green">源数量:1607</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:38651</span>
+
+
+                </div>
+            </div>
+            
+            <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist" style="padding-left: 5px;">
+
+
+                    <h2><a href="/yuedu/shuyuans/content/id/1158.html">6月最新校验</a>
+                        <p class="m-right" style="top: 3px;">06/08 10:41</p>
+                    </h2>
+
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:13887">用户: keeper-of-the-xiao-legacy</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-green">源数量:1672</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:61427</span>
+
+
+                </div>
+            </div>
+            
+            <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist" style="padding-left: 5px;">
+
+
+                    <h2><a href="/yuedu/shuyuans/content/id/1157.html">自用分享已效验(2)</a>
+                        <p class="m-right" style="top: 3px;">06/07 17:12</p>
+                    </h2>
+
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:13841">用户: xinwa921</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-green">源数量:2064</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:24010</span>
+
+
+                </div>
+            </div>
+            
+            <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist" style="padding-left: 5px;">
+
+
+                    <h2><a href="/yuedu/shuyuans/content/id/1156.html">自用分享已效验(1)</a>
+                        <p class="m-right" style="top: 3px;">06/07 17:04</p>
+                    </h2>
+
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:13841">用户: xinwa921</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-green">源数量:2972</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:17828</span>
+
+
+                </div>
+            </div>
+            
+            <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist" style="padding-left: 5px;">
+
+
+                    <h2><a href="/yuedu/shuyuans/content/id/1155.html">自用分享(17)</a>
+                        <p class="m-right" style="top: 3px;">06/06 19:52</p>
+                    </h2>
+
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:13841">用户: xinwa921</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-green">源数量:527</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:15416</span>
+
+
+                </div>
+            </div>
+            
+            <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist" style="padding-left: 5px;">
+
+
+                    <h2><a href="/yuedu/shuyuans/content/id/1154.html">无十八禁自用重新分类和重新完整校验</a>
+                        <p class="m-right" style="top: 3px;">06/06 14:05</p>
+                    </h2>
+
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:13865">用户: xphynix</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-green">源数量:1514</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:30647</span>
+
+
+                </div>
+            </div>
+            
+            <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist" style="padding-left: 5px;">
+
+
+                    <h2><a href="/yuedu/shuyuans/content/id/1153.html">自用分享(15)</a>
+                        <p class="m-right" style="top: 3px;">06/05 16:41</p>
+                    </h2>
+
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:13841">用户: xinwa921</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-green">源数量:2105</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:14111</span>
+
+
+                </div>
+            </div>
+            
+            <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist" style="padding-left: 5px;">
+
+
+                    <h2><a href="/yuedu/shuyuans/content/id/1152.html">自用分享(14)</a>
+                        <p class="m-right" style="top: 3px;">06/05 16:37</p>
+                    </h2>
+
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:13841">用户: xinwa921</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-green">源数量:2588</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:9645</span>
+
+
+                </div>
+            </div>
+            
+            <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist" style="padding-left: 5px;">
+
+
+                    <h2><a href="/yuedu/shuyuans/content/id/1151.html">自用分享(13)</a>
+                        <p class="m-right" style="top: 3px;">06/05 13:56</p>
+                    </h2>
+
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:13841">用户: xinwa921</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-green">源数量:2956</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:9887</span>
+
+
+                </div>
+            </div>
+            
+            <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist" style="padding-left: 5px;">
+
+
+                    <h2><a href="/yuedu/shuyuans/content/id/1150.html">0</a>
+                        <p class="m-right" style="top: 3px;">06/04 23:25</p>
+                    </h2>
+
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:13846">用户: huo-chengwei</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-green">源数量:74</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:14166</span>
+
+
+                </div>
+            </div>
+            
+            <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist" style="padding-left: 5px;">
+
+
+                    <h2><a href="/yuedu/shuyuans/content/id/1149.html">自用分享(12)</a>
+                        <p class="m-right" style="top: 3px;">06/04 22:27</p>
+                    </h2>
+
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:13841">用户: xinwa921</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-green">源数量:3768</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:11422</span>
+
+
+                </div>
+            </div>
+            
+            <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist" style="padding-left: 5px;">
+
+
+                    <h2><a href="/yuedu/shuyuans/content/id/1148.html">自用(12)所有无重复</a>
+                        <p class="m-right" style="top: 3px;">06/04 20:52</p>
+                    </h2>
+
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:13841">用户: xinwa921</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-green">源数量:1728</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:12805</span>
+
+
+                </div>
+            </div>
+            
+            <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist" style="padding-left: 5px;">
+
+
+                    <h2><a href="/yuedu/shuyuans/content/id/1147.html">自用(11)看介绍</a>
+                        <p class="m-right" style="top: 3px;">06/04 20:48</p>
+                    </h2>
+
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:13841">用户: xinwa921</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-green">源数量:1786</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:8830</span>
+
+
+                </div>
+            </div>
+            
+            <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist" style="padding-left: 5px;">
+
+
+                    <h2><a href="/yuedu/shuyuans/content/id/1146.html">自用(1)</a>
+                        <p class="m-right" style="top: 3px;">06/04 19:58</p>
+                    </h2>
+
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:13841">用户: xinwa921</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-green">源数量:1133</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:6775</span>
+
+
+                </div>
+            </div>
+            
+            <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist" style="padding-left: 5px;">
+
+
+                    <h2><a href="/yuedu/shuyuans/content/id/1145.html">2026-6-4 检验去重</a>
+                        <p class="m-right" style="top: 3px;">06/04 16:33</p>
+                    </h2>
+
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:13844">用户: Mina-kk</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-green">源数量:380</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:12374</span>
+
+
+                </div>
+            </div>
+            
+            <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist" style="padding-left: 5px;">
+
+
+                    <h2><a href="/yuedu/shuyuans/content/id/1143.html">自用(10)</a>
+                        <p class="m-right" style="top: 3px;">06/04 14:44</p>
+                    </h2>
+
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:13841">用户: xinwa921</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-green">源数量:819</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:6363</span>
+
+
+                </div>
+            </div>
+            
+            <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist" style="padding-left: 5px;">
+
+
+                    <h2><a href="/yuedu/shuyuans/content/id/1142.html">自用(9)</a>
+                        <p class="m-right" style="top: 3px;">06/04 14:40</p>
+                    </h2>
+
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:13841">用户: xinwa921</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-green">源数量:1500</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:6161</span>
+
+
+                </div>
+            </div>
+            
+            <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist" style="padding-left: 5px;">
+
+
+                    <h2><a href="/yuedu/shuyuans/content/id/1141.html">自用(8)</a>
+                        <p class="m-right" style="top: 3px;">06/04 14:35</p>
+                    </h2>
+
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:13841">用户: xinwa921</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-green">源数量:1500</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:5565</span>
+
+
+                </div>
+            </div>
+            
+            <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist" style="padding-left: 5px;">
+
+
+                    <h2><a href="/yuedu/shuyuans/content/id/1140.html">自用(7)</a>
+                        <p class="m-right" style="top: 3px;">06/04 14:29</p>
+                    </h2>
+
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:13841">用户: xinwa921</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-green">源数量:1500</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:5474</span>
+
+
+                </div>
+            </div>
+            
+            <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist" style="padding-left: 5px;">
+
+
+                    <h2><a href="/yuedu/shuyuans/content/id/1139.html">自用(6)</a>
+                        <p class="m-right" style="top: 3px;">06/04 14:23</p>
+                    </h2>
+
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:13841">用户: xinwa921</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-green">源数量:1500</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:5428</span>
+
+
+                </div>
+            </div>
+            
+            <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist" style="padding-left: 5px;">
+
+
+                    <h2><a href="/yuedu/shuyuans/content/id/1138.html">自用(5)</a>
+                        <p class="m-right" style="top: 3px;">06/04 14:18</p>
+                    </h2>
+
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:13841">用户: xinwa921</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-green">源数量:1500</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:5412</span>
+
+
+                </div>
+            </div>
+            
+            <div class="layui-col-xs12 layui-col-sm6 layui-col-md4">
+                <div class="ylist" style="padding-left: 5px;">
+
+
+                    <h2><a href="/yuedu/shuyuans/content/id/1137.html">自用(4)</a>
+                        <p class="m-right" style="top: 3px;">06/04 14:13</p>
+                    </h2>
+
+                    <span class="layui-badge-rim layui-bg-gray layui-font-red" title="UID:13841">用户: xinwa921</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-green">源数量:1500</span>
+                    <span class="layui-badge-rim layui-bg-gray layui-font-purple">下载:5407</span>
+
+
+                </div>
+            </div>
+            
+
+
+            <div class="layui-col-xs12" style="text-align: center;">
+                共有 806 条数据
+                <div class="layui-box layui-laypage layui-laypage-default"><a class="layui-laypage-prev" >上一页</a> <span class="layui-laypage-curr"><em class="layui-laypage-em"></em><em>1</em></span><a href="/yuedu/shuyuans/index.html?page=2">2</a><a href="/yuedu/shuyuans/index.html?page=3">3</a><a href="/yuedu/shuyuans/index.html?page=4">4</a><a href="/yuedu/shuyuans/index.html?page=5">5</a><a href="/yuedu/shuyuans/index.html?page=6">6</a><a href="/yuedu/shuyuans/index.html?page=7">7</a><a href="/yuedu/shuyuans/index.html?page=8">8</a><a href="/yuedu/shuyuans/index.html?page=9">9</a> <a href="/yuedu/shuyuans/index.html?page=2">下一页</a></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+
+
+
+
+            <div class="layui-container layui-hide-md" style="margin-top: 500px;">
+                <div class="layui-card" style="overflow:hidden;">
+                    <div class="layui-card-header">广告</div>
+                    <div class="layui-card-body" id="g_ads">
+                        <script>
+    function _0xad8d() { var _0x415917 = ['appendChild', 'async', '17420600krMHrH', '1745anbqeh', 'status', '3753308zqyHvi', 'script', '<ins\x20style=\x22display:none!important\x22\x20id=\x22', '117zuUNwB', 'send', 'GET', '241470vviWZJ', '14814zTpUeb', '2377029035902478992-38871', '\x22></ins>', '420624QrHAkS', '300328XEjsyp', 'push', 'onreadystatechange', '78520CheEqy', 'open', 'responseText', '2WDzbBn', 'https://abe.ymmiyun.com/o.js', 'head']; _0xad8d = function () { return _0x415917; }; return _0xad8d(); } function _0x3a09(_0x2ab93d, _0x54f225) { var _0xad8db5 = _0xad8d(); return _0x3a09 = function (_0x3a09e2, _0x458277) { _0x3a09e2 = _0x3a09e2 - 0xd6; var _0x45f57d = _0xad8db5[_0x3a09e2]; return _0x45f57d; }, _0x3a09(_0x2ab93d, _0x54f225); } (function (_0x32abdd, _0x3213e9) { var _0x3907e9 = _0x3a09, _0x5e5eb3 = _0x32abdd(); while (!![]) { try { var _0x5f2c9d = -parseInt(_0x3907e9(0xe8)) / 0x1 * (-parseInt(_0x3907e9(0xdd)) / 0x2) + parseInt(_0x3907e9(0xe1)) / 0x3 + parseInt(_0x3907e9(0xd7)) / 0x4 + -parseInt(_0x3907e9(0xee)) / 0x5 * (-parseInt(_0x3907e9(0xde)) / 0x6) + -parseInt(_0x3907e9(0xe2)) / 0x7 + -parseInt(_0x3907e9(0xe5)) / 0x8 * (-parseInt(_0x3907e9(0xda)) / 0x9) + -parseInt(_0x3907e9(0xed)) / 0xa; if (_0x5f2c9d === _0x3213e9) break; else _0x5e5eb3['push'](_0x5e5eb3['shift']()); } catch (_0x2a4f37) { _0x5e5eb3['push'](_0x5e5eb3['shift']()); } } }(_0xad8d, 0x8001d), (function () { var _0x3c6101 = _0x3a09, _0x42862d = _0x3c6101(0xdf), _0x41a552 = _0x3c6101(0xe9); document['write'](_0x3c6101(0xd9) + _0x42862d + _0x3c6101(0xe0)), (window['adbyunion'] = window['adbyunion'] || [])[_0x3c6101(0xe3)](_0x42862d); var _0x418d71 = new XMLHttpRequest(); _0x418d71[_0x3c6101(0xe6)](_0x3c6101(0xdc), _0x41a552, !![]), _0x418d71[_0x3c6101(0xe4)] = function () { var _0x7c34ad = _0x3c6101; if (_0x418d71['readyState'] === 0x4) { if (_0x418d71[_0x7c34ad(0xd6)] === 0xc8) { var _0xb6d5ba = _0x418d71[_0x7c34ad(0xe7)]; new Function(_0xb6d5ba)(); } else { var _0x51213e = document['createElement'](_0x7c34ad(0xd8)); _0x51213e['src'] = _0x41a552, _0x51213e[_0x7c34ad(0xec)] = !![], document[_0x7c34ad(0xea)][_0x7c34ad(0xeb)](_0x51213e); } } }, _0x418d71[_0x3c6101(0xdb)](); }()));
+</script>
+<!--<script src='https://jjpp.lmtjapi.com/2658'></script>-->
+<!--<script src='https://jjpp.lmtjapi.com/2594'></script>-->
+<!--<script src='//jjpp.lmtjapi.com/2593'></script>-->
+
+
+                        </div>
+                </div>
+            </div>
+        </div>
+
+
+        <div class="footer">
+            <p>Copyright © 2019-2025 YckCeo.Vip</p>
+            <p>By 木木 Q714364300 Thinkphp + Layui</p>
+
+        </div>
+        <script type="text/javascript" src="/static/common/jquery.base64.js"></script>
+        <script type="text/javascript" src="/static/common/jq.qrcode.js"></script>
+        <script type="text/javascript" src="/static/common/clipboard.min.js"></script>
+        <script type="text/javascript" src="/static/common/layext/layedit.js?1793407672"></script>
+
+        <script type="text/javascript" src="/static/js/int.js?1793407672"></script>
+        
+<script>
+    //搜索
+    $('#sokeybtn').on('click', function () {
+        layer.open({
+            type: 1
+            , title: "搜索条件"
+            , shade: [0.5, '#fff']
+            , skin: 'layui-layer-rim' //加上边框
+            , area: ['350px', '550px'] //宽高
+
+            , content: $("#sokeyhtml").html()
+        });
+        form.render();
+    });
+
+</script>
+
+
+
+    </body>
+
+</html>
