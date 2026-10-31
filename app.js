@@ -1,7 +1,7 @@
 // 学习机 Lite — 静态 PWA：内容来自 pack.json，进度存本地，AI 直连 OpenAI 兼容接口
 'use strict';
 
-const BUILD = '2026-10-31.9';
+const BUILD = '2026-10-31.10';
 
 const LS = {
   progress: 'zenus.progress.v1',
@@ -3483,6 +3483,9 @@ function renderSourceManager() {
     + (Number(src.type) === 2 ? ' <span class="sub" style="color:#c60">（漫画源暂不支持正文）</span>' : '')
     + (src.raw ? '' : ' <span class="sub">（旧版只存了名字，请重新导入）</span>') + '</div>'
     + '<div class="sub">' + esc(src.url || '') + '</div></div>'
+    + (needLogin(src)
+      ? '<button class="btn ghost" data-slogin="' + i + '" style="width:auto;padding:6px 10px;font-size:12px">登录</button>'
+      : '')
     + '<button class="btn ghost" data-sopen="' + i + '" style="width:auto;padding:6px 10px;font-size:12px">源站</button>'
     + '<button class="btn ghost" data-stest="' + i + '" style="width:auto;padding:6px 10px;font-size:12px">测试</button>'
     + '<button class="btn ghost" data-sdel="' + i + '" style="width:auto;padding:6px 10px;font-size:12px">删除</button></div>'
@@ -3548,6 +3551,9 @@ function renderSourceManager() {
   };
   view.querySelectorAll('[data-stest]').forEach((el) => {
     el.onclick = () => testSource(Number(el.dataset.stest));
+  });
+  view.querySelectorAll('[data-slogin]').forEach((el) => {
+    el.onclick = () => openSourceLogin(Number(el.dataset.slogin));
   });
   view.querySelectorAll('[data-sopen]').forEach((el) => {
     el.onclick = () => {
@@ -3857,6 +3863,35 @@ function stageText(r) {
   if (s === 'toc-empty') return '目录为空';
   const name = { search: '搜索', toc: '目录', content: '正文' }[s] || s;
   return '卡在' + name + '：' + (r.error || '未知');
+}
+
+// 登录源判定：带 loginUrl / loginUi / cookie 开关的，基本都要先登录
+function needLogin(src) {
+  const raw = src && src.raw;
+  if (!raw) return false;
+  return !!(raw.loginUrl || raw.loginUi || raw.enabledCookieJar);
+}
+
+let pendingLoginUrl = null;
+
+async function openSourceLogin(i) {
+  const src = sources[i];
+  if (!src || !src.raw) return toast('这个书源没有登录配置');
+  const raw = src.raw;
+  const loginUrl = String(raw.loginUrl || '');
+  const isUrl = /^https?:\/\//i.test(loginUrl);
+  const script = isUrl ? '' : loginUrl;   // loginUrl 是 JS 时，登录完成后跑它取 token
+  try {
+    await nativeCall('openLogin', {
+      url: isUrl ? loginUrl : (src.url || raw.bookSourceUrl || ''),
+      name: src.name || '',
+      script,
+    }, 8000);
+    pendingLoginUrl = src.url;
+    toast('登录完成后点「完成登录」，回来会自动重测');
+  } catch (e) {
+    toast('打开登录页失败：' + (e.message || e));
+  }
 }
 
 async function testSource(i) {
@@ -5598,6 +5633,12 @@ document.addEventListener('visibilitychange', () => {
     setTimeout(() => { if (!RDR.book && !RDR.pdf && !(RDR.comicUrls || []).length) openPendingFile(); }, 600);
     // 从别的地方点「一键导入」再切回来：把收件箱里的书源接住
     setTimeout(pullSourceImports, 800);
+    // 刚登录完切回来：自动重测那个源
+    if (pendingLoginUrl) {
+      const idx = sources.findIndex((x) => x.url === pendingLoginUrl);
+      pendingLoginUrl = null;
+      if (idx >= 0) setTimeout(() => testSource(idx), 1200);
+    }
   }
 });
 
