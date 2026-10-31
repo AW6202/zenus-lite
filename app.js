@@ -1,7 +1,7 @@
 // 学习机 Lite — 静态 PWA：内容来自 pack.json，进度存本地，AI 直连 OpenAI 兼容接口
 'use strict';
 
-const BUILD = '2026-10-31.6';
+const BUILD = '2026-10-31.7';
 
 const LS = {
   progress: 'zenus.progress.v1',
@@ -348,13 +348,84 @@ function schedule(id, rating, word) {
 
 // ── 数据 ──────────────────────────────────────────────
 async function loadPack() {
-  const res = await fetch('pack.json?v=' + Date.now());
-  if (!res.ok) throw new Error('pack.json 拉取失败: ' + res.status);
-  state.pack = await res.json();
+  // 2026-10-31 真机上出现「内容包加载失败 / Failed to fetch」：以前是带 ?v=时间戳 的强刷请求，
+  // 5G 抖一下、或者 GitHub Pages 慢一点，整个 App 就只剩一个错误页，还得手动刷新。
+  // 现在：新鲜请求重试 → 浏览器缓存 → 本地缓存，三档回落，任意一档成功都能用。
+  const cached = loadJSON('zenus.pack.cache', null);
+  const fetchJson = async (url, timeoutMs) => {
+    const ctl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    const timer = ctl ? setTimeout(() => ctl.abort(), timeoutMs) : null;
+    try {
+      const res = await fetch(url, ctl ? { signal: ctl.signal } : undefined);
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      return await res.json();
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
+  };
+
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const fresh = await fetchJson('pack.json?v=' + Date.now(), 8000);
+      applyPack(fresh, true);
+      return;
+    } catch (e) { /* 下一档 */ }
+  }
+  // 第二档：不带版本参数 → 吃浏览器/SW 缓存
+  try {
+    const cachedHttp = await fetchJson('pack.json', 8000);
+    applyPack(cachedHttp, false);
+    return;
+  } catch (e) { /* 下一档 */ }
+  // 第三档：上次成功时的本地快照
+  if (cached && Array.isArray(cached.courses) && cached.courses.length) {
+    state.pack = cached;
+    const saved = loadJSON('zenus.course.v1', null);
+    state.courseId = state.pack.courses.some((c) => c.id === saved) ? saved : state.pack.courses[0]?.id;
+    state.packFromCache = true;
+    return;
+  }
+  throw new Error('内容包拉不到（网络断了？）');
+}
+
+function applyPack(pack, persist) {
+  if (!pack || !Array.isArray(pack.courses)) throw new Error('内容包格式不对');
+  state.pack = pack;
+  if (persist) {
+    try { saveJSON('zenus.pack.cache', pack); } catch { /* 配额不足就放弃缓存 */ }
+  }
   const saved = loadJSON('zenus.course.v1', null);
   state.courseId = state.pack.courses.some((c) => c.id === saved)
     ? saved
     : state.pack.courses[0]?.id;
+}
+
+/** 内容包没拉到时顶一条横幅：能重试，但别挡着用本地材料/书源。 */
+function showPackBanner(msg) {
+  if (document.getElementById('packBar')) return;
+  const bar = document.createElement('div');
+  bar.id = 'packBar';
+  bar.style.cssText = 'position:fixed;left:0;right:0;top:0;z-index:999;background:#7a1f1f;color:#fff;'
+    + 'font:12px/1.6 sans-serif;padding:8px 10px;display:flex;gap:8px;align-items:center';
+  bar.innerHTML = '<span style="flex:1">内容包没加载：' + esc(msg) + '（本地材料和书源照常用）</span>'
+    + '<button id="packRetry" style="background:#fff;color:#7a1f1f;border:0;border-radius:6px;padding:6px 10px">重试</button>';
+  document.body.appendChild(bar);
+  const b = bar.querySelector('#packRetry');
+  b.onclick = async () => {
+    b.disabled = true;
+    b.textContent = '重试中…';
+    try {
+      await loadPack();
+      state.packError = null;
+      bar.remove();
+      renderHeader();
+      render();
+      toast('内容包已恢复');
+    } catch (e) {
+      b.disabled = false;
+      b.textContent = '重试';
+    }
+  };
 }
 
 const MINE_ID = 'mine';
@@ -5686,6 +5757,13 @@ async function pullWebCards() {
 (async function init() {
   try {
     await loadPack();
+  } catch (err) {
+    // 内容包拉不到不等于 App 不能用：本地材料、书源、设置都还能用。
+    // 以前这里直接抛到外层，整页只剩「内容包加载失败」，还得手动刷新。
+    state.pack = state.pack && state.pack.courses ? state.pack : { courses: [] };
+    state.packError = String((err && err.message) || err);
+  }
+  try {
     migrateCardsV2();
     renderHeader();
     render();
@@ -5700,8 +5778,13 @@ async function pullWebCards() {
     openPendingFile();
     setTimeout(openPendingFile, 2000);
   } catch (err) {
-    view.innerHTML = `<div class="empty">内容包加载失败<br><span class="sub">${esc(err.message)}</span></div>`;
+    // 真正的初始化异常（不是内容包）：只影响这一屏，给一句人话 + 重试
+    view.innerHTML = '<div class="empty">初始化失败<br><span class="sub">' + esc(err.message)
+      + '</span><div class="row" style="margin-top:12px"><button class="btn" id="initRetry">重试</button></div></div>';
+    const rb = document.getElementById('initRetry');
+    if (rb) rb.onclick = () => location.reload();
   }
+  if (state.packError) showPackBanner(state.packError);
   let lastDiag = null;
   try { lastDiag = JSON.parse(localStorage.getItem('zenus.diag.last') || 'null'); } catch { lastDiag = null; }
   if (lastDiag && Date.now() - (lastDiag.at || 0) < 10 * 60 * 1000 && !document.getElementById('diagBar')) {

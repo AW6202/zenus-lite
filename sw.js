@@ -1,11 +1,13 @@
 // Service Worker
 // 策略：**页面与代码网络优先**，断网才回落到缓存。
 // 之前是"缓存优先"，导致每次发版手机上都要手动清缓存 —— 2026-10-28 改。
-const CACHE = 'zenus-shell-v73';
+const CACHE = 'zenus-shell-v74';
 const SHELL = [
   './',
   './index.html',
   './app.js',
+  // 内容包也是"壳"的一部分：没它连复习/阅读都进不去，断网时必须能拿到上次那份
+  './pack.json',
   './manifest.webmanifest',
   './icons/icon-192.png',
   './icons/icon-512.png',
