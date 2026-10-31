@@ -1,7 +1,7 @@
 // 学习机 Lite — 静态 PWA：内容来自 pack.json，进度存本地，AI 直连 OpenAI 兼容接口
 'use strict';
 
-const BUILD = '2026-10-31.16';
+const BUILD = '2026-10-31.20';
 
 const LS = {
   progress: 'zenus.progress.v1',
@@ -4202,9 +4202,30 @@ function deleteBadSources() {
 
 // 书源只负责「找」；真正的「读」交给浏览器（真内核：JS/登录/广告拦截/阅读模式都在那边）。
 // 阅读器这边只吃已经落下来的本地材料 —— 两边分工，别指望规则引擎当浏览器用。
+//
+// 例外：接口源的书页/章节地址是**引擎专用伪地址** ——「真地址 + 逗号 + 请求头 JSON」，
+// 那串头里就带着 Authorization。浏览器既发不出这个头（服务端回 {"code":-1,"msg":"Unauthorized"}），
+// 还会把 token 写进地址栏和浏览历史。所以这类地址一律不许交给浏览器。
+// 2026-10-31 实机踩到：次元姬 API 源搜到书 → 点「浏览器打开」→ 就是这个报错。
+function isSourceSpecUrl(url) {
+  const u = String(url || '');
+  const i = u.indexOf(',{');
+  if (i <= 0) return false;
+  try {
+    const opt = JSON.parse(u.slice(i + 1));
+    return !!(opt && (opt.headers || opt.method || opt.webView));
+  } catch (e) {
+    return false;   // 逗号后面不是 JSON：普通网址，放行
+  }
+}
+
 function openInBrowser(url) {
   const u = String(url || '').trim();
   if (!/^https?:/i.test(u)) { toast('这个书源没给可打开的地址'); return; }
+  if (isSourceSpecUrl(u)) {
+    toast('这是接口地址（书源伪地址），浏览器打不开；请点「读进阅读器」');
+    return;
+  }
   if (!nativePort()) { window.open(u, '_blank'); return; }
   nativeCall('openUrl', { url: u }).catch((e) => toast('打开失败：' + (e.message || e)));
 }
@@ -4232,7 +4253,9 @@ async function searchInSource(i, key) {
           '<div class="it" style="display:flex;align-items:center;gap:8px">'
           + '<div style="flex:1;min-width:0"><div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'
           + esc(b.name || '未命名') + '</div><div class="sub">' + esc(b.author || '') + '</div></div>'
-          + '<button class="btn ' + (readerFirst ? 'ghost' : 'primary') + '" data-openbook="' + k + '" style="width:auto;padding:6px 10px;font-size:12px">浏览器打开</button>'
+          // 接口源（或是伪地址的书）不摆「浏览器打开」：那个按钮只会把带 token 的地址丢给浏览器
+          + (isSourceSpecUrl(b.bookUrl) ? ''
+            : '<button class="btn ' + (readerFirst ? 'ghost' : 'primary') + '" data-openbook="' + k + '" style="width:auto;padding:6px 10px;font-size:12px">浏览器打开</button>')
           + '<button class="btn ' + (readerFirst ? 'primary' : 'ghost') + '" data-addbook="' + k + '" style="width:auto;padding:6px 10px;font-size:12px">'
           + (readerFirst ? '读进阅读器' : '加入书架') + '</button></div>'
         ).join('');
@@ -5477,13 +5500,13 @@ function showBookToc() {
     '<div class="meta"><span>目录</span><span>' + b.chapters.length + ' 节</span></div>'
     + '<div class="row" style="margin:6px 0 10px"><button class="btn ghost" id="tocBack">← 回正文</button>'
     + '<button class="btn ghost" id="tocJump">跳到第…节</button>'
-    + (b.chapters[cur] && b.chapters[cur].url
+    + (b.chapters[cur] && b.chapters[cur].url && !isSourceSpecUrl(b.chapters[cur].url)
       ? '<button class="btn" id="tocBrowser">浏览器打开本章</button>' : '')
     + '</div>'
     + '<div class="list">' + b.chapters.map((c, i) =>
       '<button class="tocItem' + (i === cur ? ' on' : '') + '" data-i="' + i + '">'
       + '<span>' + esc(c.title || ('第 ' + (i + 1) + ' 节')) + '</span>'
-      + '<small>' + (i + 1) + (c.url ? ' · 可浏览器打开' : '') + '</small></button>').join('') + '</div>';
+      + '<small>' + (i + 1) + (c.url && !isSourceSpecUrl(c.url) ? ' · 可浏览器打开' : '') + '</small></button>').join('') + '</div>';
   document.getElementById('tocBack').onclick = () => renderTextBook();
   const tb = document.getElementById('tocBrowser');
   if (tb) tb.onclick = () => openChapterInBrowser(b.chapters[cur] && b.chapters[cur].url);
@@ -5516,6 +5539,7 @@ function showBookToc() {
 // 规则引擎做不到的"打开就能看"就靠这一步。
 function openChapterInBrowser(url) {
   if (!url) { toast('这一章没有保存地址'); return; }
+  if (isSourceSpecUrl(url)) { toast('这一章是接口地址（书源伪地址），浏览器打不开；直接在这里读就行'); return; }
   if (!nativePort()) { toast('要在 App 里才能交给浏览器打开'); return; }
   nativeCall('openUrl', { url }, 5000)
     .then(() => toast('已交给浏览器打开'))
