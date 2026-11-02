@@ -1,7 +1,7 @@
 // 学习机 Lite — 静态 PWA：内容来自 pack.json，进度存本地，AI 直连 OpenAI 兼容接口
 'use strict';
 
-const BUILD = '2026-11-02.2';
+const BUILD = '2026-11-02.3';
 
 const LS = {
   progress: 'zenus.progress.v1',
@@ -108,14 +108,17 @@ function coreCall(cmd, args = {}, timeout = 15000) {
 // AI 收口：App 里走原生 ai.ask（统一 key/规则/偏好/产物），浏览器里返回 null 走原来的直连
 async function coreAsk(skill, opts = {}) {
   if (!nativePort()) return null;
-  const r = await coreCall('ai.ask', {
+  const args = {
     skill,
     input: opts.input || '',
     system: opts.system || '',
-    json: opts.json !== false,
-    temperature: opts.temperature == null ? 0.3 : opts.temperature,
     context: opts.context || {},
-  }, 90000);
+  };
+  // 只传调用方显式给的值：没给就跟随原生的技能默认（json/温度各自不同）
+  if (opts.json !== undefined) args.json = opts.json;
+  if (opts.temperature !== undefined) args.temperature = opts.temperature;
+  // 原生 ZenusAi 读超时 180s；这里必须比它长，否则超时后直连兜底会把同一次请求打两遍
+  const r = await coreCall('ai.ask', args, 200000);
   return r && typeof r.text === 'string' ? r.text : null;
 }
 
@@ -1339,7 +1342,7 @@ async function startAiQuiz() {
   const sys = '你是出题老师，只输出 JSON。';
   try {
     let content = await coreAsk('quiz', {
-      system: sys, input: prompt, json: true, temperature: 0.8, context: { scope: 'browser' },
+      system: sys, input: prompt, json: true, temperature: 0.8, context: { scope: 'study' },
     });
     if (!content) {
       const res = await fetch(`${settings.apiBase}/chat/completions`, {
