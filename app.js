@@ -1,7 +1,7 @@
 // 学习机 Lite — 静态 PWA：内容来自 pack.json，进度存本地，AI 直连 OpenAI 兼容接口
 'use strict';
 
-const BUILD = '2026-11-02.1';
+const BUILD = '2026-11-02.2';
 
 const LS = {
   progress: 'zenus.progress.v1',
@@ -103,6 +103,20 @@ function nativeCall(cmd, args = {}, timeout = 10000) {
 function coreCall(cmd, args = {}, timeout = 15000) {
   if (!nativePort()) return Promise.resolve(null);
   return nativeCall(cmd, args, timeout).catch(() => null);
+}
+
+// AI 收口：App 里走原生 ai.ask（统一 key/规则/偏好/产物），浏览器里返回 null 走原来的直连
+async function coreAsk(skill, opts = {}) {
+  if (!nativePort()) return null;
+  const r = await coreCall('ai.ask', {
+    skill,
+    input: opts.input || '',
+    system: opts.system || '',
+    json: opts.json !== false,
+    temperature: opts.temperature == null ? 0.3 : opts.temperature,
+    context: opts.context || {},
+  }, 90000);
+  return r && typeof r.text === 'string' ? r.text : null;
 }
 
 function toCoreCard(c) {
@@ -1322,23 +1336,30 @@ async function startAiQuiz() {
     + '只返回 JSON，不要解释：{"questions":['
     + '{"type":"mcq","q":"题干","options":["A","B","C","D"],"answer":"正确选项原文","explain":"一句中文解释"},'
     + '{"type":"cloze","q":"含 ___ 的句子","answer":"答案","explain":"一句中文解释"}]}';
+  const sys = '你是出题老师，只输出 JSON。';
   try {
-    const res = await fetch(`${settings.apiBase}/chat/completions`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${settings.key}` },
-      body: JSON.stringify({
-        model: settings.model,
-        messages: [
-          { role: 'system', content: '你是出题老师，只输出 JSON。' },
-          { role: 'user', content: prompt },
-        ],
-        response_format: { type: 'json_object' },
-        temperature: 0.8,
-      }),
+    let content = await coreAsk('quiz', {
+      system: sys, input: prompt, json: true, temperature: 0.8, context: { scope: 'browser' },
     });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const j = await res.json();
-    const data = JSON.parse(j.choices[0].message.content);
+    if (!content) {
+      const res = await fetch(`${settings.apiBase}/chat/completions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${settings.key}` },
+        body: JSON.stringify({
+          model: settings.model,
+          messages: [
+            { role: 'system', content: sys },
+            { role: 'user', content: prompt },
+          ],
+          response_format: { type: 'json_object' },
+          temperature: 0.8,
+        }),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const j = await res.json();
+      content = j.choices[0].message.content;
+    }
+    const data = JSON.parse(content);
     const qs = (data.questions || []).slice(0, 5);
     if (!qs.length) throw new Error('模型没给出题目');
     state.quiz = { qs, idx: 0, right: 0, picked: null, revealed: false, typed: '' };
@@ -4764,25 +4785,30 @@ async function judgeItems(items) {
   if (!settings.key || !items.length) return items;
   const brief = items.slice(0, 8).map((it, i) =>
     (i + 1) + '. 标题：' + it.name + '\n摘要：' + (it.summary || it.snippet || '').slice(0, 220)).join('\n\n');
+  const sys = '你帮学习者挑材料，只输出 JSON。';
+  const user = '下面是搜索结果。逐条判断适不适合当学习材料：'
+    + '能不能直接读（是不是正文而不是导航/广告/付费墙）、属于语言类还是技术类、大概难度。\n\n'
+    + brief + '\n\n返回 JSON：{"items":[{"i":1,"usable":true 或 false,"kind":"language 或 tech","level":"入门/中级/进阶","why":"一句话理由"}]}';
   try {
-    const res = await fetch(settings.apiBase + '/chat/completions', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + settings.key },
-      body: JSON.stringify({
-        model: settings.model,
-        messages: [
-          { role: 'system', content: '你帮学习者挑材料，只输出 JSON。' },
-          { role: 'user', content: '下面是搜索结果。逐条判断适不适合当学习材料：'
-            + '能不能直接读（是不是正文而不是导航/广告/付费墙）、属于语言类还是技术类、大概难度。\n\n'
-            + brief + '\n\n返回 JSON：{"items":[{"i":1,"usable":true 或 false,"kind":"language 或 tech","level":"入门/中级/进阶","why":"一句话理由"}]}' },
-        ],
-        response_format: { type: 'json_object' },
-        temperature: 0.2,
-      }),
+    let content = await coreAsk('judge-search', {
+      system: sys, input: user, json: true, temperature: 0.2, context: { scope: 'browser' },
     });
-    if (!res.ok) return items;
-    const j = await res.json();
-    const d = JSON.parse(j.choices[0].message.content);
+    if (!content) {
+      const res = await fetch(settings.apiBase + '/chat/completions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + settings.key },
+        body: JSON.stringify({
+          model: settings.model,
+          messages: [{ role: 'system', content: sys }, { role: 'user', content: user }],
+          response_format: { type: 'json_object' },
+          temperature: 0.2,
+        }),
+      });
+      if (!res.ok) return items;
+      const j = await res.json();
+      content = j.choices[0].message.content;
+    }
+    const d = JSON.parse(content);
     for (const it of d.items || []) {
       const idx = (it.i || 0) - 1;
       if (items[idx]) Object.assign(items[idx], { usable: it.usable, kind: it.kind, level: it.level, why: it.why });
@@ -5248,19 +5274,26 @@ async function askPoints(text) {
     + '"words":[{"w":"原词或搭配","cn":"中文释义","note":"用法/搭配要点"}],'
     + '"quiz":[{"q":"题干","options":["选项1","选项2","选项3","选项4"],"a":0,"why":"为什么是这个答案"}]}'
     + '。quiz 出 3 到 5 题，a 是正确选项的下标（从 0 开始）。语言类的 words 至少 6 条，技术类可以少。';
-  const res = await fetch(settings.apiBase + '/chat/completions', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + settings.key },
-    body: JSON.stringify({
-      model: settings.model,
-      messages: [{ role: 'system', content: sys }, { role: 'user', content: user }],
-      response_format: { type: 'json_object' },
-      temperature: 0.4,
-    }),
+  let content = await coreAsk('points', {
+    system: sys, input: user, json: true, temperature: 0.4,
+    context: { scope: 'reader', sourceTitle: RDR.name || '' },
   });
-  if (!res.ok) throw new Error('HTTP ' + res.status);
-  const j = await res.json();
-  return JSON.parse(j.choices[0].message.content);
+  if (!content) {
+    const res = await fetch(settings.apiBase + '/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + settings.key },
+      body: JSON.stringify({
+        model: settings.model,
+        messages: [{ role: 'system', content: sys }, { role: 'user', content: user }],
+        response_format: { type: 'json_object' },
+        temperature: 0.4,
+      }),
+    });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const j = await res.json();
+    content = j.choices[0].message.content;
+  }
+  return JSON.parse(content);
 }
 
 function kpKey() {
@@ -6046,24 +6079,30 @@ function addCardFromSelection(text) {
 }
 
 async function fillCardMeaning(card) {
+  const sys = '你是英语词典，只输出 JSON。';
+  const user = '词或短语：' + card.front
+    + '\n返回 JSON：{"back":"简体中文释义，短语给出用法","phonetic":"英式音标，短语留空","example":"一个自然例句","exampleCN":"例句中文"}';
   try {
-    const res = await fetch(settings.apiBase + '/chat/completions', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + settings.key },
-      body: JSON.stringify({
-        model: settings.model,
-        messages: [
-          { role: 'system', content: '你是英语词典，只输出 JSON。' },
-          { role: 'user', content: '词或短语：' + card.front
-            + '\n返回 JSON：{"back":"简体中文释义，短语给出用法","phonetic":"英式音标，短语留空","example":"一个自然例句","exampleCN":"例句中文"}' },
-        ],
-        response_format: { type: 'json_object' },
-        temperature: 0.3,
-      }),
+    let content = await coreAsk('card', {
+      system: sys, input: user, json: true, temperature: 0.3,
+      context: { scope: 'reader', sourceTitle: (card.source && card.source.title) || '' },
     });
-    if (!res.ok) throw new Error('HTTP ' + res.status);
-    const j = await res.json();
-    const d = JSON.parse(j.choices[0].message.content);
+    if (!content) {
+      const res = await fetch(settings.apiBase + '/chat/completions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + settings.key },
+        body: JSON.stringify({
+          model: settings.model,
+          messages: [{ role: 'system', content: sys }, { role: 'user', content: user }],
+          response_format: { type: 'json_object' },
+          temperature: 0.3,
+        }),
+      });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const j = await res.json();
+      content = j.choices[0].message.content;
+    }
+    const d = JSON.parse(content);
     card.back = d.back || '';
     card.hint = d.phonetic || '';
     card.example = d.example || '';

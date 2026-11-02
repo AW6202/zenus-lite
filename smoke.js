@@ -1267,6 +1267,30 @@ class CDP {
       && core.upserted === true && core.rated === true && core.cardAdded === true
       && core.inboxLeft === 0 && core.importCards >= 0, core);
 
+    // AI 收口：App 里必须走原生 ai.ask，而不是网页直连
+    const aiRoute = await probe('AI 收口', `
+      const calls = [];
+      const cbs = [];
+      window.zenus = {
+        postMessage(json) {
+          const m = JSON.parse(json);
+          calls.push(m);
+          const data = { text: '{"questions":[]}', artifactId: 'a-smoke', skill: m.args && m.args.skill };
+          cbs.forEach((cb) => cb({ data: JSON.stringify({ id: m.id, ok: true, data }) }));
+        },
+        addEventListener(type, cb) { if (type === 'message') cbs.push(cb); },
+      };
+      CTRL = null;
+      const txt = await coreAsk('quiz', { system: 'sys', input: 'in', json: true });
+      const c = calls[0] || {};
+      window.zenus = undefined; CTRL = null;
+      return { txt, cmd: c.cmd, skill: c.args && c.args.skill,
+               hasSystem: !!(c.args && c.args.system), json: !!(c.args && c.args.json) };
+    `);
+    check('AI 收口：App 里走 ai.ask（带 system/json）',
+      aiRoute.cmd === 'ai.ask' && aiRoute.skill === 'quiz' && aiRoute.json === true
+      && aiRoute.hasSystem === true && aiRoute.txt === '{"questions":[]}', aiRoute);
+
     if (pdfArg) {
       const pdf = await probe('PDF', `
         const b = await (await fetch('${base}smoke.pdf')).blob();
