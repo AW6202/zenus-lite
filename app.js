@@ -1,7 +1,7 @@
 // 学习机 Lite — 静态 PWA：内容来自 pack.json，进度存本地，AI 直连 OpenAI 兼容接口
 'use strict';
 
-const BUILD = '2026-11-02.7';
+const BUILD = '2026-11-02.8';
 
 const LS = {
   progress: 'zenus.progress.v1',
@@ -5359,7 +5359,8 @@ async function radarWords() {
 async function radarWordsLocal(text, bookTitle, chapter) {
   if (!settings.key) return null;
   const knownList = Object.keys(known).slice(-300);
-  const sys = '你在给中文母语的学习者挑词。只输出 JSON。'
+  const sys = '你在给中文母语的学习者挑词。只输出 JSON，格式必须是：'
+    + '{"words":[{"w":"词或搭配","cn":"中文释义","note":"用法/搭配要点","example":"本章原句"}]}。'
     + '只挑本章真正值得学的词/固定搭配；排除已掌握列表；'
     + '如果正文主要是中文，只挑成语/固定搭配/术语；没有值得学的就返回 {"words":[]}，不要硬凑。'
     + '每条给本章原句，不要改写。';
@@ -5387,15 +5388,16 @@ async function radarWordsLocal(text, bookTitle, chapter) {
   const seen = new Set(state.inbox.map((x) => x.front));
   let added = 0;
   for (const w of arr) {
-    const front = String(w.w || '').trim();
+    // 容忍模型用 word/meaning 这种别名（原生侧也加同样的兼容）
+    const front = String(w.w || w.word || '').trim();
     if (!front || knownSet.has(front.toLowerCase()) || seen.has(front)) continue;
     state.inbox.push({
       id: 'i-' + Date.now() + '-' + added,
       kind: 'word',
       front,
-      back: w.cn || '',
-      hint: w.note || '',
-      example: w.example || '',
+      back: w.cn || w.meaning || w.definition || '',
+      hint: w.note || w.usage || '',
+      example: w.example || w.sentence || '',
       topic: '生词雷达',
       sourceKind: 'reader',
       sourceTitle: bookTitle || '',
