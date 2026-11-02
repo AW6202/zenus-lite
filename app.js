@@ -1,7 +1,7 @@
 // 学习机 Lite — 静态 PWA：内容来自 pack.json，进度存本地，AI 直连 OpenAI 兼容接口
 'use strict';
 
-const BUILD = '2026-11-02.11';
+const BUILD = '2026-11-02.12';
 
 const LS = {
   progress: 'zenus.progress.v1',
@@ -5296,7 +5296,12 @@ async function askPoints(text) {
     + '。quiz 出 3 到 5 题，a 是正确选项的下标（从 0 开始）。语言类的 words 至少 6 条，技术类可以少。';
   let content = await coreAsk('points', {
     system: sys, input: user, json: true, temperature: 0.4,
-    context: { scope: 'reader', sourceTitle: RDR.name || '' },
+    context: {
+      scope: 'reader',
+      sourceTitle: RDR.name || '',
+      bookTitle: (RDR.book && RDR.book.name) || '',
+      chapter: RDR.book ? (RDR.ch || 0) : (RDR.page || 0),
+    },
   });
   if (!content) {
     const res = await fetch(settings.apiBase + '/chat/completions', {
@@ -6255,7 +6260,12 @@ async function fillCardMeaning(card) {
   try {
     let content = await coreAsk('card', {
       system: sys, input: user, json: true, temperature: 0.3,
-      context: { scope: 'reader', sourceTitle: (card.source && card.source.title) || '' },
+      context: {
+        scope: 'reader',
+        sourceTitle: (card.source && card.source.title) || '',
+        bookTitle: card.bookTitle || '',
+        chapter: card.chapter || 0,
+      },
     });
     if (!content) {
       const res = await fetch(settings.apiBase + '/chat/completions', {
