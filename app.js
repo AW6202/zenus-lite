@@ -1,7 +1,7 @@
 // 学习机 Lite — 静态 PWA：内容来自 pack.json，进度存本地，AI 直连 OpenAI 兼容接口
 'use strict';
 
-const BUILD = '2026-11-02.5';
+const BUILD = '2026-11-02.6';
 
 const LS = {
   progress: 'zenus.progress.v1',
@@ -982,6 +982,7 @@ function renderSettings() {
     <div class="row" style="margin-bottom:8px">
       <a class="btn" href="demo.html" style="display:block;text-align:center;text-decoration:none;color:var(--text)">看「要点 → 题 → 重写」试验</a>
     </div>
+    <div class="hint" id="nativeStatus">原生桥：检测中…</div>
     <div class="hint">构建 ${esc(BUILD)} · 内容包 ${esc(state.pack?.version || '-')}<br>
     共 ${state.pack?.courses?.length || 0} 门课。内容在电脑上生成后推到这里，手机刷新即更新。</div>
   `;
@@ -1000,6 +1001,7 @@ function renderSettings() {
     pushAiConfig();
     toast('设置已保存');
   };
+  refreshNativeStatus();
   const bi = $('#btnInstall');
   const ih = $('#installHint');
   if (bi && ih) {
@@ -5336,15 +5338,21 @@ async function radarWords() {
   const text = String(ch.text || '').slice(0, 6000);
   if (text.length < 80) return toast('文字太少，先多读几段');
   toast('正在挑生词…');
-  const r = await coreCall('word-radar', {
-    text,
-    bookTitle: (RDR.book && RDR.book.name) || RDR.name || '',
-    chapter: RDR.book ? (RDR.ch || 0) : (RDR.page || 0),
-    limit: 8,
-  }, 200000);
-  if (!r) return toast('生词雷达没返回（要装新版 App）');
+  let r;
+  try {
+    r = await nativeCall('word-radar', {
+      text,
+      bookTitle: (RDR.book && RDR.book.name) || RDR.name || '',
+      chapter: RDR.book ? (RDR.ch || 0) : (RDR.page || 0),
+      limit: 8,
+    }, 200000);
+  } catch (e) {
+    // 把真实原因露出来：unknown command=旧包；还没配置 AI key=设置没填/没同步；桥超时=网络
+    return toast('生词雷达失败：' + ((e && e.message) || '未知错误'));
+  }
   await pullCoreInbox();
-  toast('已放入待确认 ' + (r.added || 0) + ' 个');
+  if (!r || !r.added) return toast('没有新词（本章可能都已掌握）');
+  toast('已放入待确认 ' + r.added + ' 个');
 }
 
 // 把 PWA 的 key/model/base 推给原生，S2 的 ai.ask 才有 key 可用
@@ -5355,6 +5363,22 @@ async function pushAiConfig() {
     model: settings.model,
     baseUrl: settings.apiBase,
   }, 15000);
+}
+
+// 设置页的诊断：一眼看出「是不是在 App 里」「原生 AI 有没有 key」
+async function refreshNativeStatus() {
+  const el = document.getElementById('nativeStatus');
+  if (!el) return;
+  if (!nativePort()) {
+    el.textContent = '原生桥：浏览器模式（学习内核/生词雷达不可用）';
+    return;
+  }
+  const cfg = await coreCall('ai.config.get', {}, 5000);
+  if (!cfg) {
+    el.textContent = '原生桥：已连接，但 App 版本过旧（缺 ai.config，装最新包）';
+    return;
+  }
+  el.textContent = '原生桥：已连接 · 原生 AI ' + (cfg.configured ? '已配置' : '未配置（在上面填 Key 并保存）');
 }
 
 async function showPoints() {
