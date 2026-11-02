@@ -985,27 +985,19 @@ class CDP {
         viewer.open && viewer.stage && viewer.hasBtns && viewer.label.indexOf('2 /') === 0 && viewer.closed,
         viewer);
 
-    // 书架：能列出材料、能导入书源（P0 只存名字+地址）
-    const shelf = await probe('书架与书源', `
+    // S5：材料书架保留；书源/书入口收口到 Legado，不再出现在书架
+    const shelf = await probe('材料书架', `
       closePoints && closePoints();
       state.tab = 'reader'; render();
       await renderShelf();
       await new Promise(r => setTimeout(r, 150));
-      const hasShelf = !!document.getElementById('shSources');
-      const before = sources.length;
-      sources = []; saveJSON(LS.sources, sources);
-      renderSourceManager();
-      await new Promise(r => setTimeout(r, 80));
-      document.getElementById('srcBox').value = JSON.stringify([{ bookSourceName: '冒烟源', bookSourceUrl: 'https://example.com/src' }]);
-      document.getElementById('srcAdd').click();
-      await new Promise(r => setTimeout(r, 120));
-      const after = sources.length;
-      const listed = (document.body.innerHTML.includes('冒烟源'));
-      sources = []; saveJSON(LS.sources, sources);
-      renderShelf();
-      return { hasShelf, before, after, listed };
+      const hasShelf = !!document.getElementById('shBack');
+      const hasSources = !!document.getElementById('shSources');
+      const hint = document.body.innerHTML.includes('书源请用');
+      return { hasShelf, hasSources, hint };
     `);
-    check('书架页存在且能导入书源', shelf.hasShelf && shelf.after === 1 && shelf.listed, shelf);
+    check('材料书架存在，书源入口已收口到 Legado',
+      shelf.hasShelf === true && shelf.hasSources === false && shelf.hint === true, shelf);
 
     // 漫画：浏览器「存为漫画」交过来的 zip → 材料库 → 多图阅读器（2026-10-31）
     const comic = await probe('漫画导入', `
