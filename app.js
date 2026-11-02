@@ -1,7 +1,7 @@
 // 学习机 Lite — 静态 PWA：内容来自 pack.json，进度存本地，AI 直连 OpenAI 兼容接口
 'use strict';
 
-const BUILD = '2026-11-02.10';
+const BUILD = '2026-11-02.11';
 
 const LS = {
   progress: 'zenus.progress.v1',
@@ -35,6 +35,7 @@ const DEFAULT_SETTINGS = {
   visionKey: '',
   readFont: 16,
   readLine: 1.8,
+  radarLang: 'auto',   // 生词雷达目标语言：auto/en/ja/zh
 };
 
 const state = {
@@ -928,6 +929,11 @@ function renderSettings() {
     <input class="t" id="s-model" value="${esc(settings.model)}" placeholder="deepseek-chat">
     <label class="f">API Key（只存在本机）</label>
     <input class="t" id="s-key" type="password" value="${esc(settings.key)}" placeholder="sk-...">
+    <label class="f">生词雷达目标语言</label>
+    <select class="t" id="s-radar-lang">
+      ${[['auto', '自动（中文材料挑中文，外语材料挑外语）'], ['en', '英文（中文技术文档里也提英文术语）'], ['ja', '日文'], ['zh', '中文（成语/搭配/术语）']]
+        .map(([v, label]) => `<option value="${v}"${(settings.radarLang || 'auto') === v ? ' selected' : ''}>${label}</option>`).join('')}
+    </select>
     <label class="f">视觉模型 Base（用于「看图出题」，OpenAI 兼容即可）</label>
     <input class="t" id="s-vbase" value="${esc(settings.visionBase || '')}" placeholder="https://api.siliconflow.cn/v1">
     <label class="f">视觉模型名</label>
@@ -994,6 +1000,7 @@ function renderSettings() {
     settings.apiBase = $('#s-base').value.trim().replace(/\/$/, '');
     settings.model = $('#s-model').value.trim();
     settings.key = $('#s-key').value.trim();
+    settings.radarLang = ($('#s-radar-lang') || {}).value || settings.radarLang;
     settings.searchKey = ($('#s-bocha') || {}).value ? $('#s-bocha').value.trim() : settings.searchKey;
     if ($('#s-vbase')) settings.visionBase = $('#s-vbase').value.trim() || settings.visionBase;
     if ($('#s-vmodel')) settings.visionModel = $('#s-vmodel').value.trim() || settings.visionModel;
@@ -5352,10 +5359,19 @@ async function radarWords() {
   toast('正在挑生词…');
   const bookTitle = (RDR.book && RDR.book.name) || RDR.name || '';
   const chapter = RDR.book ? (RDR.ch || 0) : (RDR.page || 0);
-  const lang = mostlyChinese(text) ? 'zh' : 'en';
+  const chosen = settings.radarLang || 'auto';
+  const lang = chosen === 'auto' ? (mostlyChinese(text) ? 'zh' : 'en') : chosen;
+  const langLabel = { en: '英文', ja: '日文', zh: '中文' }[lang] || '';
+  // 非自动：直接走本地（当前 APK 的 word-radar 还不认 lang，下一版会接上）
+  if (chosen !== 'auto') {
+    const n = await radarWordsLocal(text, bookTitle, chapter, lang);
+    if (n === null) return toast('生词雷达失败：先在设置里填 AI Key');
+    if (!n) return toast('没有新词（正文 ' + text.length + ' 字，已掌握 ' + Object.keys(known).length + ' 个）');
+    return toast('已放入待确认 ' + n + ' 个（' + langLabel + '）');
+  }
   let r = null;
   try {
-    r = await nativeCall('word-radar', { text, bookTitle, chapter, limit: 8 }, 200000);
+    r = await nativeCall('word-radar', { text, bookTitle, chapter, limit: 8, lang }, 200000);
   } catch (e) {
     // 原生失败（旧包/没 key/模型异常）→ 用本机 key 兜底，至少别让按钮变成死路
     const n = await radarWordsLocal(text, bookTitle, chapter, lang);
@@ -5382,15 +5398,17 @@ async function radarWords() {
 async function radarWordsLocal(text, bookTitle, chapter, lang) {
   if (!settings.key) return null;
   const knownList = Object.keys(known).slice(-300);
-  const zh = lang === 'zh';
-  const sys = (zh
-    ? '你在给中文母语的学习者挑中文词。只输出 JSON，格式必须是：'
-      + '{"words":[{"w":"词或搭配","cn":"释义/用法","note":"为什么值得学","example":"本章原句"}]}。'
-      + '只挑成语、固定搭配、专业术语、易错词；排除已掌握列表；没有值得学的就返回 {"words":[]}，不要硬凑。'
-    : '你在给中文母语的学习者挑外语词。只输出 JSON，格式必须是：'
-      + '{"words":[{"w":"词或搭配","cn":"中文释义","note":"用法/搭配要点","example":"本章原句"}]}。'
-      + '只挑本章真正值得学的词/固定搭配；排除已掌握列表；没有值得学的就返回 {"words":[]}，不要硬凑。')
-    + '每条给本章原句，不要改写。';
+  const schema = '{"words":[{"w":"词或搭配","cn":"中文释义","note":"读音/用法/搭配要点","example":"原句"}]}';
+  const sysByLang = {
+    zh: '你在给中文母语的学习者挑中文词。只输出 JSON，格式必须是：' + schema + '。'
+      + '只挑成语、固定搭配、专业术语、易错词；排除已掌握列表；没有值得学的就返回 {"words":[]}，不要硬凑。每条给本章原句。',
+    ja: '你在给中文母语的学习者挑日语词。只输出 JSON，格式必须是：' + schema + '。'
+      + '只挑日语生词、固定搭配、汉字词；note 给假名读音；排除已掌握列表；没有值得学的就返回 {"words":[]}，不要硬凑。每条给本章原句。',
+    en: '你在给中文母语的学习者挑英文词/术语。只输出 JSON，格式必须是：' + schema + '。'
+      + '从正文里只提取英文单词、短语、专业术语（即使正文主要是中文）；example 给出现它的原句（可以是中文句子）；'
+      + '排除已掌握列表；没有值得学的就返回 {"words":[]}，不要硬凑。',
+  };
+  const sys = sysByLang[lang] || sysByLang.en;
   const user = '已掌握（不要出这些）：' + knownList.join(', ')
     + '\n\n本章正文：\n' + String(text).slice(0, 6000);
   let content = '';

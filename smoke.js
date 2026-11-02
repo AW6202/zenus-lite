@@ -1314,6 +1314,17 @@ class CDP {
     check('AI 配置同步：启动把 key/model 推给原生',
       cfg.cmd === 'ai.config.set' && cfg.key === 'sk-smoke' && !!cfg.model, cfg);
 
+    // 生词雷达目标语言开关：设置里能选、能回显
+    const langSel = await probe('雷达语言', `
+      settings.radarLang = 'ja';
+      state.tab = 'settings'; render();
+      const v = document.getElementById('s-radar-lang').value;
+      settings.radarLang = 'auto';
+      state.tab = 'review'; render();
+      return { v };
+    `);
+    check('生词雷达目标语言开关可回显', langSel.v === 'ja', langSel);
+
     if (pdfArg) {
       const pdf = await probe('PDF', `
         const b = await (await fetch('${base}smoke.pdf')).blob();
