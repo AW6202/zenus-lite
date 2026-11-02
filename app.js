@@ -1,7 +1,7 @@
 // 学习机 Lite — 静态 PWA：内容来自 pack.json，进度存本地，AI 直连 OpenAI 兼容接口
 'use strict';
 
-const BUILD = '2026-11-02.8';
+const BUILD = '2026-11-02.9';
 
 const LS = {
   progress: 'zenus.progress.v1',
@@ -5331,6 +5331,14 @@ function rememberPoints(data) {
 }
 
 // 生词雷达：把本章正文交给原生，按「已掌握」过滤后挑 5-8 个词进待确认箱
+// 中文材料比例：>0.3 就按中文模式挑（成语/搭配/术语），否则按外语
+function mostlyChinese(text) {
+  const s = String(text || '');
+  const cjk = (s.match(/[一-鿿]/g) || []).length;
+  const all = (s.match(/[A-Za-z一-鿿]/g) || []).length || 1;
+  return cjk / all > 0.3;
+}
+
 async function radarWords() {
   if (!nativePort()) return toast('生词雷达只在 App 里可用');
   const ch = await chapterText();
@@ -5340,29 +5348,44 @@ async function radarWords() {
   toast('正在挑生词…');
   const bookTitle = (RDR.book && RDR.book.name) || RDR.name || '';
   const chapter = RDR.book ? (RDR.ch || 0) : (RDR.page || 0);
+  const lang = mostlyChinese(text) ? 'zh' : 'en';
   let r = null;
   try {
     r = await nativeCall('word-radar', { text, bookTitle, chapter, limit: 8 }, 200000);
   } catch (e) {
     // 原生失败（旧包/没 key/模型异常）→ 用本机 key 兜底，至少别让按钮变成死路
-    const n = await radarWordsLocal(text, bookTitle, chapter);
+    const n = await radarWordsLocal(text, bookTitle, chapter, lang);
     if (n === null) return toast('生词雷达失败：' + ((e && e.message) || '未知错误'));
-    if (!n) return toast('没有新词（本章可能都已掌握/中文材料）');
+    if (!n) return toast('没有新词（正文 ' + text.length + ' 字，已掌握 ' + Object.keys(known).length + ' 个）');
     return toast('已放入待确认 ' + n + ' 个（本地）');
   }
   await pullCoreInbox();
-  if (!r || !r.added) return toast('没有新词（本章可能都已掌握/中文材料）');
+  if (!r || !r.added) {
+    // 中文材料原生可能判「没有外语词」；用中文模式本地再试一次
+    if (lang === 'zh') {
+      const n = await radarWordsLocal(text, bookTitle, chapter, 'zh');
+      if (n > 0) {
+        await pullCoreInbox();
+        return toast('已放入待确认 ' + n + ' 个（中文模式）');
+      }
+    }
+    return toast('没有新词（正文 ' + text.length + ' 字，已掌握 ' + Object.keys(known).length + ' 个）');
+  }
   toast('已放入待确认 ' + r.added + ' 个');
 }
 
 // 本地兜底：不给原生也能跑（浏览器/旧包/原生报错时）。用本机 key + 本地 known
-async function radarWordsLocal(text, bookTitle, chapter) {
+async function radarWordsLocal(text, bookTitle, chapter, lang) {
   if (!settings.key) return null;
   const knownList = Object.keys(known).slice(-300);
-  const sys = '你在给中文母语的学习者挑词。只输出 JSON，格式必须是：'
-    + '{"words":[{"w":"词或搭配","cn":"中文释义","note":"用法/搭配要点","example":"本章原句"}]}。'
-    + '只挑本章真正值得学的词/固定搭配；排除已掌握列表；'
-    + '如果正文主要是中文，只挑成语/固定搭配/术语；没有值得学的就返回 {"words":[]}，不要硬凑。'
+  const zh = lang === 'zh';
+  const sys = (zh
+    ? '你在给中文母语的学习者挑中文词。只输出 JSON，格式必须是：'
+      + '{"words":[{"w":"词或搭配","cn":"释义/用法","note":"为什么值得学","example":"本章原句"}]}。'
+      + '只挑成语、固定搭配、专业术语、易错词；排除已掌握列表；没有值得学的就返回 {"words":[]}，不要硬凑。'
+    : '你在给中文母语的学习者挑外语词。只输出 JSON，格式必须是：'
+      + '{"words":[{"w":"词或搭配","cn":"中文释义","note":"用法/搭配要点","example":"本章原句"}]}。'
+      + '只挑本章真正值得学的词/固定搭配；排除已掌握列表；没有值得学的就返回 {"words":[]}，不要硬凑。')
     + '每条给本章原句，不要改写。';
   const user = '已掌握（不要出这些）：' + knownList.join(', ')
     + '\n\n本章正文：\n' + String(text).slice(0, 6000);
