@@ -1,7 +1,7 @@
 // 学习机 Lite — 静态 PWA：内容来自 pack.json，进度存本地，AI 直连 OpenAI 兼容接口
 'use strict';
 
-const BUILD = '2026-11-02.6';
+const BUILD = '2026-11-02.7';
 
 const LS = {
   progress: 'zenus.progress.v1',
@@ -5338,21 +5338,78 @@ async function radarWords() {
   const text = String(ch.text || '').slice(0, 6000);
   if (text.length < 80) return toast('文字太少，先多读几段');
   toast('正在挑生词…');
-  let r;
+  const bookTitle = (RDR.book && RDR.book.name) || RDR.name || '';
+  const chapter = RDR.book ? (RDR.ch || 0) : (RDR.page || 0);
+  let r = null;
   try {
-    r = await nativeCall('word-radar', {
-      text,
-      bookTitle: (RDR.book && RDR.book.name) || RDR.name || '',
-      chapter: RDR.book ? (RDR.ch || 0) : (RDR.page || 0),
-      limit: 8,
-    }, 200000);
+    r = await nativeCall('word-radar', { text, bookTitle, chapter, limit: 8 }, 200000);
   } catch (e) {
-    // 把真实原因露出来：unknown command=旧包；还没配置 AI key=设置没填/没同步；桥超时=网络
-    return toast('生词雷达失败：' + ((e && e.message) || '未知错误'));
+    // 原生失败（旧包/没 key/模型异常）→ 用本机 key 兜底，至少别让按钮变成死路
+    const n = await radarWordsLocal(text, bookTitle, chapter);
+    if (n === null) return toast('生词雷达失败：' + ((e && e.message) || '未知错误'));
+    if (!n) return toast('没有新词（本章可能都已掌握/中文材料）');
+    return toast('已放入待确认 ' + n + ' 个（本地）');
   }
   await pullCoreInbox();
-  if (!r || !r.added) return toast('没有新词（本章可能都已掌握）');
+  if (!r || !r.added) return toast('没有新词（本章可能都已掌握/中文材料）');
   toast('已放入待确认 ' + r.added + ' 个');
+}
+
+// 本地兜底：不给原生也能跑（浏览器/旧包/原生报错时）。用本机 key + 本地 known
+async function radarWordsLocal(text, bookTitle, chapter) {
+  if (!settings.key) return null;
+  const knownList = Object.keys(known).slice(-300);
+  const sys = '你在给中文母语的学习者挑词。只输出 JSON。'
+    + '只挑本章真正值得学的词/固定搭配；排除已掌握列表；'
+    + '如果正文主要是中文，只挑成语/固定搭配/术语；没有值得学的就返回 {"words":[]}，不要硬凑。'
+    + '每条给本章原句，不要改写。';
+  const user = '已掌握（不要出这些）：' + knownList.join(', ')
+    + '\n\n本章正文：\n' + String(text).slice(0, 6000);
+  let content = '';
+  try {
+    const res = await fetch(settings.apiBase + '/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + settings.key },
+      body: JSON.stringify({
+        model: settings.model,
+        messages: [{ role: 'system', content: sys }, { role: 'user', content: user }],
+        response_format: { type: 'json_object' },
+        temperature: 0.3,
+      }),
+    });
+    if (!res.ok) return null;
+    const j = await res.json();
+    content = j.choices[0].message.content;
+  } catch { return null; }
+  let arr = [];
+  try { arr = (JSON.parse(content).words) || []; } catch { return null; }
+  const knownSet = new Set(knownList);
+  const seen = new Set(state.inbox.map((x) => x.front));
+  let added = 0;
+  for (const w of arr) {
+    const front = String(w.w || '').trim();
+    if (!front || knownSet.has(front.toLowerCase()) || seen.has(front)) continue;
+    state.inbox.push({
+      id: 'i-' + Date.now() + '-' + added,
+      kind: 'word',
+      front,
+      back: w.cn || '',
+      hint: w.note || '',
+      example: w.example || '',
+      topic: '生词雷达',
+      sourceKind: 'reader',
+      sourceTitle: bookTitle || '',
+      bookTitle: bookTitle || '',
+      chapter: chapter || 0,
+      createdAt: Date.now(),
+    });
+    seen.add(front);
+    added++;
+    if (added >= 8) break;
+  }
+  saveInbox();
+  if (state.tab === 'review') renderReview();
+  return added;
 }
 
 // 把 PWA 的 key/model/base 推给原生，S2 的 ai.ask 才有 key 可用
