@@ -1199,6 +1199,67 @@ class CDP {
     check('内核实渲染视图不再挂浮栏，且提供当前材料给「存入思源」',
       npTools.hadBar === false && npTools.wraps === 2 && npTools.docApi, npTools);
 
+    // 学习内核桥：导入 / 待确认箱 / 评分镜像（假 window.zenus，不依赖真机）
+    const core = await probe('学习内核桥', `
+      const calls = [];
+      const cbs = [];
+      let importCards = -1;
+      window.zenus = {
+        postMessage(json) {
+          const m = JSON.parse(json);
+          calls.push(m);
+          const reply = (data) => cbs.forEach((cb) => cb({ data: JSON.stringify({ id: m.id, ok: true, data }) }));
+          if (m.cmd === 'inbox.take') {
+            reply([{ id: 'n-smoke', kind: 'card', front: 'ephemeral', back: '短暂的',
+                     hint: '/ɪˈfemərəl/', sourceKind: 'reader', sourceTitle: '冒烟书' }]);
+          } else if (m.cmd === 'learner.import') {
+            importCards = (m.args.payload.userCards || []).length;
+            reply({ cards: importCards });
+          } else {
+            reply({ ok: true });
+          }
+        },
+        addEventListener(type, cb) { if (type === 'message') cbs.push(cb); },
+      };
+      CTRL = null;
+      state.inbox = [];
+      settings.coreImported = false;
+      await importToCoreOnce();
+      await pullCoreInbox();
+      state.tab = 'review'; state.queue = []; state.current = null; renderReview();
+      const btn = document.getElementById('inboxBtn');
+      const hasBtn = !!btn;
+      if (btn) btn.click();
+      const add = document.querySelector('#inboxOverlay [data-add="0"]');
+      if (add) add.click();
+      await new Promise((r) => setTimeout(r, 80));
+      schedule('u-smoke', 'good', 'ephemeral');
+      await new Promise((r) => setTimeout(r, 80));
+      const cmds = calls.map((c) => c.cmd);
+      const out = {
+        hasBtn, importCards,
+        imported: cmds.includes('learner.import'),
+        took: cmds.includes('inbox.take'),
+        upserted: cmds.includes('cards.upsert'),
+        rated: cmds.includes('review.rate'),
+        cardAdded: userCards.some((c) => c.front === 'ephemeral'),
+        inboxLeft: state.inbox.length,
+      };
+      // 清理，别污染后面的用例
+      userCards = userCards.filter((c) => c.front !== 'ephemeral');
+      saveJSON(LS.userCards, userCards);
+      delete progress['u-smoke']; saveJSON(LS.progress, progress);
+      state.inbox = []; saveInbox();
+      const ov = document.getElementById('inboxOverlay'); if (ov) ov.remove();
+      window.zenus = undefined; CTRL = null;
+      renderReview();
+      return out;
+    `);
+    check('学习内核：导入本机进度 + 待确认箱 + 评分镜像',
+      core.hasBtn === true && core.imported === true && core.took === true
+      && core.upserted === true && core.rated === true && core.cardAdded === true
+      && core.inboxLeft === 0 && core.importCards >= 0, core);
+
     if (pdfArg) {
       const pdf = await probe('PDF', `
         const b = await (await fetch('${base}smoke.pdf')).blob();

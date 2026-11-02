@@ -1,7 +1,7 @@
 // 学习机 Lite — 静态 PWA：内容来自 pack.json，进度存本地，AI 直连 OpenAI 兼容接口
 'use strict';
 
-const BUILD = '2026-10-31.21';
+const BUILD = '2026-11-02.1';
 
 const LS = {
   progress: 'zenus.progress.v1',
@@ -15,6 +15,7 @@ const LS = {
   cardIndex: 'zenus.cards.index.v1',   // 词 → 卡片 id（跨库去重）
   schema: 'zenus.schema.v2',
   sources: 'zenus.sources.v1',   // Legado 书源（先只存元信息，规则解析下周做）
+  inbox: 'zenus.inbox.v1',       // 原生学习内核的「待确认」卡（阅读器存的）
 };
 
 const DEFAULT_SETTINGS = {
@@ -46,6 +47,7 @@ const state = {
   picked: null,
   chat: [],
   busy: false,
+  inbox: [],
 };
 
 const $ = (s) => document.querySelector(s);
@@ -95,6 +97,70 @@ function nativeCall(cmd, args = {}, timeout = 10000) {
   });
 }
 
+// ── 原生学习内核（Core）────────────────────────────────
+// 只有 APK 里有；浏览器里所有调用返回 null，功能自动退回本地（离线兜底）。
+// 约定：Core 是唯一真源，PWA 只做视图；S1 阶段先「导入 + 镜像」，不抢本地主库。
+function coreCall(cmd, args = {}, timeout = 15000) {
+  if (!nativePort()) return Promise.resolve(null);
+  return nativeCall(cmd, args, timeout).catch(() => null);
+}
+
+function toCoreCard(c) {
+  return {
+    id: c.id,
+    front: c.front || '',
+    back: c.back || '',
+    hint: c.hint || '',
+    example: c.example || '',
+    exampleCN: c.exampleCN || '',
+    phonetic: c.hint || '',
+    topic: c.topic || '',
+    sourceKind: (c.source && c.source.kind) || 'pwa',
+    sourceTitle: (c.source && c.source.title) || '',
+    sourceUrl: (c.source && c.source.url) || '',
+    createdAt: c.createdAt || Date.now(),
+    updatedAt: c.updatedAt || Date.now(),
+  };
+}
+
+// 首次进 App：把本机已有的卡/进度/已掌握/流水一次性导进 Core；幂等，失败下次再试
+async function importToCoreOnce() {
+  if (!nativePort() || settings.coreImported) return;
+  const payload = {
+    userCards,
+    progress,
+    known,
+    log: reviewLog.slice(-2000),
+  };
+  const r = await coreCall('learner.import', { payload }, 30000);
+  if (r) {
+    settings.coreImported = true;
+    saveJSON(LS.settings, settings);
+  }
+}
+
+// 拉原生「待确认」：取走即清空，落到本地 inbox，确认后才变成本地卡
+async function pullCoreInbox() {
+  const arr = await coreCall('inbox.take', {}, 8000);
+  if (!Array.isArray(arr) || !arr.length) return;
+  const seen = new Set(state.inbox.map((x) => x.id || x.front));
+  let added = 0;
+  for (const it of arr) {
+    const key = it.id || it.front;
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    state.inbox.push(it);
+    added++;
+  }
+  if (added) {
+    saveJSON(LS.inbox, state.inbox);
+    if (state.tab === 'review') renderReview();
+    else toast('有 ' + state.inbox.length + ' 张待确认（阅读器存的）');
+  }
+}
+
+function saveInbox() { saveJSON(LS.inbox, state.inbox); }
+
 // 读剪贴板：App 里走原生（WebView 常被拒），浏览器里走标准 API
 async function readClipText() {
   if (nativePort()) {
@@ -121,6 +187,7 @@ let known = loadJSON(LS.known, {});   // 已掌握词表：下次抓生词时跳
 let userCards = loadJSON(LS.userCards, []);  // 阅读时自己存的卡
 let reviewLog = loadJSON(LS.log, []);
 let settings = { ...DEFAULT_SETTINGS, ...loadJSON(LS.settings, {}) };
+state.inbox = loadJSON(LS.inbox, []);
 state.chat = loadJSON(LS.chat, []);
 
 // ── 材料落库（IndexedDB）──────────────────────────────
@@ -346,6 +413,9 @@ function schedule(id, rating, word) {
     if (rating === 'again' && !knownIsManual(word)) unmarkKnown(word);
     else maybePromote(id, word, e);
   }
+
+  // 镜像到原生学习内核（App 里才有；浏览器里是 no-op）。S1 先双写，不抢本地主库。
+  coreCall('review.rate', { cardId: id, rating, source: 'pwa' });
 }
 
 // ── 数据 ──────────────────────────────────────────────
@@ -532,6 +602,85 @@ function courseLang() {
   return (c?.id || '').startsWith('jp') ? 'ja-JP' : 'en-US';
 }
 
+// 原生阅读器「存卡」进来的待确认箱：确认才入复习，跳过即丢
+function inboxBar() {
+  const n = (state.inbox || []).length;
+  if (!n) return '';
+  return `<div class="row" style="margin-bottom:8px">
+    <button class="btn" id="inboxBtn">待确认 ${n} 张（阅读器/AI 存的）</button>
+  </div>`;
+}
+
+function bindInboxBtn() {
+  const b = document.getElementById('inboxBtn');
+  if (b) b.onclick = showInboxSheet;
+}
+
+function showInboxSheet() {
+  const items = state.inbox || [];
+  let o = document.getElementById('inboxOverlay');
+  if (!o) {
+    o = document.createElement('div');
+    o.id = 'inboxOverlay';
+    o.className = 'kpsheet';
+    document.body.appendChild(o);
+  }
+  const body = items.length ? items.map((it, i) => `<div class="card" style="margin:8px 0" data-row="${i}">
+      <div class="front" style="font-size:17px">${esc(it.front || '')}</div>
+      ${it.hint ? `<div class="sub">${esc(it.hint)}</div>` : ''}
+      ${it.back ? `<div class="back">${esc(it.back)}</div>` : ''}
+      ${it.example ? `<div class="eg">${esc(it.example)}</div>` : ''}
+      ${it.exampleCN ? `<div class="egcn">${esc(it.exampleCN)}</div>` : ''}
+      <div class="row" style="margin-top:8px">
+        <button class="btn primary" data-add="${i}">加入生词</button>
+        <button class="btn ghost" data-skip="${i}">跳过</button>
+      </div>
+    </div>`).join('') : '<div class="empty">没有待确认</div>';
+  o.innerHTML = `<div class="kpPanel"><div class="kpHead"><span>待确认（${items.length}）</span>
+    <button id="inboxClose">关闭</button></div><div class="kpBody">${body}</div></div>`;
+  o.querySelector('#inboxClose').onclick = () => o.remove();
+  o.onclick = (e) => { if (e.target === o) o.remove(); };
+  o.querySelectorAll('[data-add]').forEach((b) => {
+    b.onclick = async () => {
+      const i = Number(b.dataset.add);
+      const it = items[i];
+      if (!it) return;
+      if (isKnown(it.front)) { toast('「' + it.front + '」已标记为已掌握'); b.disabled = true; return; }
+      const r = upsertCard({
+        front: it.front,
+        back: it.back,
+        hint: it.hint,
+        example: it.example,
+        exampleCN: it.exampleCN,
+        topic: it.topic || '阅读生词',
+        source: { kind: it.sourceKind || 'native', title: it.sourceTitle || '', url: it.sourceUrl || '' },
+      });
+      if (r.card) {
+        await coreCall('cards.upsert', { cards: [toCoreCard(r.card)] });
+        b.textContent = r.reason === 'merged' ? '已存在' : '已加入';
+        b.disabled = true;
+        state.inbox.splice(i, 1);
+        saveInbox();
+      } else {
+        b.textContent = '已存在';
+        b.disabled = true;
+        state.inbox.splice(i, 1);
+        saveInbox();
+      }
+    };
+  });
+  o.querySelectorAll('[data-skip]').forEach((b) => {
+    b.onclick = () => {
+      const i = Number(b.dataset.skip);
+      const row = o.querySelector('[data-row="' + i + '"]');
+      if (row) row.style.opacity = '.35';
+      b.disabled = true;
+      state.inbox.splice(i, 1);
+      saveInbox();
+    };
+  });
+}
+
 function renderReview() {
   if (!state.queue.length) {
     state.queue = dueQueue();
@@ -539,7 +688,7 @@ function renderReview() {
     state.revealed = false;
   }
   if (!state.queue.length) {
-    view.innerHTML = `${statsBar()}
+    view.innerHTML = `${inboxBar()}${statsBar()}
       <div class="empty">今天这一课清空了 👍<br><span class="sub">换一门课，或让 AI 出几道新题</span></div>
       <div class="row" style="margin-top:16px">
         <button class="btn primary" id="aiQuizBtn">做 10 道测验题</button>
@@ -553,6 +702,7 @@ function renderReview() {
       state.queue = dueQueue(); render();
     };
     $('#aiQuizBtn').onclick = () => { state.tab = 'quiz'; state.quiz = null; render(); };
+    bindInboxBtn();
     return;
   }
   if (!state.current) {
@@ -607,7 +757,7 @@ function renderReview() {
     </button>
   </div>`;
 
-  view.innerHTML = `${statsBar()}
+  view.innerHTML = `${inboxBar()}${statsBar()}
     <div class="card" id="cardBox">${body}</div>
     ${state.revealed ? rates : `<div class="row" style="margin-top:12px">
       <button class="btn primary" id="reveal">${isQuiz ? '看答案' : '翻面'}</button></div>`}`;
@@ -655,6 +805,8 @@ function renderReview() {
     else { markKnown(c.front, 'manual'); toast('已标记为掌握，下次抓词会跳过'); }
     renderReview();
   };
+
+  bindInboxBtn();
 
   // 显示下次复习间隔，给出反馈感
   if (state.revealed) {
@@ -6195,6 +6347,8 @@ function upsertCard(input) {
   cardIndex[key] = card.id;
   saveJSON(LS.userCards, userCards);
   saveJSON(LS.cardIndex, cardIndex);
+  // 镜像到原生学习内核（App 里才有；浏览器里是 no-op）
+  coreCall('cards.upsert', { cards: [toCoreCard(card)] });
   return { added: true, card };
 }
 
@@ -6281,6 +6435,12 @@ async function pullWebCards() {
     pullWebCards();
     setTimeout(pullWebCards, 1500);
     setTimeout(pullWebCards, 6000);
+    // 原生学习内核：首次导入本机进度（幂等）+ 拉阅读器存的待确认卡
+    importToCoreOnce();
+    setTimeout(importToCoreOnce, 2000);
+    setTimeout(importToCoreOnce, 6000);
+    pullCoreInbox();
+    setTimeout(pullCoreInbox, 2500);
     // yuedu:// 一键导入：App 收到链接后放进了收件箱，这里取走并入库
     pullSourceImports();
     setTimeout(pullSourceImports, 2500);
