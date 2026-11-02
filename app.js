@@ -1,7 +1,7 @@
 // 学习机 Lite — 静态 PWA：内容来自 pack.json，进度存本地，AI 直连 OpenAI 兼容接口
 'use strict';
 
-const BUILD = '2026-11-02.3';
+const BUILD = '2026-11-02.4';
 
 const LS = {
   progress: 'zenus.progress.v1',
@@ -997,6 +997,7 @@ function renderSettings() {
     settings.ctxMsgs = Math.max(0, Math.min(40, Number($('#s-ctx').value) || 0));
     if ($('#s-rate')) settings.ttsRate = Math.min(1.2, Math.max(0.5, Number($('#s-rate').value) || 0.9));
     saveJSON(LS.settings, settings);
+    pushAiConfig();
     toast('设置已保存');
   };
   const bi = $('#btnInstall');
@@ -2787,6 +2788,7 @@ function renderReader() {
     + '<button id="spreadBtn" class="t-close">' + (RDR.spread ? '单页' : '双页') + '</button>'
     + '<button id="ocrBtn" class="t-close">识别文字</button>'
     + '<button id="kpBtn" class="t-close">知识点</button>'
+    + '<button id="radarBtn" class="t-close">生词</button>'
     + '<button id="vizBtn" class="t-close">看图出题</button>'
     + '<button id="toggleScroll" class="t-close">滚动</button>'
     + '<button id="closePdf" class="t-close">关闭</button>'
@@ -2813,6 +2815,8 @@ function renderReader() {
   if (sb) sb.onclick = toggleSpread;
   const kpb2 = document.getElementById('kpBtn');
   if (kpb2) kpb2.onclick = () => { hideTools(); showPoints(); };
+  const rdb2 = document.getElementById('radarBtn');
+  if (rdb2) rdb2.onclick = () => { hideTools(); radarWords(); };
   const viz = document.getElementById('vizBtn');
   if (viz) viz.onclick = () => { hideTools(); visionFromPdfPage(); };
   const dis = document.getElementById('dismissWarn');
@@ -5324,6 +5328,35 @@ function rememberPoints(data) {
   saveJSON(LS.kpoints, kpStore);
 }
 
+// 生词雷达：把本章正文交给原生，按「已掌握」过滤后挑 5-8 个词进待确认箱
+async function radarWords() {
+  if (!nativePort()) return toast('生词雷达只在 App 里可用');
+  const ch = await chapterText();
+  if (!ch) return toast('这一页没有可读的文字');
+  const text = String(ch.text || '').slice(0, 6000);
+  if (text.length < 80) return toast('文字太少，先多读几段');
+  toast('正在挑生词…');
+  const r = await coreCall('word-radar', {
+    text,
+    bookTitle: (RDR.book && RDR.book.name) || RDR.name || '',
+    chapter: RDR.book ? (RDR.ch || 0) : (RDR.page || 0),
+    limit: 8,
+  }, 150000);
+  if (!r) return toast('生词雷达没返回（要装新版 App）');
+  await pullCoreInbox();
+  toast('已放入待确认 ' + (r.added || 0) + ' 个');
+}
+
+// 把 PWA 的 key/model/base 推给原生，S2 的 ai.ask 才有 key 可用
+async function pushAiConfig() {
+  if (!nativePort() || !settings.key) return;
+  await coreCall('ai.config.set', {
+    apiKey: settings.key,
+    model: settings.model,
+    baseUrl: settings.apiBase,
+  }, 15000);
+}
+
 async function showPoints() {
   const ch = await chapterText();
   if (!ch) return toast('这一页没有可读的文字（扫描件先点「识别文字」）');
@@ -5541,6 +5574,7 @@ function renderTextBook() {
     + '<button id="spreadBtn">' + (RDR.spread ? '单页' : '双页') + '</button>'
     + '<div class="sep"></div>'
     + '<button id="kpBtn" class="t-close">知识点</button>'
+    + '<button id="radarBtn" class="t-close">生词</button>'
     + '<button id="vizBtn" class="t-close">看图出题</button>'
     + '<button id="togglePaged" class="t-close">' + (RDR.paged ? '滚动' : '分页') + '</button>'
     + '<button id="closeBook" class="t-close">关闭</button></div>';
@@ -5557,6 +5591,8 @@ function renderTextBook() {
   document.getElementById('spreadBtn').onclick = () => toggleSpread();
   const kpb = document.getElementById('kpBtn');
   if (kpb) kpb.onclick = () => { hideTools(); showPoints(); };
+  const rdb = document.getElementById('radarBtn');
+  if (rdb) rdb.onclick = () => { hideTools(); radarWords(); };
   document.getElementById('closeBook').onclick = () => { saveReadPos(); resetBook(); renderReader(); };
   if (RDR.paged) {
     layoutPages(RDR.pendingRatio != null ? RDR.pendingRatio : 0);
@@ -5905,6 +5941,7 @@ function renderPdfScroll() {
     + '<button id="spreadBtn" class="t-close">' + (RDR.spread ? '单页' : '双页') + '</button>'
     + '<button id="ocrBtn" class="t-close">识别文字</button>'
     + '<button id="kpBtn" class="t-close">知识点</button>'
+    + '<button id="radarBtn" class="t-close">生词</button>'
     + '<button id="vizBtn" class="t-close">看图出题</button>'
     + '<button id="toggleScroll" class="t-close">滚动</button>'
     + '<button id="closePdf" class="t-close">关闭</button>'
@@ -5940,6 +5977,8 @@ function renderPdfScroll() {
   if (tb2) tb2.onclick = () => showOutline();
   const kpb2 = document.getElementById('kpBtn');
   if (kpb2) kpb2.onclick = () => { hideTools(); showPoints(); };
+  const rdb2 = document.getElementById('radarBtn');
+  if (rdb2) rdb2.onclick = () => { hideTools(); radarWords(); };
   const viz = document.getElementById('vizBtn');
   if (viz) viz.onclick = () => { hideTools(); visionFromPdfPage(); };
   document.getElementById('closePdf').onclick = () => { saveReadPos(); resetBook(); renderReader(); };
@@ -6515,6 +6554,8 @@ async function pullWebCards() {
     importToCoreOnce();
     setTimeout(importToCoreOnce, 2000);
     setTimeout(importToCoreOnce, 6000);
+    pushAiConfig();
+    setTimeout(pushAiConfig, 2500);
     pullCoreInbox();
     setTimeout(pullCoreInbox, 2500);
     // yuedu:// 一键导入：App 收到链接后放进了收件箱，这里取走并入库

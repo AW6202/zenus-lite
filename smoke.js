@@ -1291,6 +1291,29 @@ class CDP {
       aiRoute.cmd === 'ai.ask' && aiRoute.skill === 'quiz' && aiRoute.json === true
       && aiRoute.hasSystem === true && aiRoute.txt === '{"questions":[]}', aiRoute);
 
+    // 配置同步：PWA 的 key 必须推到原生，否则 ai.ask 报「还没配置 AI key」
+    const cfg = await probe('AI 配置同步', `
+      const calls = [];
+      const cbs = [];
+      window.zenus = {
+        postMessage(json) {
+          const m = JSON.parse(json);
+          calls.push(m);
+          cbs.forEach((cb) => cb({ data: JSON.stringify({ id: m.id, ok: true, data: { ok: true } }) }));
+        },
+        addEventListener(type, cb) { if (type === 'message') cbs.push(cb); },
+      };
+      CTRL = null;
+      const oldKey = settings.key;
+      settings.key = 'sk-smoke';
+      await pushAiConfig();
+      const c = calls[0] || {};
+      window.zenus = undefined; CTRL = null; settings.key = oldKey;
+      return { cmd: c.cmd, key: c.args && c.args.apiKey, model: c.args && c.args.model };
+    `);
+    check('AI 配置同步：启动把 key/model 推给原生',
+      cfg.cmd === 'ai.config.set' && cfg.key === 'sk-smoke' && !!cfg.model, cfg);
+
     if (pdfArg) {
       const pdf = await probe('PDF', `
         const b = await (await fetch('${base}smoke.pdf')).blob();
