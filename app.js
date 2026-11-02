@@ -1,7 +1,7 @@
 // 学习机 Lite — 静态 PWA：内容来自 pack.json，进度存本地，AI 直连 OpenAI 兼容接口
 'use strict';
 
-const BUILD = '2026-11-02.9';
+const BUILD = '2026-11-02.10';
 
 const LS = {
   progress: 'zenus.progress.v1',
@@ -664,7 +664,9 @@ function showInboxSheet() {
       </div>
     </div>`).join('') : '<div class="empty">没有待确认</div>';
   o.innerHTML = `<div class="kpPanel"><div class="kpHead"><span>待确认（${items.length}）</span>
-    <button id="inboxClose">关闭</button></div><div class="kpBody">${body}</div></div>`;
+    <button id="inboxClose">关闭</button></div><div class="kpBody">
+    <div class="sub" style="margin-bottom:6px">确认后进「我的生词」；在顶部课程下拉里选它就能复习</div>
+    ${body}</div></div>`;
   const close = () => {
     o.remove();
     state.inbox = state.inbox.filter((x) => !x._resolved);
@@ -695,6 +697,8 @@ function showInboxSheet() {
         await coreCall('cards.upsert', { cards: [toCoreCard(r.card)] });
         b.textContent = r.reason === 'merged' ? '已存在' : '已加入';
         b.disabled = true;
+        // 立即刷新顶部课程下拉，让「我的生词（N）」当场出现（以前要重启才见）
+        renderHeader();
       } else {
         b.textContent = '已存在';
         b.disabled = true;
