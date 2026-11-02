@@ -1,7 +1,7 @@
 // 学习机 Lite — 静态 PWA：内容来自 pack.json，进度存本地，AI 直连 OpenAI 兼容接口
 'use strict';
 
-const BUILD = '2026-11-02.13';
+const BUILD = '2026-11-02.14';
 
 const LS = {
   progress: 'zenus.progress.v1',
@@ -4452,7 +4452,7 @@ function isSourceSpecUrl(url) {
   }
 }
 
-function openInBrowser(url) {
+function openInBrowser(url, reader = false) {
   const u = String(url || '').trim();
   if (!/^https?:/i.test(u)) { toast('这个书源没给可打开的地址'); return; }
   if (isSourceSpecUrl(u)) {
@@ -4460,7 +4460,8 @@ function openInBrowser(url) {
     return;
   }
   if (!nativePort()) { window.open(u, '_blank'); return; }
-  nativeCall('openUrl', { url: u }).catch((e) => toast('打开失败：' + (e.message || e)));
+  nativeCall('openUrl', { url: u, reader: !!reader })
+    .catch((e) => toast('打开失败：' + (e.message || e)));
 }
 
 async function searchInSource(i, key) {
@@ -4488,7 +4489,8 @@ async function searchInSource(i, key) {
           + esc(b.name || '未命名') + '</div><div class="sub">' + esc(b.author || '') + '</div></div>'
           // 接口源（或是伪地址的书）不摆「浏览器打开」：那个按钮只会把带 token 的地址丢给浏览器
           + (isSourceSpecUrl(b.bookUrl) ? ''
-            : '<button class="btn ' + (readerFirst ? 'ghost' : 'primary') + '" data-openbook="' + k + '" style="width:auto;padding:6px 10px;font-size:12px">浏览器打开</button>')
+            : '<button class="btn ' + (readerFirst ? 'ghost' : 'primary') + '" data-openbook="' + k + '" style="width:auto;padding:6px 10px;font-size:12px">浏览器打开</button>'
+              + '<button class="btn ghost" data-openreader="' + k + '" style="width:auto;padding:6px 10px;font-size:12px">阅读模式</button>')
           + '<button class="btn ' + (readerFirst ? 'primary' : 'ghost') + '" data-addbook="' + k + '" style="width:auto;padding:6px 10px;font-size:12px">'
           + (readerFirst ? '读进阅读器' : '加入书架') + '</button></div>'
         ).join('');
@@ -4497,6 +4499,9 @@ async function searchInSource(i, key) {
       });
       box.querySelectorAll('[data-openbook]').forEach((el) => {
         el.onclick = () => openInBrowser(list[Number(el.dataset.openbook)].bookUrl);
+      });
+      box.querySelectorAll('[data-openreader]').forEach((el) => {
+        el.onclick = () => openInBrowser(list[Number(el.dataset.openreader)].bookUrl, true);
       });
     }
   } catch (e) {
@@ -5968,13 +5973,16 @@ function showBookToc() {
     + (b.origin && b.origin.raw && b.origin.tocUrl
       ? '<button class="btn" id="moreCh">继续抓 ' + MORE_BATCH + ' 章</button>' : '')
     + (b.chapters[cur] && b.chapters[cur].url && !isSourceSpecUrl(b.chapters[cur].url)
-      ? '<button class="btn ghost" id="tocBrowser">浏览器打开本章</button>' : '')
+      ? '<button class="btn" id="tocReader">阅读模式打开本章</button>'
+        + '<button class="btn ghost" id="tocBrowser">浏览器打开本章</button>' : '')
     + '</div>'
     + '<div class="list">' + b.chapters.map((c, i) =>
       '<button class="tocItem' + (i === cur ? ' on' : '') + '" data-i="' + i + '">'
       + '<span>' + esc(c.title || ('第 ' + (i + 1) + ' 节')) + '</span>'
       + '<small>' + (i + 1) + (c.url && !isSourceSpecUrl(c.url) ? ' · 可浏览器打开' : '') + '</small></button>').join('') + '</div>';
   document.getElementById('tocBack').onclick = () => renderTextBook();
+  const tr = document.getElementById('tocReader');
+  if (tr) tr.onclick = () => openChapterInBrowser(b.chapters[cur] && b.chapters[cur].url, true);
   const tb = document.getElementById('tocBrowser');
   if (tb) tb.onclick = () => openChapterInBrowser(b.chapters[cur] && b.chapters[cur].url);
   const mc = document.getElementById('moreCh');
@@ -6006,12 +6014,12 @@ function showBookToc() {
 
 // 用真浏览器打开章节页：漫画站懒加载/防盗链/JS 渲染都能自然解决，
 // 规则引擎做不到的"打开就能看"就靠这一步。
-function openChapterInBrowser(url) {
+function openChapterInBrowser(url, reader = false) {
   if (!url) { toast('这一章没有保存地址'); return; }
   if (isSourceSpecUrl(url)) { toast('这一章是接口地址（书源伪地址），浏览器打不开；直接在这里读就行'); return; }
   if (!nativePort()) { toast('要在 App 里才能交给浏览器打开'); return; }
-  nativeCall('openUrl', { url }, 5000)
-    .then(() => toast('已交给浏览器打开'))
+  nativeCall('openUrl', { url, reader: !!reader }, 5000)
+    .then(() => toast(reader ? '已交给浏览器（阅读模式）' : '已交给浏览器打开'))
     .catch((e) => toast('打开失败：' + (e.message || e)));
 }
 

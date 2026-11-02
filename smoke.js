@@ -1317,6 +1317,28 @@ class CDP {
     `);
     check('生词雷达目标语言开关可回显', langSel.v === 'ja', langSel);
 
+    // S6：阅读模式打开必须把 reader:true 传给原生
+    const openMode = await probe('阅读模式打开', `
+      const calls = [];
+      const cbs = [];
+      window.zenus = {
+        postMessage(json) {
+          const m = JSON.parse(json);
+          calls.push(m);
+          cbs.forEach((cb) => cb({ data: JSON.stringify({ id: m.id, ok: true, data: true }) }));
+        },
+        addEventListener(type, cb) { if (type === 'message') cbs.push(cb); },
+      };
+      CTRL = null;
+      openInBrowser('https://example.com/chapter', true);
+      await new Promise((r) => setTimeout(r, 30));
+      const c = calls[0] || {};
+      window.zenus = undefined; CTRL = null;
+      return { cmd: c.cmd, reader: c.args && c.args.reader };
+    `);
+    check('阅读模式：openUrl 带 reader:true',
+      openMode.cmd === 'openUrl' && openMode.reader === true, openMode);
+
     if (pdfArg) {
       const pdf = await probe('PDF', `
         const b = await (await fetch('${base}smoke.pdf')).blob();
