@@ -1,7 +1,7 @@
 // 学习机 Lite — 静态 PWA：内容来自 pack.json，进度存本地，AI 直连 OpenAI 兼容接口
 'use strict';
 
-const BUILD = '2026-11-02.4';
+const BUILD = '2026-11-02.5';
 
 const LS = {
   progress: 'zenus.progress.v1',
@@ -5341,7 +5341,7 @@ async function radarWords() {
     bookTitle: (RDR.book && RDR.book.name) || RDR.name || '',
     chapter: RDR.book ? (RDR.ch || 0) : (RDR.page || 0),
     limit: 8,
-  }, 150000);
+  }, 200000);
   if (!r) return toast('生词雷达没返回（要装新版 App）');
   await pullCoreInbox();
   toast('已放入待确认 ' + (r.added || 0) + ' 个');
