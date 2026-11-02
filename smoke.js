@@ -1211,7 +1211,9 @@ class CDP {
           const reply = (data) => cbs.forEach((cb) => cb({ data: JSON.stringify({ id: m.id, ok: true, data }) }));
           if (m.cmd === 'inbox.take') {
             reply([{ id: 'n-smoke', kind: 'card', front: 'ephemeral', back: '短暂的',
-                     hint: '/ɪˈfemərəl/', sourceKind: 'reader', sourceTitle: '冒烟书' }]);
+                     hint: '/ɪˈfemərəl/', sourceKind: 'reader', sourceTitle: '冒烟书' },
+                   { id: 'n-smoke2', kind: 'card', front: 'serendipity', back: '意外发现',
+                     hint: '/ˌserənˈdɪpəti/', sourceKind: 'reader', sourceTitle: '冒烟书' }]);
           } else if (m.cmd === 'learner.import') {
             importCards = (m.args.payload.userCards || []).length;
             reply({ cards: importCards });
@@ -1233,6 +1235,10 @@ class CDP {
       const add = document.querySelector('#inboxOverlay [data-add="0"]');
       if (add) add.click();
       await new Promise((r) => setTimeout(r, 80));
+      // 第二项必须还能点：按索引 splice 的旧写法会在这里跳项
+      const add2 = document.querySelector('#inboxOverlay [data-add="1"]');
+      if (add2) add2.click();
+      await new Promise((r) => setTimeout(r, 80));
       schedule('u-smoke', 'good', 'ephemeral');
       await new Promise((r) => setTimeout(r, 80));
       const cmds = calls.map((c) => c.cmd);
@@ -1242,11 +1248,12 @@ class CDP {
         took: cmds.includes('inbox.take'),
         upserted: cmds.includes('cards.upsert'),
         rated: cmds.includes('review.rate'),
-        cardAdded: userCards.some((c) => c.front === 'ephemeral'),
+        cardAdded: userCards.some((c) => c.front === 'ephemeral')
+          && userCards.some((c) => c.front === 'serendipity'),
         inboxLeft: state.inbox.length,
       };
       // 清理，别污染后面的用例
-      userCards = userCards.filter((c) => c.front !== 'ephemeral');
+      userCards = userCards.filter((c) => c.front !== 'ephemeral' && c.front !== 'serendipity');
       saveJSON(LS.userCards, userCards);
       delete progress['u-smoke']; saveJSON(LS.progress, progress);
       state.inbox = []; saveInbox();

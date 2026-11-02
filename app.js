@@ -118,24 +118,34 @@ function toCoreCard(c) {
     sourceKind: (c.source && c.source.kind) || 'pwa',
     sourceTitle: (c.source && c.source.title) || '',
     sourceUrl: (c.source && c.source.url) || '',
+    bookId: c.bookId || '',
+    bookTitle: c.bookTitle || '',
+    chapter: c.chapter || 0,
     createdAt: c.createdAt || Date.now(),
     updatedAt: c.updatedAt || Date.now(),
   };
 }
 
 // 首次进 App：把本机已有的卡/进度/已掌握/流水一次性导进 Core；幂等，失败下次再试
+let coreImporting = false;
 async function importToCoreOnce() {
-  if (!nativePort() || settings.coreImported) return;
-  const payload = {
-    userCards,
-    progress,
-    known,
-    log: reviewLog.slice(-2000),
-  };
-  const r = await coreCall('learner.import', { payload }, 30000);
-  if (r) {
-    settings.coreImported = true;
-    saveJSON(LS.settings, settings);
+  if (!nativePort() || settings.coreImported || coreImporting) return;
+  coreImporting = true;
+  try {
+    const payload = {
+      userCards,
+      progress,
+      known,
+      log: reviewLog.slice(-2000),
+    };
+    // 慢设备上 2000 条流水可能超过 30 秒；宁可等，也不要超时后重试导致并发导入
+    const r = await coreCall('learner.import', { payload }, 60000);
+    if (r) {
+      settings.coreImported = true;
+      saveJSON(LS.settings, settings);
+    }
+  } finally {
+    coreImporting = false;
   }
 }
 
@@ -638,8 +648,14 @@ function showInboxSheet() {
     </div>`).join('') : '<div class="empty">没有待确认</div>';
   o.innerHTML = `<div class="kpPanel"><div class="kpHead"><span>待确认（${items.length}）</span>
     <button id="inboxClose">关闭</button></div><div class="kpBody">${body}</div></div>`;
-  o.querySelector('#inboxClose').onclick = () => o.remove();
-  o.onclick = (e) => { if (e.target === o) o.remove(); };
+  const close = () => {
+    o.remove();
+    state.inbox = state.inbox.filter((x) => !x._resolved);
+    saveInbox();
+    renderReview();
+  };
+  o.querySelector('#inboxClose').onclick = close;
+  o.onclick = (e) => { if (e.target === o) close(); };
   o.querySelectorAll('[data-add]').forEach((b) => {
     b.onclick = async () => {
       const i = Number(b.dataset.add);
@@ -654,29 +670,42 @@ function showInboxSheet() {
         exampleCN: it.exampleCN,
         topic: it.topic || '阅读生词',
         source: { kind: it.sourceKind || 'native', title: it.sourceTitle || '', url: it.sourceUrl || '' },
+        bookId: it.bookId,
+        bookTitle: it.bookTitle,
+        chapter: it.chapter,
       });
       if (r.card) {
         await coreCall('cards.upsert', { cards: [toCoreCard(r.card)] });
         b.textContent = r.reason === 'merged' ? '已存在' : '已加入';
         b.disabled = true;
-        state.inbox.splice(i, 1);
-        saveInbox();
       } else {
         b.textContent = '已存在';
         b.disabled = true;
-        state.inbox.splice(i, 1);
-        saveInbox();
       }
+      // 不要按索引 splice：后面的按钮还拿着旧索引，会跳项。标记后按对象过滤。
+      it._resolved = true;
+      state.inbox = state.inbox.filter((x) => !x._resolved);
+      saveInbox();
+      const left = state.inbox.length;
+      const head = o.querySelector('.kpHead span');
+      if (head) head.textContent = '待确认（' + left + '）';
+      if (!left) setTimeout(() => { o.remove(); renderReview(); }, 350);
     };
   });
   o.querySelectorAll('[data-skip]').forEach((b) => {
     b.onclick = () => {
       const i = Number(b.dataset.skip);
+      const it = items[i];
       const row = o.querySelector('[data-row="' + i + '"]');
       if (row) row.style.opacity = '.35';
       b.disabled = true;
-      state.inbox.splice(i, 1);
+      if (it) it._resolved = true;
+      state.inbox = state.inbox.filter((x) => !x._resolved);
       saveInbox();
+      const left = state.inbox.length;
+      const head = o.querySelector('.kpHead span');
+      if (head) head.textContent = '待确认（' + left + '）';
+      if (!left) setTimeout(() => { o.remove(); renderReview(); }, 250);
     };
   });
 }
@@ -6039,7 +6068,10 @@ async function fillCardMeaning(card) {
     card.hint = d.phonetic || '';
     card.example = d.example || '';
     card.exampleCN = d.exampleCN || '';
+    card.updatedAt = Date.now();
     saveJSON(LS.userCards, userCards);
+    // 释义补上后同步给原生内核，否则 Core 里这张卡永远是空背面
+    coreCall('cards.upsert', { cards: [toCoreCard(card)] });
     toast('释义已补上');
   } catch (err) {
     toast('释义没取到：' + err.message);
@@ -6284,7 +6316,7 @@ function mergeCardFields(target, incoming, keepTargetFirst) {
     if (keepTargetFirst && target[k]) return;
     target[k] = incoming[k];
   };
-  ['back', 'hint', 'explain', 'topic', 'source'].forEach(fill);
+  ['back', 'hint', 'explain', 'topic', 'source', 'bookId', 'bookTitle', 'chapter'].forEach(fill);
   if (Array.isArray(incoming.options) && !(target.options || []).length) target.options = incoming.options;
   target.updatedAt = Math.max(target.updatedAt || 0, incoming.updatedAt || Date.now());
 }
@@ -6329,7 +6361,9 @@ function upsertCard(input) {
   if (existing) {
     mergeCardFields(existing, input, true);
     if (input.id && input.id !== existing.id) absorbProgress(input.id, existing.id);
+    existing.updatedAt = Date.now();
     saveJSON(LS.userCards, userCards);
+    coreCall('cards.upsert', { cards: [toCoreCard(existing)] });
     return { added: false, reason: 'merged', card: existing };
   }
 
