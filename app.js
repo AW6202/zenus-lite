@@ -1,7 +1,7 @@
 // 学习机 Lite — 静态 PWA：内容来自 pack.json，进度存本地，AI 直连 OpenAI 兼容接口
 'use strict';
 
-const BUILD = '2026-11-03.2';
+const BUILD = '2026-11-03.3';
 
 const LS = {
   progress: 'zenus.progress.v1',
@@ -4308,10 +4308,15 @@ async function runLoginAction(k) {
   if (!it.action) return toast('这个项没有动作');
   LOGIN.busy = true;
   toast('执行：' + (it.name || ''));
+  // 记住这次登录动作拿到什么：登录不上时，「没弹窗」和「弹窗白屏」是两种完全不同的病，
+  // 只有把 open 地址/脚本报错摊出来才分得清。
+  const rec = { at: Date.now(), action: it.action, name: it.name || '', open: '', vars: '', error: '' };
   try {
     const r = await nativeCall('bookLoginAction', { source: sources[LOGIN.idx].raw, action: it.action }, 90000);
     const open = (r && r.open) || '';
     const vars = (r && r.vars) || '';
+    rec.open = open; rec.vars = vars; rec.error = (r && r.error) || '';
+    LOGIN.last = rec;
     if (open) {
       // 把源和动作名一起交给原生：登录窗关掉后，原生会自己再跑一次这个动作
       // （那时 cookie 已经落盘，syncLogin 就能读到 CYJapiToken 并写进源变量）。
@@ -4324,19 +4329,41 @@ async function runLoginAction(k) {
         action: it.action,
       }, 8000);
       LOGIN.pendingAction = it.action;
-      toast('请在弹出的页面完成登录；关掉登录窗后会自动同步 token');
+      toast('打开登录页：' + open.slice(0, 48) + ' —— 登录完关掉窗口会自动同步');
     } else if (vars) {
       toast('已拿到变量：' + vars.slice(0, 60));
-    } else if (r && r.error) {
-      toast('脚本报错：' + r.error);
+    } else if (rec.error) {
+      toast('脚本报错：' + rec.error);
     } else {
-      toast('执行完成（没有返回变量）');
+      // 没地址、没变量、没报错 = 这个源的登录脚本在我们的 JS 引擎里没走到开窗那一步
+      toast('这个源没返回登录地址（不是网络问题，是登录脚本没跑出窗口）');
+      showLoginDiag(rec);
     }
   } catch (e) {
-    toast('执行失败：' + (e.message || e));
+    rec.error = (e && e.message) || String(e);
+    LOGIN.last = rec;
+    toast('执行失败：' + rec.error);
   } finally {
     LOGIN.busy = false;
   }
+}
+
+// 登录没弹窗时把「脚本到底返回了什么」摊开，别让用户去猜是网络还是规则
+function showLoginDiag(rec) {
+  const o = document.createElement('div');
+  o.className = 'kpsheet';
+  o.style.cssText = 'position:fixed;inset:0;z-index:1000;background:rgba(6,8,12,.95);color:#e8eaf0;'
+    + 'font:12px/1.6 ui-monospace,Consolas,monospace;padding:14px;overflow:auto;white-space:pre-wrap;word-break:break-all';
+  o.textContent = '登录动作结果\n'
+    + '动作：' + (rec.name || '-') + ' / ' + rec.action + '\n'
+    + '登录地址：' + (rec.open || '（空——脚本没开窗）') + '\n'
+    + '脚本报错：' + (rec.error || '（无）') + '\n'
+    + '返回变量：' + (rec.vars || '（空）') + '\n\n'
+    + '「登录地址」为空 = 这个源的登录脚本没调到浏览器开窗；\n'
+    + '有地址但窗口白屏 = 那个网址本身打不开（网络/站点）。\n\n'
+    + '（点空白处关闭，截图发我）';
+  o.onclick = (e) => { if (e.target === o) o.remove(); };
+  document.body.appendChild(o);
 }
 
 let pendingLoginUrl = null;
@@ -5553,6 +5580,10 @@ async function collectDiag() {
         L.push('桥 ' + cmd + '：失败 ' + e.message + '（' + (Date.now() - t0) + 'ms）');
       }
     }
+  }
+  if (LOGIN && LOGIN.last) {
+    const g = LOGIN.last;
+    L.push('上次登录动作：' + (g.name || '-') + ' · 地址=' + (g.open || '空') + ' · 报错=' + (g.error || '无'));
   }
   L.push('内容包：' + (state.pack?.version || '-') + ' · ' + ((state.pack?.courses || []).length) + ' 门课');
   L.push('当前：tab=' + state.tab + ' course=' + (state.courseId || '-')
