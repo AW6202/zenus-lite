@@ -199,7 +199,59 @@ input.t{width:100%;background:var(--card);border:1px solid var(--line);color:var
   </button>
 </nav>
 
+<!-- 错误可见：手机 WebView 没有控制台，JS 一抛错就只剩「点了没反应」。
+     这段必须在 app.js 之前跑（它自己也可能挂），把未捕获错误画在页面上并存一份，重开还能看。 -->
+<script>
+(function () {
+  var MAX = 6, seen = [];
+  function esc(s) { return String(s == null ? '' : s).replace(/[<>&]/g, function (c) { return { '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c]; }); }
+  function bar() {
+    var t = document.getElementById('zErrBar');
+    if (t) return t;
+    t = document.createElement('div');
+    t.id = 'zErrBar';
+    t.style.cssText = 'position:fixed;left:0;right:0;bottom:0;z-index:2147483647;background:#3a1216;color:#ffd7d7;'
+      + 'font:11px/1.55 monospace;padding:8px 10px;max-height:42vh;overflow:auto;border-top:2px solid #e2585c;'
+      + 'word-break:break-all';
+    t.onclick = function (e) { if (e.target === t) t.remove(); };
+    (document.body || document.documentElement).appendChild(t);
+    return t;
+  }
+  function report(kind, msg, where, stack) {
+    var line = '[' + kind + '] ' + msg + (where ? ' @ ' + where : '');
+    if (seen.indexOf(line) >= 0) return;
+    seen.push(line);
+    try {
+      var last = JSON.parse(localStorage.getItem('zenus.err.v1') || '[]');
+      last.push({ t: Date.now(), line: line, stack: String(stack || '').slice(0, 800) });
+      localStorage.setItem('zenus.err.v1', JSON.stringify(last.slice(-20)));
+    } catch (e) { /* 存不下也得继续显示 */ }
+    var t = bar();
+    t.innerHTML = '<div style="color:#fff">页面出错（点空白处收起，截图发我）</div>'
+      + seen.slice(-MAX).map(function (s) { return '<div>' + esc(s) + '</div>'; }).join('');
+  }
+  window.__zenusReport = report;
+  window.__zenusLastErrors = function () {
+    try { return JSON.parse(localStorage.getItem('zenus.err.v1') || '[]'); } catch (e) { return []; }
+  };
+  window.addEventListener('error', function (e) {
+    var t = e.target;
+    // 资源加载失败（script/img）走的是元素事件，e.message 为空，得单独认出来
+    if (t && t !== window && t.tagName && e.message == null) {
+      report('资源', (t.src || t.href || t.tagName) + ' 加载失败', '');
+      return;
+    }
+    var f = String(e.filename || '').split('/').pop();
+    report('脚本', e.message || '未知错误', f + ':' + e.lineno + ':' + e.colno, e.error && e.error.stack);
+  }, true);
+  window.addEventListener('unhandledrejection', function (e) {
+    var r = (e && e.reason) || {};
+    report('Promise', r.message || String(r), '', r.stack);
+  });
+})();
+</script>
+
 <!-- 版本号必须跟 app.js 的 BUILD 一起改：否则手机 WebView 会吃旧缓存，看不到新功能 -->
-<script src="app.js?v=2026-11-02.14"></script>
+<script src="app.js?v=2026-11-03.1"></script>
 </body>
 </html>

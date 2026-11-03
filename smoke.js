@@ -1339,6 +1339,33 @@ class CDP {
     check('阅读模式：openUrl 带 reader:true',
       openMode.cmd === 'openUrl' && openMode.reader === true, openMode);
 
+    // 错误可见：手机 WebView 没有控制台，「点了没反应」必须自己能显示出来
+    // 负向测试：故意让 renderBrowse 抛错，页面要报错而不是停在旧页面
+    const errVisible = await probe('报错可见', `
+      const old = renderBrowse;
+      renderBrowse = () => { throw new Error('SMOKE_BOOM'); };
+      state.tab = 'browse'; render();
+      const inView = (document.getElementById('view').textContent || '');
+      const bar = document.getElementById('zErrBar');
+      const barText = bar ? bar.textContent : '';
+      renderBrowse = old;
+      state.tab = 'review'; render();
+      return { inView, barText };
+    `);
+    check('render 抛错时页面显示错误（不再停在旧页面）',
+      /出错了/.test(errVisible.inView) && /SMOKE_BOOM/.test(errVisible.inView), errVisible);
+    check('未捕获错误画到页面并记进 localStorage',
+      /SMOKE_BOOM/.test(errVisible.barText || ''), errVisible);
+
+    // 诊断面板要能收集完（不能在手机上卡在「正在收集…」）
+    const diag = await probe('诊断面板', `
+      const t0 = Date.now();
+      const txt = await collectDiag();
+      return { okLen: (txt || '').length, ms: Date.now() - t0, hasUA: /UA：/.test(txt), hasIdb: /IndexedDB/.test(txt) };
+    `);
+    check('诊断面板能收集完且含 UA / IndexedDB 结论',
+      diag.okLen > 80 && diag.hasUA && diag.hasIdb && diag.ms < 20000, diag);
+
     if (pdfArg) {
       const pdf = await probe('PDF', `
         const b = await (await fetch('${base}smoke.pdf')).blob();

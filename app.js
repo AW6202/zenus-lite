@@ -1,7 +1,7 @@
 // 学习机 Lite — 静态 PWA：内容来自 pack.json，进度存本地，AI 直连 OpenAI 兼容接口
 'use strict';
 
-const BUILD = '2026-11-02.14';
+const BUILD = '2026-11-03.1';
 
 const LS = {
   progress: 'zenus.progress.v1',
@@ -570,47 +570,42 @@ function syncReadingChrome() {
   document.body.classList.toggle('reading', reading);
 }
 
-function render() {
-  if (!state.pack) return;
-  view.addEventListener('scroll', onViewScroll, { passive: true });
-
-let resizeTimer = null;
-window.addEventListener('resize', () => {
-  clearTimeout(resizeTimer);
-  resizeTimer = setTimeout(() => {
-    if (RDR.pdf) relayoutPdf();
-    else if (RDR.paged && RDR.book) {
-      const ratio = RDR.pages > 1 ? (RDR.pageIdx || 0) / (RDR.pages - 1) : 0;
-      layoutPages(ratio);
-    }
-  }, 180);
-});
-window.addEventListener('orientationchange', () => setTimeout(() => { if (RDR.pdf) relayoutPdf(); }, 300));
-
-
-// 工具条上点了按钮就重新计时（正在缩放/翻页时不要自己收掉）
-document.addEventListener('click', (e) => {
-  if (RDR.toolsVisible && e.target.closest && e.target.closest('.floating')) scheduleHideTools();
-});
-
-document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'visible' && state.tab === 'reader' && !RDR.book && !RDR.pdf) {
-    setTimeout(checkClipboardHint, 400);
+// 页面级的报错也要能被看见：手机 WebView 没有控制台，render 一抛错就只剩「点了没反应」，
+// 而且旧的 innerHTML 还留在屏幕上（2026-11-02 学习机「各页打不开、两个圈一直转」就是这么被误判成 WebView 坏的）。
+function reportError(where, err) {
+  const msg = (err && (err.message || String(err))) || '未知错误';
+  if (typeof window.__zenusReport === 'function') {
+    window.__zenusReport('页面', where + '：' + msg, '', err && err.stack);
+  } else if (typeof console !== 'undefined') {
+    console.error('[' + where + ']', err);
   }
-});
+}
 
-document.querySelectorAll('.tabbar button').forEach((b) => {
+function render() {
+  if (!state.pack) {
+    view.innerHTML = '<div class="empty">内容包还没加载好<br><span class="sub">等一下再点，或去「设置 → 检查更新」</span></div>';
+    return;
+  }
+  document.querySelectorAll('.tabbar button').forEach((b) => {
     b.classList.toggle('on', b.dataset.tab === state.tab);
   });
   document.body.classList.toggle('reader-mode', state.tab === 'reader');
   if (state.tab !== 'reader') window.__zenusMenuMode = '';
   syncReadingChrome();
-  if (state.tab === 'review') return renderReview();
-  if (state.tab === 'browse') return renderBrowse();
-  if (state.tab === 'reader') return renderReader();
-  if (state.tab === 'quiz') return renderQuizTab();
-  if (state.tab === 'chat') return renderChat();
-  if (state.tab === 'settings') return renderSettings();
+  try {
+    if (state.tab === 'review') return renderReview();
+    if (state.tab === 'browse') return renderBrowse();
+    if (state.tab === 'reader') return renderReader();
+    if (state.tab === 'quiz') return renderQuizTab();
+    if (state.tab === 'chat') return renderChat();
+    if (state.tab === 'settings') return renderSettings();
+  } catch (err) {
+    reportError('render/' + state.tab, err);
+    view.innerHTML = '<div class="empty">这个页面出错了<br><span class="sub">' + esc(err.message || err) + '</span>'
+      + '<div class="row" style="margin-top:12px"><button class="btn" id="rerender">重试</button></div></div>';
+    const rb = document.getElementById('rerender');
+    if (rb) rb.onclick = () => render();
+  }
 }
 
 function statsBar() {
@@ -989,6 +984,7 @@ function renderSettings() {
 
     <h2>关于</h2>
     <div class="row" style="margin-bottom:8px"><button class="btn" id="checkUpdate">检查更新</button></div>
+    <div class="row" style="margin-bottom:8px"><button class="btn" id="diagBtn">诊断（页面出问题时点这个）</button></div>
     <div class="row" style="margin-bottom:8px">
       <a class="btn" href="demo.html" style="display:block;text-align:center;text-decoration:none;color:var(--text)">看「要点 → 题 → 重写」试验</a>
     </div>
@@ -1074,64 +1070,8 @@ function renderSettings() {
   const cu = $('#checkUpdate');
   if (cu) cu.onclick = async () => {
     try {
-      // —— 诊断条 + APK 拉起处理 ——
-  let apkImport = '';
-  try {
-    const q = new URLSearchParams(location.search);
-    apkImport = q.get('import') || '';
-    if (q.get('apk') === '1') {
-      // APK 回显的 intent 信息：直接摊在屏幕上，一眼看出微信到底传了什么
-      const bar = document.createElement('div');
-      bar.id = 'diagBar';
-      bar.style.cssText = 'position:fixed;left:0;right:0;top:0;z-index:999;background:#2a2113;color:#e0a13a;'
-        + 'font:11px/1.55 monospace;padding:8px;word-break:break-all;max-height:45vh;overflow:auto';
-      const rows = [
-        'BUILD ' + BUILD,
-        'action=' + (q.get('act') || '(空)'),
-        'data=' + (q.get('data') || '(空)'),
-        'extra=' + (q.get('extra') || '(空)'),
-        'subject=' + (q.get('subject') || '(空)'),
-        'import=' + (apkImport ? apkImport.slice(0, 120) : '(空)'),
-      ];
-      bar.innerHTML = rows.map((r) => '<div>' + esc(r) + '</div>').join('')
-        + '<div style="margin-top:6px;color:#fff">↑ 截图发给 Claude；点这里关闭</div>';
-      bar.onclick = () => bar.remove();
-      document.body.appendChild(bar);
-      // 页面可能很快被跳转冲掉：同步存一份，下次打开还能看
-      try { localStorage.setItem('zenus.diag.last', JSON.stringify({ at: Date.now(), rows: rows })); } catch { /* 存不下算了 */ }
-    }
-  } catch { /* 参数解析失败就当没有 */ }
-
-  // APK（TWA）把「用其他应用打开 / 分享」的链接转成 ?import=xxx 传进来
-  const incoming = apkImport;
-  if (incoming) {
-    history.replaceState(null, '', location.pathname);   // 用完清掉，刷新不会重复导入
-    state.tab = 'reader';
-    render();
-    setTimeout(() => importFromText(incoming), 300);
-  }
-  let lastDiag = null;
-  try { lastDiag = JSON.parse(localStorage.getItem('zenus.diag.last') || 'null'); } catch { lastDiag = null; }
-  if (lastDiag && Date.now() - (lastDiag.at || 0) < 10 * 60 * 1000 && !document.getElementById('diagBar')) {
-    const bar = document.createElement('div');
-    bar.id = 'diagBar';
-    bar.style.cssText = 'position:fixed;left:0;right:0;top:0;z-index:999;background:#2a2113;color:#e0a13a;'
-      + 'font:11px/1.55 monospace;padding:8px;word-break:break-all;max-height:45vh;overflow:auto';
-    bar.innerHTML = '<div style="color:#fff">上次从微信进来的记录：</div>'
-      + (lastDiag.rows || []).map((r) => '<div>' + esc(r) + '</div>').join('')
-      + '<div style="margin-top:6px;color:#fff">↑ 截图发我；点这里关闭</div>';
-    bar.onclick = () => { bar.remove(); try { localStorage.removeItem('zenus.diag.last'); } catch { /* 忽略 */ } };
-    document.body.appendChild(bar);
-  }
-
-  const shared = checkShared();
-  if (shared) {
-    state.tab = 'reader';
-    render();
-    setTimeout(() => importFromText(shared), 300);
-  }
-  if (settings.syncToken) setTimeout(() => syncNow({ quiet: true }), 1500);
-  if ('serviceWorker' in navigator) {
+      // 清掉 SW 缓存 + 换一个版本参数重开：手机上「看到的是旧页面」时用这个
+      if ('serviceWorker' in navigator) {
         const reg = await navigator.serviceWorker.getRegistration();
         if (reg) await reg.update();
         const keys = await caches.keys();
@@ -1141,6 +1081,8 @@ function renderSettings() {
       setTimeout(() => location.replace(location.pathname + '?v=' + Date.now()), 600);
     } catch (err) { toast('更新失败：' + err.message); }
   };
+  const dg = $('#diagBtn');
+  if (dg) dg.onclick = showDiag;
   $('#exportProg').onclick = () => {
     const blob = new Blob([JSON.stringify({ version: 1, progress, log: reviewLog }, null, 2)],
       { type: 'application/json' });
@@ -5495,6 +5437,101 @@ async function refreshNativeStatus() {
   el.textContent = '原生桥：已连接 · 原生 AI ' + (cfg.configured ? '已配置' : '未配置（在上面填 Key 并保存）');
 }
 
+// ── 诊断面板 ─────────────────────────────────────────────
+// 手机上的故障只有用户能看见，而「页面卡住 / 点了没反应」有五六种完全不同的原因。
+// 与其来回问「是白屏还是闪退」，不如一键把环境事实收集齐：桥在不在、IndexedDB 通不通、
+// 存储满没满、SW 有没有在捣乱、最近抛了什么错。
+function idbProbeDb(name, version, timeoutMs) {
+  return new Promise((resolve) => {
+    let done = false;
+    const finish = (txt) => { if (!done) { done = true; clearTimeout(t); resolve(txt); } };
+    const t = setTimeout(() => finish('超时（' + timeoutMs + 'ms 没回调）'), timeoutMs);
+    try {
+      const r = indexedDB.open(name, version);
+      r.onsuccess = () => {
+        try { r.result.close(); } catch (e) { /* 忽略 */ }
+        finish('ok');
+      };
+      r.onerror = () => finish('失败（' + (r.error && r.error.message) + '）');
+      r.onblocked = () => finish('blocked（别处还占着这个库）');
+      r.onupgradeneeded = () => { /* 版本不对时只让它建，不写数据 */ };
+    } catch (e) { finish('异常（' + e.message + '）'); }
+  });
+}
+
+async function collectDiag() {
+  const L = [];
+  L.push('构建：' + BUILD);
+  L.push('时间：' + new Date().toLocaleString());
+  L.push('页面：' + location.href);
+  L.push('UA：' + navigator.userAgent);
+  L.push('在线：' + (navigator.onLine ? '是' : '否') + ' · 语言 ' + (navigator.language || '-'));
+  L.push('原生桥：' + (nativePort() ? '有（App 内）' : '无（普通浏览器）'));
+  try {
+    let used = 0;
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i) || '';
+      used += k.length + String(localStorage.getItem(k) || '').length;
+    }
+    L.push('localStorage：' + localStorage.length + ' 项 / ' + (used / 1024).toFixed(0) + ' KB');
+  } catch (e) { L.push('localStorage：读不了（' + e.message + '）'); }
+  try {
+    if (navigator.storage && navigator.storage.estimate) {
+      const est = await navigator.storage.estimate();
+      L.push('存储：已用 ' + ((est.usage || 0) / 1048576).toFixed(1) + ' MB / 配额 '
+        + ((est.quota || 0) / 1048576).toFixed(0) + ' MB');
+    }
+  } catch (e) { L.push('存储：查不到（' + e.message + '）'); }
+  L.push('IndexedDB 材料库：' + await idbProbeDb(MAT_DB, 1, 8000));
+  L.push('IndexedDB 书源库：' + await idbProbeDb(SRC_DB, 1, 8000));
+  try {
+    const reg = await navigator.serviceWorker.getRegistration();
+    L.push('Service Worker：' + (reg ? (reg.active ? '已激活' : '未激活') : '无'));
+  } catch (e) { L.push('Service Worker：查不到（' + e.message + '）'); }
+  if (nativePort()) {
+    try {
+      const env = await nativeCall('diag.env', {}, 6000);
+      if (env) {
+        L.push('App：' + (env.appVersion || '?') + ' (' + (env.appVersionCode || '?') + ') · Android ' + (env.sdk || '?'));
+        L.push('WebView 内核：' + (env.webViewPkg || '?') + ' ' + (env.webViewVersion || '?'));
+      }
+    } catch (e) { L.push('App 环境：取不到（' + e.message + '）'); }
+    for (const cmd of ['clipboard', 'inbox']) {
+      const t0 = Date.now();
+      try {
+        await nativeCall(cmd, {}, 6000);
+        L.push('桥 ' + cmd + '：ok ' + (Date.now() - t0) + 'ms');
+      } catch (e) {
+        L.push('桥 ' + cmd + '：失败 ' + e.message + '（' + (Date.now() - t0) + 'ms）');
+      }
+    }
+  }
+  L.push('内容包：' + (state.pack?.version || '-') + ' · ' + ((state.pack?.courses || []).length) + ' 门课');
+  L.push('当前：tab=' + state.tab + ' course=' + (state.courseId || '-')
+    + ' 待确认 ' + ((state.inbox || []).length) + ' 张');
+  const errs = (window.__zenusLastErrors && window.__zenusLastErrors()) || [];
+  L.push('--- 最近错误 ' + errs.length + ' 条 ---');
+  errs.slice(-5).forEach((e) => L.push(new Date(e.t).toLocaleString() + '  ' + e.line));
+  return L.join('\n');
+}
+
+async function showDiag() {
+  const o = document.createElement('div');
+  o.id = 'diagSheet';
+  o.style.cssText = 'position:fixed;inset:0;z-index:1000;background:rgba(6,8,12,.94);color:#e8eaf0;'
+    + 'font:12px/1.55 ui-monospace,Consolas,monospace;padding:12px;overflow:auto;'
+    + 'white-space:pre-wrap;word-break:break-all';
+  o.textContent = '正在收集…';
+  o.onclick = (e) => { if (e.target === o) o.remove(); };
+  document.body.appendChild(o);
+  try {
+    const txt = await collectDiag();
+    o.textContent = txt + '\n\n（点空白处关闭；截图发我）';
+  } catch (e) {
+    o.textContent = '诊断本身出错：' + (e && e.message) + '\n点空白处关闭';
+  }
+}
+
 async function showPoints() {
   const ch = await chapterText();
   if (!ch) return toast('这一页没有可读的文字（扫描件先点「识别文字」）');
@@ -6680,6 +6717,35 @@ async function pullWebCards() {
 }
 
 (async function init() {
+  // —— 诊断条 + APK 拉起处理 ——
+  // 必须在这里跑（内容包已就位）。2026-10-28 的补丁把这一段误挪进了「检查更新」按钮，
+  // 结果「用其他应用打开 / 分享进来」整条链路静默失效——点按钮才执行一次。
+  let apkImport = '';
+  try {
+    const q = new URLSearchParams(location.search);
+    apkImport = q.get('import') || '';
+    if (q.get('apk') === '1') {
+      // APK 回显的 intent 信息：直接摊在屏幕上，一眼看出微信到底传了什么
+      const bar = document.createElement('div');
+      bar.id = 'diagBar';
+      bar.style.cssText = 'position:fixed;left:0;right:0;top:0;z-index:999;background:#2a2113;color:#e0a13a;'
+        + 'font:11px/1.55 monospace;padding:8px;word-break:break-all;max-height:45vh;overflow:auto';
+      const rows = [
+        'BUILD ' + BUILD,
+        'action=' + (q.get('act') || '(空)'),
+        'data=' + (q.get('data') || '(空)'),
+        'extra=' + (q.get('extra') || '(空)'),
+        'subject=' + (q.get('subject') || '(空)'),
+        'import=' + (apkImport ? apkImport.slice(0, 120) : '(空)'),
+      ];
+      bar.innerHTML = rows.map((r) => '<div>' + esc(r) + '</div>').join('')
+        + '<div style="margin-top:6px;color:#fff">↑ 截图发给 Claude；点这里关闭</div>';
+      bar.onclick = () => bar.remove();
+      document.body.appendChild(bar);
+      // 页面可能很快被跳转冲掉：同步存一份，下次打开还能看
+      try { localStorage.setItem('zenus.diag.last', JSON.stringify({ at: Date.now(), rows: rows })); } catch { /* 存不下算了 */ }
+    }
+  } catch { /* 参数解析失败就当没有 */ }
   try {
     await loadPack();
   } catch (err) {
@@ -6692,6 +6758,13 @@ async function pullWebCards() {
     migrateCardsV2();
     renderHeader();
     render();
+    // APK（TWA）把「用其他应用打开 / 分享」的链接转成 ?import=xxx 传进来
+    if (apkImport) {
+      history.replaceState(null, '', location.pathname);   // 用完清掉，刷新不会重复导入
+      state.tab = 'reader';
+      render();
+      setTimeout(() => importFromText(apkImport), 300);
+    }
     // 桥对象可能比首屏晚到，重试两次；取走即清空，多调不会重复入库
     pullWebCards();
     setTimeout(pullWebCards, 1500);
@@ -6739,6 +6812,8 @@ async function pullWebCards() {
     setTimeout(() => importFromText(shared), 300);
   }
   if (settings.syncToken) setTimeout(() => syncNow({ quiet: true }), 1500);
+  // ?diag=1：地址栏带上就能直接看诊断面板（手机上不用先翻到设置页）
+  try { if (new URLSearchParams(location.search).get('diag') === '1') setTimeout(showDiag, 800); } catch { /* 忽略 */ }
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('sw.js').catch(() => {});
   }
