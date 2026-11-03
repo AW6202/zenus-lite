@@ -1,7 +1,7 @@
 // 学习机 Lite — 静态 PWA：内容来自 pack.json，进度存本地，AI 直连 OpenAI 兼容接口
 'use strict';
 
-const BUILD = '2026-11-03.1';
+const BUILD = '2026-11-03.2';
 
 const LS = {
   progress: 'zenus.progress.v1',
@@ -230,14 +230,39 @@ const MAT_MAX_BYTES = 3 * 1024 * 1024;   // 单份上限，超了不入库
 function idbOpen() {
   return new Promise((resolve, reject) => {
     const req = indexedDB.open(MAT_DB, 1);
+    // WebView 的 IndexedDB 一旦坏掉，open() 可能永远不回调——页面就永远停在加载态，
+    // 看起来就是「这一页打不开」。给个上限：超时按失败算，页面降级（空书架/不入库），
+    // 错误会走全局错误条画在屏幕上，而不是静默卡死。
+    let settled = false;
+    const timer = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      reject(new Error('IndexedDB 打开超时（' + MAT_DB + '）'));
+    }, 8000);
     req.onupgradeneeded = () => {
       const db = req.result;
       if (!db.objectStoreNames.contains(MAT_STORE)) {
         db.createObjectStore(MAT_STORE, { keyPath: 'id' });
       }
     };
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error);
+    req.onsuccess = () => {
+      clearTimeout(timer);
+      if (settled) { try { req.result.close(); } catch (e) { /* 忽略 */ } return; }
+      settled = true;
+      resolve(req.result);
+    };
+    req.onerror = () => {
+      clearTimeout(timer);
+      if (settled) return;
+      settled = true;
+      reject(req.error);
+    };
+    req.onblocked = () => {
+      clearTimeout(timer);
+      if (settled) return;
+      settled = true;
+      reject(new Error('IndexedDB 被占用（' + MAT_DB + '）'));
+    };
   });
 }
 
@@ -3498,12 +3523,35 @@ const SRC_STORE = 'kv';
 function srcDb() {
   return new Promise((resolve, reject) => {
     const req = indexedDB.open(SRC_DB, 1);
+    // 同 idbOpen：坏掉的 IndexedDB 会让 open() 永不回调，书源页就永远「加载中」
+    let settled = false;
+    const timer = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      reject(new Error('IndexedDB 打开超时（' + SRC_DB + '）'));
+    }, 8000);
     req.onupgradeneeded = () => {
       const db = req.result;
       if (!db.objectStoreNames.contains(SRC_STORE)) db.createObjectStore(SRC_STORE);
     };
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error);
+    req.onsuccess = () => {
+      clearTimeout(timer);
+      if (settled) { try { req.result.close(); } catch (e) { /* 忽略 */ } return; }
+      settled = true;
+      resolve(req.result);
+    };
+    req.onerror = () => {
+      clearTimeout(timer);
+      if (settled) return;
+      settled = true;
+      reject(req.error);
+    };
+    req.onblocked = () => {
+      clearTimeout(timer);
+      if (settled) return;
+      settled = true;
+      reject(new Error('IndexedDB 被占用（' + SRC_DB + '）'));
+    };
   });
 }
 async function srcSave() {
