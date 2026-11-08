@@ -741,6 +741,15 @@ function showInboxSheet() {
       const row = o.querySelector('[data-row="' + i + '"]');
       if (row) row.style.opacity = '.35';
       b.disabled = true;
+      // 跳过的语义是「我认识这个词」，不是「现在不想学」。
+      // 所以要在本地 known 里记一笔（isKnown / isKnownCard / 生词过滤都读它），
+      // 同时同步给原生学习内核，否则 DSH Go 挑词时看不到这批词，会重复推荐。
+      // 原生侧写 learner 的 known:<word>，zenus_vocab_get 会把它带出来。
+      if (it && it.front) {
+        markKnown(it.front, 'skip');
+        b.textContent = '已掌握';
+        coreCall('learner.markKnown', { word: it.front, why: 'skip' }, 3000).catch(() => {});
+      }
       if (it) it._resolved = true;
       state.inbox = state.inbox.filter((x) => !x._resolved);
       saveInbox();
