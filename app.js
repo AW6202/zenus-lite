@@ -1,7 +1,7 @@
 // 学习机 Lite — 静态 PWA：内容来自 pack.json，进度存本地，AI 直连 OpenAI 兼容接口
 'use strict';
 
-const BUILD = '2026-11-08.1';
+const BUILD = '2026-11-11.1';
 
 const LS = {
   progress: 'zenus.progress.v1',
@@ -336,7 +336,10 @@ async function openStoredMaterial(id) {
     RDR.ch = 0;
     RDR.key = rec.id;
     RDR.pageIdx = 0;
+    // 从书架重开也要回到上次读到的章/页：applyReadPos() 会把 RDR.ch 和待恢复的页内比例填好
+    const ratio = applyReadPos();
     renderReader();
+    if (ratio) requestAnimationFrame(() => scrollToRatio(ratio));
   } catch (e) {
     toast('打开失败：' + e.message);
   }
@@ -2743,13 +2746,13 @@ function renderReader() {
   if (RDR.pdf && RDR.pdfScroll) return renderPdfScroll();
   if (!RDR.pdf && !RDR.book) {
     view.innerHTML = '<div class="empty">选一份材料，直接在页面里读。<br>'
-      + '<span class="sub">小说/电子书请用 ⋮ → 阅读（Legado）；这里放 PDF / DOCX / MD / 图片 / 漫画。'
+      + '<span class="sub">小说/电子书/书源抓来的书也在这里；PDF / DOCX / MD / 图片 / 漫画都行。'
       + '选中任意文字 → 朗读 / 存卡 / 问 AI，文件不上传。</span>'
       + '<div class="row" style="margin-top:16px"><button class="btn primary" id="pickPdf">选择文件</button></div>'
       + '<div class="row" style="margin-top:8px"><button class="btn" id="shelfBtn">书架</button>'
       + '<button class="btn" id="findBooks">找教材</button><button class="btn" id="lookupBtn">查词</button></div>'
       + '<div class="row" style="margin-top:8px"><button class="btn" id="pasteBtn">粘贴 / 分享导入</button></div>'
-      + '<div class="sub" style="margin-top:10px">支持 PDF · DOCX · TXT · Markdown · 图片（EPUB 旧材料仍可打开；新书建议进 Legado）</div>'
+      + '<div class="sub" style="margin-top:10px">支持 PDF · DOCX · TXT · Markdown · EPUB · 图片 · 漫画</div>'
       + '<div id="recentMats" style="margin-top:14px;text-align:left"></div></div>'
       + '<input type="file" id="pdfFile" accept=".pdf,.epub,.docx,.txt,.md,.png,.jpg,.jpeg,.webp,image/*,application/pdf,application/epub+zip,'
       + 'application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain" style="display:none">';
@@ -3649,7 +3652,7 @@ async function renderShelf() {
 
   view.innerHTML =
     '<div class="meta"><span>书架</span><span>' + mats.length + ' 份材料</span></div>'
-    + '<div class="hint">小说/电子书和书源请用 ⋮ → 阅读（Legado）；这里只放材料。</div>'
+    + '<div class="hint">小说、电子书、书源抓来的书都在这里；读到抓完的那章时，在目录里点「继续抓」。</div>'
     + '<div class="row" style="margin:8px 0;flex-wrap:wrap">'
     + '<button class="btn ghost" id="shBack">← 回材料</button></div>'
     + (rows || '<div class="empty">书架还是空的。<br><span class="sub">在壳里打开网页 → ≡ 菜单「存到书架」；或直接导入本地文件。</span></div>');
