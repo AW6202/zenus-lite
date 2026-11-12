@@ -1,7 +1,7 @@
 // 学习机 Lite — 静态 PWA：内容来自 pack.json，进度存本地，AI 直连 OpenAI 兼容接口
 'use strict';
 
-const BUILD = '2026-11-12.6';
+const BUILD = '2026-11-12.7';
 
 const LS = {
   progress: 'zenus.progress.v1',
@@ -3632,6 +3632,83 @@ async function srcClearAll() {
   state.srcErr = '';
 }
 
+// ── 体检结果落盘（独立 IndexedDB；不能塞进 zenus_sources：srcSave() 会 clear() 主库）──
+// 164 个源串行跑要 1.5–2.5 小时，WebView 切后台/息屏就 reload，不落盘等于永远跑不完。
+const TEST_DB = 'zenus_src_test';
+const TEST_STORE = 'kv';
+
+function testDb() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(TEST_DB, 1);
+    let settled = false;
+    const timer = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      reject(new Error('IndexedDB 打开超时（' + TEST_DB + '）'));
+    }, 8000);
+    req.onupgradeneeded = () => {
+      const db = req.result;
+      if (!db.objectStoreNames.contains(TEST_STORE)) db.createObjectStore(TEST_STORE);
+    };
+    req.onsuccess = () => {
+      clearTimeout(timer);
+      if (settled) { try { req.result.close(); } catch (e) { /* 忽略 */ } return; }
+      settled = true;
+      resolve(req.result);
+    };
+    req.onerror = () => { clearTimeout(timer); if (!settled) { settled = true; reject(req.error); } };
+    req.onblocked = () => { clearTimeout(timer); if (!settled) { settled = true; reject(new Error('IndexedDB 被占用')); } };
+  });
+}
+
+async function srcTestPut(url, rec) {
+  if (!url) return;
+  try {
+    const db = await testDb();
+    await new Promise((resolve, reject) => {
+      const tx = db.transaction(TEST_STORE, 'readwrite');
+      tx.objectStore(TEST_STORE).put(rec, 't:' + url);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+      tx.onabort = () => reject(tx.error || new Error('aborted'));
+    });
+  } catch (e) { /* 落盘失败不影响本轮测试；导出时再提示 */ }
+}
+
+async function srcTestLoad() {
+  let loaded = 0;
+  try {
+    const db = await testDb();
+    const rows = await new Promise((resolve, reject) => {
+      const tx = db.transaction(TEST_STORE, 'readonly');
+      const req = tx.objectStore(TEST_STORE).openCursor();
+      const out = [];
+      req.onsuccess = () => {
+        const cur = req.result;
+        if (!cur) return resolve(out);
+        if (String(cur.key).startsWith('t:')) out.push([String(cur.key).slice(2), cur.value]);
+        cur.continue();
+      };
+      req.onerror = () => reject(req.error);
+    });
+    rows.forEach(([url, rec]) => { if (url && rec) { SRC_TEST[url] = rec; loaded++; } });
+  } catch (e) { /* 读不到就当没测过 */ }
+  return loaded;
+}
+
+async function srcTestClear() {
+  Object.keys(SRC_TEST).forEach((k) => { delete SRC_TEST[k]; });
+  try {
+    const db = await testDb();
+    await new Promise((resolve, reject) => {
+      const tx = db.transaction(TEST_STORE, 'readwrite');
+      tx.objectStore(TEST_STORE).clear();
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+  } catch (e) { /* ignore */ }
+}
+
 async function renderShelf() {
   window.__zenusMenuMode = '';
   let mats = [];
@@ -3793,6 +3870,7 @@ function renderSourceManager() {
     + '<button class="btn ghost" id="srcTestAll" style="width:auto;padding:0 12px">测试全部</button>'
     + '<button class="btn ghost" id="srcDelBad" style="width:auto;padding:0 12px">删不可用</button>'
     + '<button class="btn ghost" id="srcExport" style="width:auto;padding:0 12px">导出体检结果</button>'
+    + '<button class="btn ghost" id="srcTestReset" style="width:auto;padding:0 12px">重置体检</button>'
     + '<span class="sub" id="srcTestMsg" style="align-self:center;flex:1"></span></div>'
     + '<div class="row" style="margin-top:12px;gap:8px;flex-wrap:nowrap">'
     + '<select class="t" id="srcPick" style="flex:1;height:36px;min-height:36px;padding:4px 8px;font-size:12px">'
@@ -3817,6 +3895,12 @@ function renderSourceManager() {
   document.getElementById('srcTestAll').onclick = () => testAllSources();
   document.getElementById('srcDelBad').onclick = () => deleteBadSources();
   document.getElementById('srcExport').onclick = () => exportSourceMatrix();
+  document.getElementById('srcTestReset').onclick = async () => {
+    if (!confirm('清空全部体检记录？下次「测试全部」会从第一个源重跑。')) return;
+    await srcTestClear();
+    toast('体检记录已清空');
+    renderSourceManager();
+  };
   // 从文件导入：电脑上整理好的大合集（几百上千个源）不用再贴到文本框里
   document.getElementById('srcFile').onclick = () => document.getElementById('srcFileInput').click();
   document.getElementById('srcFileInput').onchange = async (ev) => {
@@ -4443,16 +4527,19 @@ async function testSource(i) {
 
 // 批量测试：几百个源时手动一个个点不现实。结果只存本次会话（不落盘），
 // 「删不可用」只删确定失败的，没测过的不动。
-async function testAllSources() {
+async function testAllSources(force) {
   if (!sources.length) return toast('还没有书源');
   if (!nativePort()) return toast('测试要在 App 里用');
   const btn = document.getElementById('srcTestAll');
   const msg = document.getElementById('srcTestMsg');
+  await srcTestLoad();                    // 续跑：先把上次落盘的结果装回来
   const list = sources.slice();
+  const todo = force ? list : list.filter((s) => s.raw && !SRC_TEST[s.url]);
+  if (!todo.length) return toast('全部源都测过了；要重跑点「重置体检」');
   let ok = 0, bad = 0, skip = 0;
-  btn.disabled = true;
-  for (let i = 0; i < list.length; i++) {
-    const s = list[i];
+  if (btn) btn.disabled = true;
+  for (let i = 0; i < todo.length; i++) {
+    const s = todo[i];
     if (!s.raw) { skip++; continue; }
     try {
       const r = await nativeCall('bookProbeFull', { source: s.raw, key: '' }, 120000);
@@ -4467,16 +4554,21 @@ async function testAllSources() {
         stage: (r && r.stage) || '?',
         error: (r && r.error) || '',
         msg: stageText(r),
+        at: Date.now(),
       };
       if (pass) ok++; else bad++;
     } catch (e) {
       SRC_TEST[s.url] = {
         ok: false, stage: 'throw', error: String((e && e.message) || e),
-        search: 0, toc: 0, content: 0, msg: String((e && e.message) || e),
+        search: 0, toc: 0, content: 0, msg: String((e && e.message) || e), at: Date.now(),
       };
       bad++;
     }
-    if (msg) msg.textContent = (i + 1) + '/' + list.length + ' · 可用 ' + ok + ' / 不可用 ' + bad;
+    // 每源跑完立刻落盘：息屏/切后台 reload 也不丢，下次点「测试全部」从这里接着跑
+    try { await srcTestPut(s.url, SRC_TEST[s.url]); } catch (e) { /* ignore */ }
+    const done = Object.keys(SRC_TEST).length;
+    if (msg) msg.textContent = (i + 1) + '/' + todo.length + ' · 可用 ' + ok + ' / 不可用 ' + bad
+      + ' · 已测 ' + done + '/' + list.length;
     if (i % 10 === 9) { const st = view.scrollTop; renderSourceManager(); view.scrollTop = st; }
   }
   btn.disabled = false;
@@ -4512,13 +4604,19 @@ function matrixText(env, iso) {
   lines.push('SDK=' + (env.sdk || '?'));
   lines.push('SOURCES=' + sources.length + ' TESTED=' + tested.length);
   lines.push('# columns: 源名 | 搜索 | 目录 | 正文 | 失败阶段+失败文案');
+  // 一行一源：任何换行/竖线都必须转义成字面量，否则整份矩阵会被打断
+  const cell = (v) => String(v == null ? '' : v)
+    .replace(/\r\n?/g, '\\n')
+    .replace(/\n/g, '\\n')
+    .replace(/\t/g, ' ')
+    .replace(/\|/g, '\\|');
   sources.forEach((s) => {
     const t = SRC_TEST[s.url];
-    const name = String(s.name || '未命名').replace(/\s+/g, ' ');
+    const name = cell(s.name || '未命名').replace(/\s+/g, ' ').slice(0, 120);
     if (!t) { lines.push([name, '-', '-', '-', '未测'].join(' | ')); return; }
     const fail = t.ok ? '-'
-      : ((t.stage || '?') + (t.error ? ': ' + t.error : (t.msg ? ': ' + t.msg : '')))
-        .replace(/\s+/g, ' ').slice(0, 300);
+      : cell((t.stage || '?') + (t.error ? ': ' + t.error : (t.msg ? ': ' + t.msg : '')))
+        .slice(0, 300);
     lines.push([name, String(t.search || 0), String(t.toc || 0), String(t.content || 0), fail].join(' | '));
   });
   const cnt = (k) => tested.filter((s) => Number((SRC_TEST[s.url] || {})[k] || 0) > 0).length;
@@ -4528,15 +4626,15 @@ function matrixText(env, iso) {
 }
 
 async function exportSourceMatrix() {
+  await srcTestLoad();                    // reload 后内存是空的，导出前先从 IndexedDB 装回来
   const tested = sources.filter((s) => SRC_TEST[s.url]);
   if (!tested.length) return toast('先点「测试全部」，再导出');
   let env = {};
   try { env = (await nativeCall('diag.env', {}, 5000)) || {}; } catch (e) { env = {}; }
+  // 基线固定跑 75808f17（引擎没动过的那个包）；别让人手填，手填就会混版本
   if (!settings.apkCommit) {
-    const v = prompt('装的是哪个 APK？填 commit 短号（例 75808f17），只需填一次', '');
-    if (v === null) return;
-    settings.apkCommit = String(v).trim();
-    saveJSON(LS.settings, settings);
+    settings.apkCommit = '75808f17';
+    try { saveJSON(LS.settings, settings); } catch (e) { /* ignore */ }
   }
   const now = new Date();
   const p = (n) => String(n).padStart(2, '0');
@@ -7205,6 +7303,8 @@ async function pullWebCards() {
     // yuedu:// 一键导入：App 收到链接后放进了收件箱，这里取走并入库
     pullSourceImports();
     setTimeout(pullSourceImports, 2500);
+    // 体检结果续跑：上次跑到一半（或 reload 过）也要能接着看/接着跑
+    srcTestLoad();
     // 浏览器下载的可读文件：有就自动进阅读器
     openPendingFile();
     setTimeout(openPendingFile, 2000);
