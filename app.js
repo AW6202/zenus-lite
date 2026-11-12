@@ -1,7 +1,7 @@
 // 学习机 Lite — 静态 PWA：内容来自 pack.json，进度存本地，AI 直连 OpenAI 兼容接口
 'use strict';
 
-const BUILD = '2026-11-12.4';
+const BUILD = '2026-11-12.5';
 
 const LS = {
   progress: 'zenus.progress.v1',
@@ -4499,27 +4499,13 @@ function deleteBadSources() {
 // ── 导出体检矩阵 ─────────────────────────────────────────
 // 每源一行五列：源名 | 搜索 | 目录 | 正文 | 失败阶段+失败文案。
 // 头部带 BUILD / 时间戳 / APK 版本 + commit，供「改造前 / 改造后」同一 Gate 对照。
-async function exportSourceMatrix() {
+function matrixText(env, iso) {
+  env = env || {};
   const tested = sources.filter((s) => SRC_TEST[s.url]);
-  if (!tested.length) return toast('先点「测试全部」，再导出');
-  let env = {};
-  try { env = (await nativeCall('diag.env', {}, 5000)) || {}; } catch (e) { env = {}; }
-  if (!settings.apkCommit) {
-    const v = prompt('装的是哪个 APK？填 commit 短号（例 75808f17），只需填一次', '');
-    if (v === null) return;
-    settings.apkCommit = String(v).trim();
-    saveJSON(LS.settings, settings);
-  }
-  const now = new Date();
-  const p = (n) => String(n).padStart(2, '0');
-  const off = -now.getTimezoneOffset();
-  const tz = (off >= 0 ? '+' : '-') + p(Math.floor(Math.abs(off) / 60)) + ':' + p(Math.abs(off) % 60);
-  const iso = now.getFullYear() + '-' + p(now.getMonth() + 1) + '-' + p(now.getDate()) + 'T'
-    + p(now.getHours()) + ':' + p(now.getMinutes()) + ':' + p(now.getSeconds()) + tz;
   const lines = [];
   lines.push('# aegis-source-matrix v1');
   lines.push('BUILD=' + BUILD);
-  lines.push('TIME=' + iso);
+  lines.push('TIME=' + (iso || new Date().toISOString()));
   lines.push('APK=' + (env.appVersion || '?') + ' (' + (env.appVersionCode || '?') + ')');
   lines.push('APK_COMMIT=' + (settings.apkCommit || '?'));
   lines.push('WEBVIEW=' + (env.webViewPkg || '?') + ' ' + (env.webViewVersion || ''));
@@ -4538,7 +4524,27 @@ async function exportSourceMatrix() {
   const cnt = (k) => tested.filter((s) => Number((SRC_TEST[s.url] || {})[k] || 0) > 0).length;
   lines.push('# summary tested=' + tested.length + ' search_ok=' + cnt('search') + ' toc_ok=' + cnt('toc')
     + ' content_ok=' + cnt('content') + ' pass=' + tested.filter((s) => SRC_TEST[s.url].ok).length);
-  const text = lines.join('\n') + '\n';
+  return lines.join('\n') + '\n';
+}
+
+async function exportSourceMatrix() {
+  const tested = sources.filter((s) => SRC_TEST[s.url]);
+  if (!tested.length) return toast('先点「测试全部」，再导出');
+  let env = {};
+  try { env = (await nativeCall('diag.env', {}, 5000)) || {}; } catch (e) { env = {}; }
+  if (!settings.apkCommit) {
+    const v = prompt('装的是哪个 APK？填 commit 短号（例 75808f17），只需填一次', '');
+    if (v === null) return;
+    settings.apkCommit = String(v).trim();
+    saveJSON(LS.settings, settings);
+  }
+  const now = new Date();
+  const p = (n) => String(n).padStart(2, '0');
+  const off = -now.getTimezoneOffset();
+  const tz = (off >= 0 ? '+' : '-') + p(Math.floor(Math.abs(off) / 60)) + ':' + p(Math.abs(off) % 60);
+  const iso = now.getFullYear() + '-' + p(now.getMonth() + 1) + '-' + p(now.getDate()) + 'T'
+    + p(now.getHours()) + ':' + p(now.getMinutes()) + ':' + p(now.getSeconds()) + tz;
+  const text = matrixText(env, iso);
   const fname = 'aegis-source-matrix-' + iso.replace(/[-:T+]/g, '').slice(0, 14) + '.txt';
   try {
     const blob = new Blob([text], { type: 'text/plain' });
@@ -4547,7 +4553,7 @@ async function exportSourceMatrix() {
     a.download = fname;
     a.click();
     URL.revokeObjectURL(a.href);
-    toast('已导出 ' + fname + '（' + lines.length + ' 行）');
+    toast('已导出 ' + fname + '（' + text.split('\n').length + ' 行）');
   } catch (e) {
     toast('下载失败：' + (e.message || e) + '，已复制到剪贴板');
     nativeCall('clipboard', { text }).catch(() => {});
