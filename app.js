@@ -1,7 +1,7 @@
 // 学习机 Lite — 静态 PWA：内容来自 pack.json，进度存本地，AI 直连 OpenAI 兼容接口
 'use strict';
 
-const BUILD = '2026-11-12.12';
+const BUILD = '2026-11-12.13';
 
 const LS = {
   progress: 'zenus.progress.v1',
@@ -4733,7 +4733,7 @@ async function exportSourceMatrix() {
   try { env = (await nativeCall('diag.env', {}, 5000)) || {}; } catch (e) { env = {}; }
   // 基线固定跑 75808f17（引擎没动过的那个包）；别让人手填，手填就会混版本
   if (!settings.apkCommit) {
-    settings.apkCommit = '75808f17';
+    settings.apkCommit = '6c0d45bc';
     try { saveJSON(LS.settings, settings); } catch (e) { /* ignore */ }
   }
   const now = new Date();
