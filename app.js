@@ -1,7 +1,7 @@
 // 学习机 Lite — 静态 PWA：内容来自 pack.json，进度存本地，AI 直连 OpenAI 兼容接口
 'use strict';
 
-const BUILD = '2026-11-12.1';
+const BUILD = '2026-11-12.2';
 
 const LS = {
   progress: 'zenus.progress.v1',
@@ -3797,7 +3797,8 @@ function renderSourceManager() {
     + '<select class="t" id="srcPick" style="flex:1;height:36px;min-height:36px;padding:4px 8px;font-size:12px">'
     + pickOptions + '</select>'
     + '<input class="t" id="srcKey" placeholder="书名或作者" style="flex:1.2;height:36px;min-height:36px;padding:6px 10px">'
-    + '<button class="btn primary" id="srcSearch" style="width:auto;padding:0 14px">搜索</button></div>'
+    + '<button class="btn primary" id="srcSearch" style="width:auto;padding:0 14px">搜索</button>'
+    + '<button class="btn ghost" id="srcScope" style="width:auto;padding:0 10px;white-space:nowrap">范围：当前源</button></div>'
     + '<div id="srcResults"></div>'
     + (rows || '<div class="empty" style="margin-top:14px">还没有书源</div>');
   document.getElementById('srcBack').onclick = () => renderShelf();
@@ -3888,8 +3889,20 @@ function renderSourceManager() {
     }
     const pick = document.getElementById('srcPick');
     const key = (document.getElementById('srcKey').value || '').trim() || '斗破苍穹';
+    // 范围开关：一个源 / 全部源（2026-11-12 补，Legado 的默认行为是搜全部）
+    if (SEARCH_SCOPE === 'all') { searchAllSources(key); return; }
     searchInSource(Number(pick ? pick.value : -1), key);
   };
+  const scopeBtn = document.getElementById('srcScope');
+  if (scopeBtn) {
+    scopeBtn.textContent = SEARCH_SCOPE === 'all' ? '范围：全部源' : '范围：当前源';
+    scopeBtn.className = 'btn ' + (SEARCH_SCOPE === 'all' ? 'primary' : 'ghost');
+    scopeBtn.onclick = () => {
+      SEARCH_SCOPE = SEARCH_SCOPE === 'all' ? 'one' : 'all';
+      scopeBtn.textContent = SEARCH_SCOPE === 'all' ? '范围：全部源' : '范围：当前源';
+      scopeBtn.className = 'btn ' + (SEARCH_SCOPE === 'all' ? 'primary' : 'ghost');
+    };
+  }
   view.scrollTop = 0;
 }
 
@@ -4542,6 +4555,88 @@ async function searchInSource(i, key) {
   } catch (e) {
     if (box) box.innerHTML = '<div class="empty">搜索失败：' + esc(e.message || String(e)) + '</div>';
   }
+}
+
+// ── 跨源搜索：一个书名，同时问所有书源 ─────────────────────
+// Legado 的搜索默认就是「搜全部源」；我们之前只有一个源一个源点，这里补上。
+// 并发 6 个源，单个源 25 秒上限；结果按「书名+作者」聚合，同一个源只留一条。
+let SEARCH_SCOPE = 'one';
+let SEARCH_ALL = { running: false, abort: false, key: '', done: 0, total: 0, failed: 0, groups: [] };
+
+function normBookKey(b) {
+  return String(b.name || '').trim() + '\u0001' + String(b.author || '').trim();
+}
+
+async function searchAllSources(key) {
+  if (SEARCH_ALL.running) { SEARCH_ALL.abort = true; return; }
+  const list = sources.map((s, i) => ({ s, i })).filter((x) => x.s && x.s.raw && x.s.enabled !== false);
+  if (!list.length) return toast('没有可搜的书源（先导入）');
+  SEARCH_ALL = { running: true, abort: false, key, done: 0, total: list.length, failed: 0, groups: [] };
+  renderSearchAll();
+  const byKey = new Map();
+  let cursor = 0;
+  const CONC = 6;
+  async function worker() {
+    while (!SEARCH_ALL.abort) {
+      const n = cursor++;
+      if (n >= list.length) return;
+      const { s, i } = list[n];
+      try {
+        const r = await nativeCall('bookSearch', { source: s.raw, key, page: 1 }, 25000);
+        (r || []).forEach((b) => {
+          if (!b || !b.bookUrl) return;
+          const k = normBookKey(b);
+          let g = byKey.get(k);
+          if (!g) { g = { name: b.name || '未命名', author: b.author || '', from: [] }; byKey.set(k, g); }
+          if (!g.from.some((x) => x.idx === i)) g.from.push({ idx: i, book: b, src: s });
+        });
+      } catch (e) {
+        SEARCH_ALL.failed++;
+      }
+      SEARCH_ALL.done++;
+      if (SEARCH_ALL.done % 2 === 0 || SEARCH_ALL.done === SEARCH_ALL.total) renderSearchAll();
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(CONC, list.length) }, worker));
+  SEARCH_ALL.groups = Array.from(byKey.values())
+    .sort((a, b) => (b.from.length - a.from.length) || String(a.name).localeCompare(String(b.name)));
+  SEARCH_ALL.running = false;
+  renderSearchAll();
+  toast('全源搜索完成：' + SEARCH_ALL.groups.length + ' 本书（' +
+    (SEARCH_ALL.total - SEARCH_ALL.failed) + '/' + SEARCH_ALL.total + ' 个源返回）');
+}
+
+function renderSearchAll() {
+  const box = document.getElementById('srcResults');
+  if (!box) return;
+  const head = '<div class="meta" style="margin-top:12px"><span>全源搜索：' + esc(SEARCH_ALL.key) + '</span><span>'
+    + SEARCH_ALL.done + '/' + SEARCH_ALL.total + ' 源'
+    + (SEARCH_ALL.failed ? ' · ' + SEARCH_ALL.failed + ' 个源失败' : '') + '</span></div>'
+    + (SEARCH_ALL.running
+      ? '<div class="row" style="margin:6px 0"><button class="btn ghost" id="srcStop">停止</button></div>'
+      : '');
+  const rows = SEARCH_ALL.groups.map((g, gi) =>
+    '<div class="it" style="align-items:flex-start;flex-direction:column;gap:6px">'
+    + '<div style="min-width:0"><b>' + esc(g.name) + '</b>'
+    + (g.author ? ' <span class="sub">' + esc(g.author) + '</span>' : '')
+    + ' <span class="sub">· ' + g.from.length + ' 个源</span></div>'
+    + '<div style="display:flex;flex-wrap:wrap;gap:6px">'
+    + g.from.map((f) => '<button class="btn ghost" data-alladd="' + gi + ':' + f.idx + '"'
+        + ' style="width:auto;padding:5px 9px;font-size:12px">'
+        + esc(f.src.name || ('源 ' + (f.idx + 1))) + ' · 读</button>').join('')
+    + '</div></div>').join('');
+  box.innerHTML = head + rows;
+  const stop = document.getElementById('srcStop');
+  if (stop) stop.onclick = () => { SEARCH_ALL.abort = true; toast('停止中…'); };
+  box.querySelectorAll('[data-alladd]').forEach((el) => {
+    el.onclick = () => {
+      const parts = String(el.dataset.alladd).split(':').map(Number);
+      const g = SEARCH_ALL.groups[parts[0]];
+      if (!g) return;
+      const f = g.from.find((x) => x.idx === parts[1]) || g.from[0];
+      addBookToShelf(f.src, f.book, el);
+    };
+  });
 }
 
 // 抓一本书：一次抓前几章存成材料（整本抓太慢，且书源站会限流）。
