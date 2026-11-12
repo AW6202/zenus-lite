@@ -1,7 +1,7 @@
 // 学习机 Lite — 静态 PWA：内容来自 pack.json，进度存本地，AI 直连 OpenAI 兼容接口
 'use strict';
 
-const BUILD = '2026-11-12.9';
+const BUILD = '2026-11-12.10';
 
 const LS = {
   progress: 'zenus.progress.v1',
@@ -4726,23 +4726,45 @@ async function exportSourceMatrix() {
     + p(now.getHours()) + ':' + p(now.getMinutes()) + ':' + p(now.getSeconds()) + tz;
   const text = matrixText(env, iso);
   const fname = 'aegis-source-matrix-' + iso.replace(/[-:T+]/g, '').slice(0, 14) + '.txt';
-  // WebView 83 的 blob 下载不会落盘（DownloadListener 收不到 blob:），所以**先复制到剪贴板**，
-  // 再试 <a download>；两个都留着，用户至少有一条能拿到数据。
-  let copied = false;
-  try { await nativeCall('clipboard', { text }, 5000); copied = true; } catch (e) { copied = false; }
-  try {
-    const blob = new Blob([text], { type: 'text/plain' });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = fname;
-    a.click();
-    URL.revokeObjectURL(a.href);
-    toast('已导出 ' + fname + '（' + text.split('\n').length + ' 行）'
-      + (copied ? '；同时已复制到剪贴板（没看到文件就粘贴成 txt）' : ''));
-  } catch (e) {
-    toast('下载失败：' + (e.message || e) + '，已复制到剪贴板');
-    nativeCall('clipboard', { text }).catch(() => {});
-  }
+  // 桥里的 `clipboard` 是**只读**（读系统剪贴板），写不了；WebView 的 blob 下载也不落盘。
+  // 所以导出改成「弹一个全选好的文本框 + 一键复制」，复制失败还能长按自己复制。
+  showMatrixSheet(text, fname);
+}
+
+function showMatrixSheet(text, fname) {
+  const old = document.getElementById('matrixOverlay');
+  if (old) old.remove();
+  const ov = document.createElement('div');
+  ov.id = 'matrixOverlay';
+  ov.style.cssText = 'position:fixed;inset:0;z-index:1002;background:rgba(0,0,0,.62);display:flex;flex-direction:column;padding:12px;gap:8px';
+  ov.innerHTML = '<div style="color:#eee;font-size:13px;line-height:1.5">体检矩阵 · ' + text.split('\n').length
+    + ' 行<br><span style="color:#aaa;font-size:12px">点「复制」后粘成 ' + fname
+    + '；不行就长按文本框 → 全选 → 复制</span></div>'
+    + '<textarea id="matrixBox" readonly style="flex:1;min-height:0;width:100%;background:#111;color:#ddd;border:1px solid #333;border-radius:8px;font:11px/1.45 monospace;padding:8px"></textarea>'
+    + '<div style="display:flex;gap:8px"><button class="btn primary" id="matrixCopy" style="flex:1">复制</button>'
+    + '<button class="btn" id="matrixClose" style="flex:1">关闭</button></div>';
+  document.body.appendChild(ov);
+  const box = document.getElementById('matrixBox');
+  box.value = text;
+  const selectAll = () => {
+    try { box.focus(); box.setSelectionRange(0, box.value.length); box.select(); } catch (e) { /* ignore */ }
+  };
+  selectAll();
+  const copyNow = async () => {
+    try {
+      await navigator.clipboard.writeText(text);
+      toast('已复制（' + text.split('\n').length + ' 行），去粘贴成 txt');
+      return;
+    } catch (e) { /* 退到 execCommand */ }
+    selectAll();
+    let ok = false;
+    try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+    toast(ok ? ('已复制（' + text.split('\n').length + ' 行），去粘贴成 txt')
+      : '复制失败：长按文本框 → 全选 → 复制');
+  };
+  document.getElementById('matrixCopy').onclick = copyNow;
+  document.getElementById('matrixClose').onclick = () => ov.remove();
+  copyNow();   // 打开即试一次（还在点击手势里）
 }
 
 // 书源只负责「找」；真正的「读」交给浏览器（真内核：JS/登录/广告拦截/阅读模式都在那边）。
