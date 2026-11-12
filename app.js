@@ -1,7 +1,7 @@
 // 学习机 Lite — 静态 PWA：内容来自 pack.json，进度存本地，AI 直连 OpenAI 兼容接口
 'use strict';
 
-const BUILD = '2026-11-11.1';
+const BUILD = '2026-11-12.1';
 
 const LS = {
   progress: 'zenus.progress.v1',
@@ -2751,13 +2751,15 @@ function renderReader() {
       + '<div class="row" style="margin-top:16px"><button class="btn primary" id="pickPdf">选择文件</button></div>'
       + '<div class="row" style="margin-top:8px"><button class="btn" id="shelfBtn">书架</button>'
       + '<button class="btn" id="findBooks">找教材</button><button class="btn" id="lookupBtn">查词</button></div>'
-      + '<div class="row" style="margin-top:8px"><button class="btn" id="pasteBtn">粘贴 / 分享导入</button></div>'
+      + '<div class="row" style="margin-top:8px"><button class="btn" id="srcBtn">书源（' + sources.length + '）</button>'
+      + '<button class="btn" id="pasteBtn">粘贴 / 分享导入</button></div>'
       + '<div class="sub" style="margin-top:10px">支持 PDF · DOCX · TXT · Markdown · EPUB · 图片 · 漫画</div>'
       + '<div id="recentMats" style="margin-top:14px;text-align:left"></div></div>'
       + '<input type="file" id="pdfFile" accept=".pdf,.epub,.docx,.txt,.md,.png,.jpg,.jpeg,.webp,image/*,application/pdf,application/epub+zip,'
       + 'application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain" style="display:none">';
     document.getElementById('pickPdf').onclick = () => document.getElementById('pdfFile').click();
     document.getElementById('shelfBtn').onclick = () => renderShelf();
+    document.getElementById('srcBtn').onclick = () => renderSourceManager();
     document.getElementById('findBooks').onclick = () => renderFind();
     document.getElementById('lookupBtn').onclick = () => renderLookup();
     document.getElementById('pasteBtn').onclick = () => pasteFromClipboard();
@@ -3651,12 +3653,15 @@ async function renderShelf() {
     + '</div>').join('');
 
   view.innerHTML =
-    '<div class="meta"><span>书架</span><span>' + mats.length + ' 份材料</span></div>'
-    + '<div class="hint">小说、电子书、书源抓来的书都在这里；读到抓完的那章时，在目录里点「继续抓」。</div>'
+    '<div class="meta"><span>书架</span><span>' + mats.length + ' 份材料 · ' + sources.length + ' 个书源</span></div>'
+    + '<div class="hint">小说、电子书、书源抓来的书都在这里；读到抓完的那章时，在目录里点「继续抓」。'
+    + '书源在「书源管理」里导入、测试、按源搜书。</div>'
     + '<div class="row" style="margin:8px 0;flex-wrap:wrap">'
-    + '<button class="btn ghost" id="shBack">← 回材料</button></div>'
+    + '<button class="btn ghost" id="shBack">← 回材料</button>'
+    + '<button class="btn primary" id="shSources">书源管理（' + sources.length + '）</button></div>'
     + (rows || '<div class="empty">书架还是空的。<br><span class="sub">在壳里打开网页 → ≡ 菜单「存到书架」；或直接导入本地文件。</span></div>');
   document.getElementById('shBack').onclick = () => { state.tab = 'reader'; render(); };
+  document.getElementById('shSources').onclick = () => renderSourceManager();
   view.querySelectorAll('[data-open]').forEach((el) => {
     el.onclick = (e) => {
       if (e.target.dataset && (e.target.dataset.del || e.target.dataset.refetch)) return;
@@ -3771,10 +3776,11 @@ function renderSourceManager() {
   view.innerHTML =
     '<div class="meta"><span>书源管理</span><span>' + sources.length + ' 个'
     + (state.srcErr ? ' · 存储异常' : '') + '</span></div>'
-    + '<div class="hint">粘贴 Legado 书源 JSON（一个数组，或单个对象也可以）。'
-    + '导入后能「测试」连通性，也能直接按书源搜书、把第一章加入书架。</div>'
+    + '<div class="hint">粘贴 Legado 书源 JSON（数组 / 单个对象 / {"sourceUrls":[…] } 合集都行），'
+    + '也可以直接粘一条 <b>http 合集地址</b>（在 App 里用原生拉，网页 fetch 会被跨域挡住）。'
+    + '导入后点「测试」看连通性；下面选一个源、输入书名即可搜索，把书加入书架。</div>'
     + '<textarea class="t" id="srcBox" rows="6" style="height:auto;min-height:120px;font-size:12px"'
-    + ' placeholder="粘贴书源 JSON 数组"></textarea>'
+    + ' placeholder="粘贴书源 JSON 数组，或一条 http(s) 合集地址"></textarea>'
     + '<div class="row" style="margin-top:8px"><button class="btn primary" id="srcAdd">导入书源</button>'
     + '<button class="btn" id="srcCat">源仓库</button>'
     + '<button class="btn" id="srcFile">从文件导入</button>'
