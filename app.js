@@ -1,7 +1,7 @@
 // 学习机 Lite — 静态 PWA：内容来自 pack.json，进度存本地，AI 直连 OpenAI 兼容接口
 'use strict';
 
-const BUILD = '2026-11-12.11';
+const BUILD = '2026-11-12.12';
 
 const LS = {
   progress: 'zenus.progress.v1',
@@ -4628,6 +4628,17 @@ async function testAllSources(force) {
         content: Number((r && r.content) || 0),
         stage: (r && r.stage) || '?',
         error: (r && r.error) || '',
+        // 诊断：失败那一阶段的最终请求（URL / HTTP / 字节 / HTML 头 200 字）
+        ...(function () {
+          const st = (r && r.stage) || '';
+          const k = (st === 'toc' || st === 'toc-empty') ? 'toc' : (st === 'content' ? 'content' : 'search');
+          return {
+            diagUrl: (r && r[k + 'Url']) || '',
+            diagHttp: Number((r && r[k + 'Http']) || 0),
+            diagBytes: Number((r && r[k + 'Bytes']) || 0),
+            diagHead: (r && r[k + 'Head']) || '',
+          };
+        })(),
         msg: stageText(r),
         at: Date.now(),
       };
@@ -4696,9 +4707,16 @@ function matrixText(env, iso) {
     const t = SRC_TEST[s.url];
     const name = cell(s.name || '未命名').replace(/\s+/g, ' ').slice(0, 120);
     if (!t) { lines.push([name, '-', '-', '-', '未测'].join(' | ')); return; }
-    const fail = t.ok ? '-'
+    let fail = t.ok ? '-'
       : cell((t.stage || '?') + (t.error ? ': ' + t.error : (t.msg ? ': ' + t.msg : '')))
         .slice(0, 300);
+    // 只给失败行补诊断：最终请求 URL / HTTP / 字节 / HTML 头 200 字
+    if (!t.ok) {
+      fail += ' ; url=' + cell(t.diagUrl || '?')
+        + ' ; http=' + (t.diagHttp || 0)
+        + ' ; bytes=' + (t.diagBytes || 0)
+        + ' ; head=' + cell(t.diagHead || '').slice(0, 200);
+    }
     lines.push([name, String(t.search || 0), String(t.toc || 0), String(t.content || 0), fail].join(' | '));
   });
   const cnt = (k) => tested.filter((s) => Number((SRC_TEST[s.url] || {})[k] || 0) > 0).length;
