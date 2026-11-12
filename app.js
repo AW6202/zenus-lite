@@ -1,7 +1,7 @@
 // 学习机 Lite — 静态 PWA：内容来自 pack.json，进度存本地，AI 直连 OpenAI 兼容接口
 'use strict';
 
-const BUILD = '2026-11-12.10';
+const BUILD = '2026-11-12.11';
 
 const LS = {
   progress: 'zenus.progress.v1',
@@ -4750,17 +4750,24 @@ function showMatrixSheet(text, fname) {
     try { box.focus(); box.setSelectionRange(0, box.value.length); box.select(); } catch (e) { /* ignore */ }
   };
   selectAll();
-  const copyNow = async () => {
-    try {
-      await navigator.clipboard.writeText(text);
-      toast('已复制（' + text.split('\n').length + ' 行），去粘贴成 txt');
-      return;
-    } catch (e) { /* 退到 execCommand */ }
+  // 顺序很重要：execCommand('copy') 必须**同步**执行（还在点击手势里）。
+  // 先 await 一次失败再调它，手势已经过期，execCommand 恒返回 false —— 上一版就这么空的。
+  const copyNow = () => {
+    const n = text.split('\n').length;
     selectAll();
     let ok = false;
     try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
-    toast(ok ? ('已复制（' + text.split('\n').length + ' 行），去粘贴成 txt')
-      : '复制失败：长按文本框 → 全选 → 复制');
+    if (ok) { toast('已复制（' + n + ' 行），去粘贴成 txt'); return; }
+    // 同步路径失败：异步 API 也在同一个任务里发起（promise 立刻创建，不破坏手势）
+    const fallback = () => toast('自动复制被拒：长按文本框 → 全选 → 复制');
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(
+        () => toast('已复制（' + n + ' 行），去粘贴成 txt'),
+        fallback,
+      );
+    } else {
+      fallback();
+    }
   };
   document.getElementById('matrixCopy').onclick = copyNow;
   document.getElementById('matrixClose').onclick = () => ov.remove();
