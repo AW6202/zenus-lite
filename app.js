@@ -1,7 +1,7 @@
 // 学习机 Lite — 静态 PWA：内容来自 pack.json，进度存本地，AI 直连 OpenAI 兼容接口
 'use strict';
 
-const BUILD = '2026-11-12.5';
+const BUILD = '2026-11-12.6';
 
 const LS = {
   progress: 'zenus.progress.v1',
@@ -4546,6 +4546,10 @@ async function exportSourceMatrix() {
     + p(now.getHours()) + ':' + p(now.getMinutes()) + ':' + p(now.getSeconds()) + tz;
   const text = matrixText(env, iso);
   const fname = 'aegis-source-matrix-' + iso.replace(/[-:T+]/g, '').slice(0, 14) + '.txt';
+  // WebView 83 的 blob 下载不会落盘（DownloadListener 收不到 blob:），所以**先复制到剪贴板**，
+  // 再试 <a download>；两个都留着，用户至少有一条能拿到数据。
+  let copied = false;
+  try { await nativeCall('clipboard', { text }, 5000); copied = true; } catch (e) { copied = false; }
   try {
     const blob = new Blob([text], { type: 'text/plain' });
     const a = document.createElement('a');
@@ -4553,7 +4557,8 @@ async function exportSourceMatrix() {
     a.download = fname;
     a.click();
     URL.revokeObjectURL(a.href);
-    toast('已导出 ' + fname + '（' + text.split('\n').length + ' 行）');
+    toast('已导出 ' + fname + '（' + text.split('\n').length + ' 行）'
+      + (copied ? '；同时已复制到剪贴板（没看到文件就粘贴成 txt）' : ''));
   } catch (e) {
     toast('下载失败：' + (e.message || e) + '，已复制到剪贴板');
     nativeCall('clipboard', { text }).catch(() => {});
