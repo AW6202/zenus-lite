@@ -1,7 +1,7 @@
 // 学习机 Lite — 静态 PWA：内容来自 pack.json，进度存本地，AI 直连 OpenAI 兼容接口
 'use strict';
 
-const BUILD = '2026-11-12.2';
+const BUILD = '2026-11-12.3';
 
 const LS = {
   progress: 'zenus.progress.v1',
@@ -4567,22 +4567,24 @@ function normBookKey(b) {
   return String(b.name || '').trim() + '\u0001' + String(b.author || '').trim();
 }
 
-async function searchAllSources(key) {
-  if (SEARCH_ALL.running) { SEARCH_ALL.abort = true; return; }
-  const list = sources.map((s, i) => ({ s, i })).filter((x) => x.s && x.s.raw && x.s.enabled !== false);
-  if (!list.length) return toast('没有可搜的书源（先导入）');
-  SEARCH_ALL = { running: true, abort: false, key, done: 0, total: list.length, failed: 0, groups: [] };
-  renderSearchAll();
+/** 并发搜索所有（可用）书源；返回按「书名+作者」聚合的分组。 */
+async function searchEverySource(key, opts) {
+  opts = opts || {};
+  const perSourceMs = opts.perSourceMs || 25000;
+  const exclude = opts.excludeSource || '';
+  const abort = opts.abort || (() => false);
+  const list = sources.map((s, i) => ({ s, i }))
+    .filter((x) => x.s && x.s.raw && x.s.enabled !== false && String(x.s.name || '') !== exclude);
   const byKey = new Map();
-  let cursor = 0;
-  const CONC = 6;
+  let cursor = 0, done = 0, failed = 0;
+  const CONC = Math.min(6, list.length || 1);
   async function worker() {
-    while (!SEARCH_ALL.abort) {
+    while (!abort()) {
       const n = cursor++;
       if (n >= list.length) return;
       const { s, i } = list[n];
       try {
-        const r = await nativeCall('bookSearch', { source: s.raw, key, page: 1 }, 25000);
+        const r = await nativeCall('bookSearch', { source: s.raw, key, page: 1 }, perSourceMs);
         (r || []).forEach((b) => {
           if (!b || !b.bookUrl) return;
           const k = normBookKey(b);
@@ -4590,20 +4592,35 @@ async function searchAllSources(key) {
           if (!g) { g = { name: b.name || '未命名', author: b.author || '', from: [] }; byKey.set(k, g); }
           if (!g.from.some((x) => x.idx === i)) g.from.push({ idx: i, book: b, src: s });
         });
-      } catch (e) {
-        SEARCH_ALL.failed++;
-      }
-      SEARCH_ALL.done++;
-      if (SEARCH_ALL.done % 2 === 0 || SEARCH_ALL.done === SEARCH_ALL.total) renderSearchAll();
+      } catch (e) { failed++; }
+      done++;
+      if (opts.onProgress) opts.onProgress(done, list.length, failed);
     }
   }
-  await Promise.all(Array.from({ length: Math.min(CONC, list.length) }, worker));
-  SEARCH_ALL.groups = Array.from(byKey.values())
+  await Promise.all(Array.from({ length: CONC }, worker));
+  const groups = Array.from(byKey.values())
     .sort((a, b) => (b.from.length - a.from.length) || String(a.name).localeCompare(String(b.name)));
+  return { groups, total: list.length, done, failed };
+}
+
+async function searchAllSources(key) {
+  if (SEARCH_ALL.running) { SEARCH_ALL.abort = true; return; }
+  if (!sources.some((s) => s && s.raw)) return toast('没有可搜的书源（先导入）');
+  SEARCH_ALL = { running: true, abort: false, key, done: 0, total: 0, failed: 0, groups: [] };
+  renderSearchAll();
+  const res = await searchEverySource(key, {
+    abort: () => SEARCH_ALL.abort,
+    onProgress: (done, total, failed) => {
+      SEARCH_ALL.done = done; SEARCH_ALL.total = total; SEARCH_ALL.failed = failed;
+      if (done % 2 === 0 || done === total) renderSearchAll();
+    },
+  });
+  SEARCH_ALL.groups = res.groups;
+  SEARCH_ALL.done = res.total; SEARCH_ALL.total = res.total; SEARCH_ALL.failed = res.failed;
   SEARCH_ALL.running = false;
   renderSearchAll();
   toast('全源搜索完成：' + SEARCH_ALL.groups.length + ' 本书（' +
-    (SEARCH_ALL.total - SEARCH_ALL.failed) + '/' + SEARCH_ALL.total + ' 个源返回）');
+    (res.total - res.failed) + '/' + res.total + ' 个源返回）');
 }
 
 function renderSearchAll() {
@@ -4637,6 +4654,134 @@ function renderSearchAll() {
       addBookToShelf(f.src, f.book, el);
     };
   });
+}
+
+// ── 换源：读到一半发现这个源缺章/广告多，用别的源重抓同一本 ──────
+// 做法跟 Legado 的「换源」一个思路：按书名去其它源搜 → 选中一个 → 重新拿目录 →
+// 按**当前章节标题**在新目录里对齐 → 从对齐处前后各留一点抓一批，阅读位置跟过去。
+function stripBookPrefix(title, bookName) {
+  const t = String(title || '');
+  const p = String(bookName || '') + ' · ';
+  if (bookName && t.startsWith(p)) return t.slice(p.length);
+  const i = t.indexOf(' · ');
+  return i >= 0 ? t.slice(i + 3) : t;
+}
+
+async function changeSourceFlow() {
+  const b = RDR.book;
+  if (!b) return;
+  const key = String(b.name || '').trim();
+  if (!key) return toast('这本书没有书名，搜不了');
+  const cur = (b.origin && b.origin.source) || '';
+  RDR.srcPick = { key, loading: true, groups: [], total: 0, done: 0, failed: 0 };
+  renderSourcePicker();
+  const res = await searchEverySource(key, {
+    excludeSource: cur,
+    perSourceMs: 20000,
+    onProgress: (done, total, failed) => {
+      const p = RDR.srcPick;
+      if (!p || !p.loading) return;
+      p.done = done; p.total = total; p.failed = failed;
+      renderSourcePicker();
+    },
+  });
+  RDR.srcPick = { key, loading: false, groups: res.groups, total: res.total, done: res.done, failed: res.failed };
+  renderSourcePicker();
+}
+
+function renderSourcePicker() {
+  const p = RDR.srcPick || { key: '', loading: true, groups: [], total: 0, done: 0, failed: 0 };
+  const rows = p.groups.map((g, gi) =>
+    '<div class="it" style="align-items:flex-start;flex-direction:column;gap:6px">'
+    + '<div style="min-width:0"><b>' + esc(g.name) + '</b>'
+    + (g.author ? ' <span class="sub">' + esc(g.author) + '</span>' : '') + '</div>'
+    + '<div style="display:flex;flex-wrap:wrap;gap:6px">'
+    + g.from.map((f) => '<button class="btn ghost" data-switch="' + gi + ':' + f.idx + '"'
+        + ' style="width:auto;padding:5px 9px;font-size:12px">'
+        + esc(f.src.name || ('源 ' + (f.idx + 1))) + '</button>').join('')
+    + '</div></div>').join('');
+  view.innerHTML =
+    '<div class="meta"><span>换源 · ' + esc(RDR.book ? RDR.book.name : '') + '</span><span>'
+    + (p.loading ? (p.done + '/' + p.total + ' 个源') : ((p.total - p.failed) + '/' + p.total + ' 个源')) + '</span></div>'
+    + '<div class="row" style="margin:8px 0"><button class="btn ghost" id="srcPickBack">← 回阅读</button></div>'
+    + (p.loading ? '<div class="hint">正在用「' + esc(p.key) + '」搜其它源…</div>' : '')
+    + (rows || (p.loading ? '' : '<div class="empty">其它源没搜到这本</div>'));
+  document.getElementById('srcPickBack').onclick = () => renderReader();
+  view.querySelectorAll('[data-switch]').forEach((el) => {
+    el.onclick = () => {
+      const parts = String(el.dataset.switch).split(':').map(Number);
+      const g = p.groups[parts[0]];
+      if (!g) return;
+      const f = g.from.find((x) => x.idx === parts[1]) || g.from[0];
+      el.disabled = true;
+      el.textContent = '抓取中…';
+      applyChangeSource(f.src, f.book);
+    };
+  });
+}
+
+async function applyChangeSource(src, book) {
+  const rec = RDR.book;
+  if (!rec) return;
+  const curTitle = stripBookPrefix((rec.chapters[RDR.ch] || {}).title || '', rec.name);
+  toast('换源：从 ' + (src.name || '') + ' 抓目录…');
+  try {
+    const info = await nativeCall('bookInfo', { source: src.raw, url: book.bookUrl }, 60000);
+    const tocUrl = (info && info.tocUrl) || book.bookUrl;
+    const toc = await nativeCall('bookToc', { source: src.raw, url: tocUrl }, 90000);
+    if (!toc || !toc.length) throw new Error('新源目录是空的');
+    let match = curTitle ? toc.findIndex((c) => String(c.title || '').trim() === curTitle) : -1;
+    if (match < 0 && curTitle) {
+      const head = curTitle.slice(0, 8);
+      match = toc.findIndex((c) => head && String(c.title || '').includes(head));
+    }
+    // 从匹配章的前一章开始抓，留一点上下文；没匹配上就从头抓
+    const base = Math.max(0, match >= 0 ? match - 1 : 0);
+    const want = Math.min(BOOK_BATCH, toc.length - base);
+    const slice = toc.slice(base, base + want);
+    const urls = slice.map((c) => c.url).filter(Boolean);
+    if (!urls.length) throw new Error('新源这一段没有章节地址');
+    const got = await nativeCall('bookChapters', { source: src.raw, urls, limit: want }, 180000);
+    const chapters = [];
+    (got || []).forEach((g, i) => {
+      if (!g || !g.text) return;
+      const t = (slice[i] && slice[i].title) || ('第 ' + (base + i + 1) + ' 章');
+      chapters.push({
+        title: (book.name || '未命名') + ' · ' + t,
+        text: g.text,
+        url: g.url || (slice[i] && slice[i].url) || '',
+      });
+    });
+    if (!chapters.length) throw new Error('新源这一段没抓到正文');
+    const next = {
+      ...rec,
+      name: book.name || rec.name,
+      kind: 'text',
+      savedAt: Date.now(),
+      bytes: JSON.stringify(chapters).length,
+      chapters,
+      origin: {
+        source: src.name || '',
+        bookUrl: book.bookUrl || '',
+        tocUrl,
+        raw: src.raw || null,
+        tocCount: toc.length,
+        baseChapter: base,
+      },
+    };
+    await matPut(next);
+    RDR.book = next;
+    RDR.ch = match >= 0 ? Math.max(0, Math.min(chapters.length - 1, match - base)) : 0;
+    RDR.pageIdx = 0;
+    RDR.tocs = null;
+    saveReadPos();
+    renderReader();
+    toast('已换到 ' + (src.name || '') + '：第 ' + (base + RDR.ch + 1) + ' / ' + toc.length + ' 章'
+      + (match < 0 ? '（没对上原章节，从头读）' : ''));
+  } catch (e) {
+    toast('换源失败：' + (e.message || e));
+    renderSourcePicker();
+  }
 }
 
 // 抓一本书：一次抓前几章存成材料（整本抓太慢，且书源站会限流）。
@@ -4696,7 +4841,8 @@ async function fetchMoreChapters(n) {
   const btn = document.getElementById('moreCh');
   if (!o || !o.raw) { toast('这本书没有书源信息（可能是导入的文件），抓不了后面的章节'); return; }
   if (!o.tocUrl) { toast('这本书没记目录地址，抓不了后面的章节'); return; }
-  const have = (b.chapters || []).length;
+  // 换过源的书章节不是从目录第 1 章开始的：origin.baseChapter 记着 chapters[0] 在目录里的位置
+  const have = ((o && o.baseChapter) || 0) + (b.chapters || []).length;
   const want = Math.max(1, n || MORE_BATCH);
   if (btn) { btn.disabled = true; btn.textContent = '抓取中…'; }
   try {
@@ -5935,6 +6081,7 @@ function renderTextBook() {
     + '<div class="floating pager' + (RDR.toolsVisible ? ' show' : '') + '" id="bookTools">'
     + '<button id="prevCh">◀</button><button id="nextCh">▶</button>'
     + '<button id="tocBtn">目录</button>'
+    + (b.origin && b.origin.raw ? '<button id="srcSwitch">换源</button>' : '')
     + '<div class="sep"></div>'
     + '<button id="fBig" title="字号">A+ ' + (settings.readFont || 16) + '</button><button id="fSmall" title="字号">A-</button>'
     + '<button id="lLoose" title="行距">行+</button><button id="lTight" title="行距">行-</button>'
@@ -5955,6 +6102,8 @@ function renderTextBook() {
   document.getElementById('lLoose').onclick = () => bumpLine(0.1);
   document.getElementById('togglePaged').onclick = togglePaged;
   document.getElementById('tocBtn').onclick = () => { hideTools(); showBookToc(); };
+  const swBtn = document.getElementById('srcSwitch');
+  if (swBtn) swBtn.onclick = () => { hideTools(); changeSourceFlow(); };
   document.getElementById('spreadBtn').onclick = () => toggleSpread();
   const kpb = document.getElementById('kpBtn');
   if (kpb) kpb.onclick = () => { hideTools(); showPoints(); };
