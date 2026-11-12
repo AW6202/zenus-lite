@@ -1,7 +1,7 @@
 // 学习机 Lite — 静态 PWA：内容来自 pack.json，进度存本地，AI 直连 OpenAI 兼容接口
 'use strict';
 
-const BUILD = '2026-11-12.7';
+const BUILD = '2026-11-12.8';
 
 const LS = {
   progress: 'zenus.progress.v1',
@@ -3686,14 +3686,48 @@ async function srcTestLoad() {
       req.onsuccess = () => {
         const cur = req.result;
         if (!cur) return resolve(out);
-        if (String(cur.key).startsWith('t:')) out.push([String(cur.key).slice(2), cur.value]);
+        out.push([String(cur.key), cur.value]);
         cur.continue();
       };
       req.onerror = () => reject(req.error);
     });
-    rows.forEach(([url, rec]) => { if (url && rec) { SRC_TEST[url] = rec; loaded++; } });
+    rows.forEach(([key, value]) => {
+      if (key.startsWith('t:') && value) { SRC_TEST[key.slice(2)] = value; loaded++; }
+      if (key === 'meta:round' && value) setTestRoundStart(value.startedAt || '', false);
+    });
   } catch (e) { /* 读不到就当没测过 */ }
+  // 老数据没有 meta：用最早一条 at 兜底，别让 STARTED_AT 是空的
+  if (!SRC_TEST_META.startedAt) {
+    const times = Object.keys(SRC_TEST).map((k) => SRC_TEST[k] && SRC_TEST[k].at).filter(Boolean);
+    if (times.length) setTestRoundStart(isoStamp(new Date(Math.min.apply(null, times))), false);
+  }
   return loaded;
+}
+
+// 本轮开跑时间：落盘，跨 reload 保持；「重置体检」会清掉
+function isoStamp(d) {
+  const p = (n) => String(n).padStart(2, '0');
+  const off = -d.getTimezoneOffset();
+  const tz = (off >= 0 ? '+' : '-') + p(Math.floor(Math.abs(off) / 60)) + ':' + p(Math.abs(off) % 60);
+  return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + 'T'
+    + p(d.getHours()) + ':' + p(d.getMinutes()) + ':' + p(d.getSeconds()) + tz;
+}
+
+function setTestRoundStart(iso, persist) {
+  SRC_TEST_META.startedAt = iso || '';
+  if (persist) srcTestMetaPut().catch(() => {});
+}
+
+async function srcTestMetaPut() {
+  try {
+    const db = await testDb();
+    await new Promise((resolve, reject) => {
+      const tx = db.transaction(TEST_STORE, 'readwrite');
+      tx.objectStore(TEST_STORE).put({ startedAt: SRC_TEST_META.startedAt, build: BUILD }, 'meta:round');
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+  } catch (e) { /* ignore */ }
 }
 
 async function srcTestClear() {
@@ -3707,6 +3741,7 @@ async function srcTestClear() {
       tx.onerror = () => reject(tx.error);
     });
   } catch (e) { /* ignore */ }
+  setTestRoundStart('', false);
 }
 
 async function renderShelf() {
@@ -3809,7 +3844,8 @@ async function refetchMaterial(id, btn) {
 
 // 书源管理：导入 / 测试连通性 / 按规则搜一本书放进书架。
 // 规则解析在原生侧（ZenusBookSource.kt）——网页 fetch 别人的站会被 CORS 挡死，只能走桥。
-const SRC_TEST = {};   // url -> { ok, msg }：本次会话的测试结果（不落盘）
+const SRC_TEST = {};   // url -> { ok, search, toc, content, stage, error, at }：落盘见 srcTestPut
+const SRC_TEST_META = { startedAt: '' };  // 本轮第一个源开跑的时间（ISO），随结果一起落盘
 
 function renderSourceManager() {
   window.__zenusMenuBoxMode = '';
@@ -4536,6 +4572,8 @@ async function testAllSources(force) {
   const list = sources.slice();
   const todo = force ? list : list.filter((s) => s.raw && !SRC_TEST[s.url]);
   if (!todo.length) return toast('全部源都测过了；要重跑点「重置体检」');
+  // 本轮开跑时间：只在第一源真正开跑时定一次；续跑沿用（落盘，reload 也不变）
+  if (!SRC_TEST_META.startedAt) setTestRoundStart(isoStamp(new Date()), true);
   let ok = 0, bad = 0, skip = 0;
   if (btn) btn.disabled = true;
   for (let i = 0; i < todo.length; i++) {
@@ -4598,6 +4636,7 @@ function matrixText(env, iso) {
   lines.push('# aegis-source-matrix v1');
   lines.push('BUILD=' + BUILD);
   lines.push('TIME=' + (iso || new Date().toISOString()));
+  lines.push('STARTED_AT=' + (SRC_TEST_META.startedAt || '?'));
   lines.push('APK=' + (env.appVersion || '?') + ' (' + (env.appVersionCode || '?') + ')');
   lines.push('APK_COMMIT=' + (settings.apkCommit || '?'));
   lines.push('WEBVIEW=' + (env.webViewPkg || '?') + ' ' + (env.webViewVersion || ''));
