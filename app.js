@@ -1,7 +1,7 @@
 // 学习机 Lite — 静态 PWA：内容来自 pack.json，进度存本地，AI 直连 OpenAI 兼容接口
 'use strict';
 
-const BUILD = '2026-11-12.8';
+const BUILD = '2026-11-12.9';
 
 const LS = {
   progress: 'zenus.progress.v1',
@@ -3847,6 +3847,34 @@ async function refetchMaterial(id, btn) {
 const SRC_TEST = {};   // url -> { ok, search, toc, content, stage, error, at }：落盘见 srcTestPut
 const SRC_TEST_META = { startedAt: '' };  // 本轮第一个源开跑的时间（ISO），随结果一起落盘
 
+// 测试进行中的状态：renderSourceManager() 会整块重建页面，循环**不能**再持有旧节点引用。
+// 进度/禁用态全部从这里渲染，循环只改状态 → 重建多少次进度都不会停，也不会被点出第二个循环。
+const SRC_TESTING = { running: false, done: 0, total: 0, ok: 0, bad: 0, tested: 0, all: 0, finishedAt: 0 };
+
+function testButtonLabel() {
+  return SRC_TESTING.running ? ('测试中 ' + SRC_TESTING.done + '/' + SRC_TESTING.total) : '测试全部';
+}
+
+function testProgressText() {
+  if (SRC_TESTING.running) {
+    return SRC_TESTING.done + '/' + SRC_TESTING.total + ' · 可用 ' + SRC_TESTING.ok
+      + ' / 不可用 ' + SRC_TESTING.bad + ' · 已测 ' + SRC_TESTING.tested + '/' + SRC_TESTING.all;
+  }
+  if (SRC_TESTING.finishedAt) {
+    return '上一轮：可用 ' + SRC_TESTING.ok + ' / 不可用 ' + SRC_TESTING.bad
+      + ' · 已测 ' + SRC_TESTING.tested + '/' + SRC_TESTING.all;
+  }
+  const n = Object.keys(SRC_TEST).length;
+  return n ? ('已测 ' + n + ' 个，继续点「测试全部」接着跑') : '';
+}
+
+function syncTestUi() {
+  const btn = document.getElementById('srcTestAll');
+  if (btn) { btn.disabled = SRC_TESTING.running; btn.textContent = testButtonLabel(); }
+  const msg = document.getElementById('srcTestMsg');
+  if (msg) msg.textContent = testProgressText();
+}
+
 function renderSourceManager() {
   window.__zenusMenuBoxMode = '';
   const badge = (s) => {
@@ -3903,11 +3931,12 @@ function renderSourceManager() {
     + '<button class="btn ghost" id="srcBack">← 回书架</button></div>'
     + '<input type="file" id="srcFileInput" accept=".json,.txt,application/json,text/plain" style="display:none">'
     + '<div class="row" style="margin-top:8px;flex-wrap:wrap;gap:8px">'
-    + '<button class="btn ghost" id="srcTestAll" style="width:auto;padding:0 12px">测试全部</button>'
+    + '<button class="btn ghost" id="srcTestAll" style="width:auto;padding:0 12px"'
+    + (SRC_TESTING.running ? ' disabled' : '') + '>' + esc(testButtonLabel()) + '</button>'
     + '<button class="btn ghost" id="srcDelBad" style="width:auto;padding:0 12px">删不可用</button>'
     + '<button class="btn ghost" id="srcExport" style="width:auto;padding:0 12px">导出体检结果</button>'
     + '<button class="btn ghost" id="srcTestReset" style="width:auto;padding:0 12px">重置体检</button>'
-    + '<span class="sub" id="srcTestMsg" style="align-self:center;flex:1"></span></div>'
+    + '<span class="sub" id="srcTestMsg" style="align-self:center;flex:1">' + esc(testProgressText()) + '</span></div>'
     + '<div class="row" style="margin-top:12px;gap:8px;flex-wrap:nowrap">'
     + '<select class="t" id="srcPick" style="flex:1;height:36px;min-height:36px;padding:4px 8px;font-size:12px">'
     + pickOptions + '</select>'
@@ -4566,8 +4595,8 @@ async function testSource(i) {
 async function testAllSources(force) {
   if (!sources.length) return toast('还没有书源');
   if (!nativePort()) return toast('测试要在 App 里用');
-  const btn = document.getElementById('srcTestAll');
-  const msg = document.getElementById('srcTestMsg');
+  // 已经有一轮在跑：直接拒绝（旧实现里重渲染后按钮没禁用，能点出第二个循环，引擎会串味）
+  if (SRC_TESTING.running) return toast('正在测试中，等这一轮跑完（进度在按钮右边）');
   await srcTestLoad();                    // 续跑：先把上次落盘的结果装回来
   const list = sources.slice();
   const todo = force ? list : list.filter((s) => s.raw && !SRC_TEST[s.url]);
@@ -4575,7 +4604,15 @@ async function testAllSources(force) {
   // 本轮开跑时间：只在第一源真正开跑时定一次；续跑沿用（落盘，reload 也不变）
   if (!SRC_TEST_META.startedAt) setTestRoundStart(isoStamp(new Date()), true);
   let ok = 0, bad = 0, skip = 0;
-  if (btn) btn.disabled = true;
+  SRC_TESTING.running = true;
+  SRC_TESTING.done = 0;
+  SRC_TESTING.total = todo.length;
+  SRC_TESTING.ok = 0;
+  SRC_TESTING.bad = 0;
+  SRC_TESTING.tested = Object.keys(SRC_TEST).length;
+  SRC_TESTING.all = list.length;
+  SRC_TESTING.finishedAt = 0;
+  syncTestUi();
   for (let i = 0; i < todo.length; i++) {
     const s = todo[i];
     if (!s.raw) { skip++; continue; }
@@ -4604,12 +4641,18 @@ async function testAllSources(force) {
     }
     // 每源跑完立刻落盘：息屏/切后台 reload 也不丢，下次点「测试全部」从这里接着跑
     try { await srcTestPut(s.url, SRC_TEST[s.url]); } catch (e) { /* ignore */ }
-    const done = Object.keys(SRC_TEST).length;
-    if (msg) msg.textContent = (i + 1) + '/' + todo.length + ' · 可用 ' + ok + ' / 不可用 ' + bad
-      + ' · 已测 ' + done + '/' + list.length;
+    // 只改状态，再由 syncTestUi() 找**当前**节点刷新（页面可能已被重建）
+    SRC_TESTING.done = i + 1;
+    SRC_TESTING.ok = ok;
+    SRC_TESTING.bad = bad;
+    SRC_TESTING.tested = Object.keys(SRC_TEST).length;
+    syncTestUi();
     if (i % 10 === 9) { const st = view.scrollTop; renderSourceManager(); view.scrollTop = st; }
   }
-  btn.disabled = false;
+  SRC_TESTING.running = false;
+  SRC_TESTING.finishedAt = Date.now();
+  SRC_TESTING.tested = Object.keys(SRC_TEST).length;
+  syncTestUi();
   toast('测试完成：可用 ' + ok + ' / 不可用 ' + bad + (skip ? ' / 跳过(旧版) ' + skip : ''));
   const st = view.scrollTop;
   renderSourceManager();
