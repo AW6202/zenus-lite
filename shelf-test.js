@@ -237,6 +237,30 @@ const STUB = `
     check('浏览器里说明「书要装 App 才取得到」，但本机网页档案照样显示',
       /浏览器/.test(noNative.banner) && /App/.test(noNative.banner) && noNative.cards >= 1, noNative);
 
+    // ── 5. 档案三种看法（§3）：原文快照 / 抽字稿 / 清洗稿 ──
+    const arcView = await cdp.eval(`
+      const html = '<html><body><article><p>' + '这是一段没被抽到的正文。'.repeat(50) + '</p></article></body></html>';
+      const r = await ZConv.convert({ html, name: '快照样本.html' }, { levels: [2, 3, 4] });
+      await openArchiveViewer(r.archive.docId);
+      const o = document.getElementById('arcOverlay');
+      const tabs = Array.from(o.querySelectorAll('.arcTab')).map((b) => ({ k: b.dataset.k, text: b.textContent, disabled: b.disabled }));
+      const body1 = document.getElementById('arcBody').textContent;
+      // 切到抽字稿
+      o.querySelector('.arcTab[data-k="text"]').click();
+      const body2 = document.getElementById('arcBody').textContent;
+      return { level: r.archive.level, tabs, body1: body1.slice(0, 40), body2: body2.slice(0, 40),
+               hasHint: /听的时候不能切/.test(o.textContent) };
+    `);
+    check('三种看法：三档都在，第 4 级只有「原文」可用（另两档禁用）',
+      arcView.level === 4 && arcView.tabs.length === 3
+      && arcView.tabs.find((t) => t.k === 'source').disabled === false
+      && arcView.tabs.find((t) => t.k === 'text').disabled === true
+      && arcView.tabs.find((t) => t.k === 'ai').disabled === true, arcView);
+    check('原文视图显示的是快照正文（剥掉标签），禁用的档点不动',
+      /没被抽到的正文/.test(arcView.body1) && !/<p>/.test(arcView.body1)
+      && arcView.body2 === arcView.body1, arcView);
+    check('界面写明「听的时候不能切视图」', arcView.hasHint === true, arcView);
+
     console.log('');
   } catch (err) {
     check('跑完整个流程', false, { err: err.message, stack: String(err.stack || '').slice(0, 500) });

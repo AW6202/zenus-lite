@@ -761,6 +761,14 @@ window.ZConv = (function () {
     if (!snapshotText && bytes && (kind === 'html' || kind === 'txt' || kind === 'md' || kind === 'web')) {
       try { snapshotText = new TextDecoder().decode(bytes); } catch (e) { snapshotText = ''; }
     }
+    // 「原文」给人看的是文字，不是标签；HTML 先剥成纯文本再存
+    if (snapshotText && kind === 'html') {
+      try {
+        const d = new DOMParser().parseFromString(snapshotText, 'text/html');
+        const plain = (d.body && d.body.textContent) || '';
+        if (plain.trim()) snapshotText = plain.replace(/\s+/g, ' ').trim();
+      } catch (e) { /* 解析不了就保留原样 */ }
+    }
 
     let result = null;
     let partial = false;

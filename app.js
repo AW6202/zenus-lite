@@ -1,7 +1,7 @@
 // 学习机 Lite — 静态 PWA：内容来自 pack.json，进度存本地，AI 直连 OpenAI 兼容接口
 'use strict';
 
-const BUILD = '2026-11-14.8';
+const BUILD = '2026-11-14.9';
 
 const LS = {
   progress: 'zenus.progress.v1',
@@ -1057,6 +1057,52 @@ async function refreshPageKeywords(docId) {
   return true;
 }
 
+// ── 档案三种看法（§3：原文 / 抽字稿 / AI 清洗稿）──────────────
+// 听的时候不能切（播放器按段落定位），停下来再切——这是硬约束，界面上写明。
+async function openArchiveViewer(docId) {
+  if (!window.ZConv) return toast('这个版本还没有档案功能');
+  const doc = await ZConv.docGet(docId);
+  const arc = await ZConv.arcCurrent(docId);
+  if (!doc || !arc) return toast('这份材料还没有档案');
+  const join = (arr) => (arr || []).map((p) => p.text).filter(Boolean).join('\n');
+  const views = [
+    { k: 'source', label: '原文', text: ZConv.sourceText(arc), empty: '没留原文快照（只有抽不到正文的第 4 级才留）' },
+    { k: 'text', label: '抽字稿', text: join(arc.paragraphs), empty: '还没抽出正文' },
+    { k: 'ai', label: '清洗稿', text: join(arc.clean && arc.clean.paragraphs), empty: '还没清洗过（默认手动触发）' },
+  ];
+  let cur = views.find((v) => v.text) || views[1];
+  let o = document.getElementById('arcOverlay');
+  if (!o) {
+    o = document.createElement('div');
+    o.id = 'arcOverlay';
+    o.className = 'kpsheet';
+    document.body.appendChild(o);
+  }
+  const tabs = views.map((v) =>
+    '<button class="arcTab' + (v.k === cur.k ? ' on' : '') + '" data-k="' + v.k + '"'
+    + (v.text ? '' : ' disabled') + '>' + v.label + '</button>').join('');
+  o.innerHTML = '<div class="kpPanel"><div class="kpHead"><span>' + esc(doc.name || '档案')
+    + '</span><button id="arcClose">关闭</button></div>'
+    + '<div class="filters" id="arcTabs">' + tabs + '</div>'
+    + '<div class="hint" id="arcMeta">' + esc(String(arc.levelName || '')) + ' · ' + (arc.coverage?.paras || 0)
+    + ' 段 · ' + (arc.coverage?.chars || 0) + ' 字</div>'
+    + '<div class="kpBody" id="arcBody" style="white-space:pre-wrap">'
+    + (cur.text ? esc(cur.text.slice(0, 20000)) : esc(cur.empty)) + '</div>'
+    + '<div class="hint">听的时候不能切视图（播放器按段落定位）；停下来再切。</div></div>';
+  const close = () => o.remove();
+  document.getElementById('arcClose').onclick = close;
+  o.onclick = (e) => { if (e.target === o) close(); };
+  o.querySelectorAll('.arcTab').forEach((b) => {
+    b.onclick = () => {
+      const v = views.find((x) => x.k === b.dataset.k);
+      if (!v) return;
+      cur = v;
+      o.querySelectorAll('.arcTab').forEach((x) => x.classList.toggle('on', x.dataset.k === v.k));
+      document.getElementById('arcBody').textContent = v.text ? v.text.slice(0, 20000) : v.empty;
+    };
+  });
+}
+
 async function renderShelfTab() {
   if (state.shelf.at === 0 && nativePort() && !state.shelfPulling) {
     view.innerHTML = '<div class="empty">正在向 NG 取书架…</div>';
@@ -1117,7 +1163,9 @@ async function renderShelfTab() {
       : '';
     const bottom = it.type === 'web'
       ? '<div class="dom">' + (it.domain ? '来源：' + esc(it.domain) : '本机档案')
-        + (it.level4 ? ' · 仅收藏，不能听' : '') + '</div>'
+        + (it.level4 ? ' · 仅收藏，不能听' : '')
+        + (it.docId ? ' <button class="arcBtn" data-doc="' + esc(it.docId) + '">档案</button>' : '')
+        + '</div>'
       : '<div class="dom">' + (it.sub ? esc(it.sub) : 'NG 书架') + '</div>';
     return `<div class="shelfCard" data-i="${i}" data-type="${it.type}">`
       + '<div class="st">' + esc(it.title) + '</div>' + kw + bottom + '</div>';
@@ -1132,8 +1180,14 @@ async function renderShelfTab() {
     b.onclick = () => { state.shelfFilter = b.dataset.filter; render(); };
   });
   view.querySelectorAll('.shelfCard').forEach((el) => {
-    el.onclick = async () => {
-      const it = items[Number(el.dataset.i)];
+    const it = items[Number(el.dataset.i)];
+    el.onclick = async (ev) => {
+      // 「档案」小按钮：看原文 / 抽字稿 / 清洗稿，不要触发「打开材料」
+      if (ev.target && ev.target.classList && ev.target.classList.contains('arcBtn')) {
+        ev.stopPropagation();
+        if (it && it.docId) await openArchiveViewer(it.docId);
+        return;
+      }
       if (!it) return;
       if (it.type === 'web' && it.key) { await openStoredMaterial(it.key); return; }
       toast('书的正文在 NG 里打开；这里只列目录');
