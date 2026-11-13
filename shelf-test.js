@@ -114,6 +114,11 @@ const STUB = `
         window.__shelf.calls.push(req.cmd);
         return this._emit({ id: req.id, ok: true, data: window.__shelf.pages });
       }
+      if (req.cmd === 'localText.put') {
+        window.__shelf.calls.push(req.cmd);
+        window.__shelf.pushed = { book: req.args.book, chapter: req.args.chapter, chars: (req.args.text || '').length };
+        return this._emit({ id: req.id, ok: true, data: { ok: true } });
+      }
       this._emit({ id: req.id, ok: true, data: null });
     }
   };
@@ -227,6 +232,16 @@ const STUB = `
       stale.cards === 5 && /缓存/.test(stale.banner) && /数据截至/.test(stale.banner) && /1124/.test(stale.banner), stale);
 
     // ── 4. 浏览器里（没有原生桥）：说明只能看本机档案 ──
+    // 先验 C8：把这一章推给 Aegis 的本地副本（要在原生桥还在的时候跑）
+    const pushed = await cdp.eval(`
+      const docs = await ZConv.docAll();
+      const doc = docs.find((d) => (d.name || '').includes('示例文章')) || docs[0];
+      const ok = await pushChapterToAegis(doc.docId, 0);
+      return { ok, pushed: window.__shelf.pushed || null, cmds: window.__shelf.calls };
+    `);
+    check('「推到听书」把正文推给原生 localText.put（带书名/章号/字数）',
+      pushed.ok === true && pushed.pushed && pushed.pushed.chars > 0 && pushed.cmds.includes('localText.put'), pushed);
+
     await cdp.eval('window.zenus = undefined; return true;');
     const noNative = await cdp.eval(`
       state.shelf.at = 0;

@@ -1,7 +1,7 @@
 // 学习机 Lite — 静态 PWA：内容来自 pack.json，进度存本地，AI 直连 OpenAI 兼容接口
 'use strict';
 
-const BUILD = '2026-11-14.9';
+const BUILD = '2026-11-14.10';
 
 const LS = {
   progress: 'zenus.progress.v1',
@@ -1059,6 +1059,27 @@ async function refreshPageKeywords(docId) {
 
 // ── 档案三种看法（§3：原文 / 抽字稿 / AI 清洗稿）──────────────
 // 听的时候不能切（播放器按段落定位），停下来再切——这是硬约束，界面上写明。
+
+// C8 后半：把「当前要听的那一章」推给 Aegis 的本地副本（localText.put）。
+// 清洗稿优先、没有就用抽字稿；每本书只留最近一章，挤旧章由原生侧负责。
+async function pushChapterToAegis(docId, chapterIndex) {
+  if (!nativePort() || !window.ZConv) return false;
+  const doc = await ZConv.docGet(docId);
+  const arc = await ZConv.arcCurrent(docId);
+  if (!doc || !arc) return false;
+  const ai = ZConv.paragraphsOf(arc, 'ai');
+  const src = ai.length ? ai : ZConv.paragraphsOf(arc, 'text');
+  const text = src.map((p) => p.text).filter(Boolean).join('\n');
+  if (!text.trim()) return false;
+  const r = await coreCall('localText.put', {
+    book: doc.name || '未命名',
+    chapter: Number(chapterIndex) || 0,
+    title: doc.name || '',
+    text,
+  }, 20000);
+  return !!(r && r.ok);
+}
+
 async function openArchiveViewer(docId) {
   if (!window.ZConv) return toast('这个版本还没有档案功能');
   const doc = await ZConv.docGet(docId);
@@ -1088,6 +1109,7 @@ async function openArchiveViewer(docId) {
     + ' 段 · ' + (arc.coverage?.chars || 0) + ' 字</div>'
     + '<div class="kpBody" id="arcBody" style="white-space:pre-wrap">'
     + (cur.text ? esc(cur.text.slice(0, 20000)) : esc(cur.empty)) + '</div>'
+    + (nativePort() ? '<div class="row" style="margin-top:10px"><button class="btn primary" id="arcPush">推到听书（精听）</button></div>' : '')
     + '<div class="hint">听的时候不能切视图（播放器按段落定位）；停下来再切。</div></div>';
   const close = () => o.remove();
   document.getElementById('arcClose').onclick = close;
@@ -1101,6 +1123,13 @@ async function openArchiveViewer(docId) {
       document.getElementById('arcBody').textContent = v.text ? v.text.slice(0, 20000) : v.empty;
     };
   });
+  const push = document.getElementById('arcPush');
+  if (push) {
+    push.onclick = async () => {
+      const ok = await pushChapterToAegis(docId, 0);
+      toast(ok ? '已推到 Aegis · 去 NG 点「听书」就吃这份稿' : '推不过去（没有正文或原生桥不可用）');
+    };
+  }
 }
 
 async function renderShelfTab() {
@@ -2992,12 +3021,28 @@ function mergeFragments(lines) {
   return out;
 }
 
+// PDF 自动建档：只转前 6 页（够判断抽没抽到），同一份一天只自动跑一次。
+function schedulePdfArchive(bytes, name, key) {
+  if (!bytes || !window.ZConv || !key) return;
+  const flagKey = 'zenus.arcauto.' + key;
+  const last = Number(loadJSON(flagKey, 0)) || 0;
+  if (last && Date.now() - last < 24 * 3600 * 1000) return;
+  setTimeout(() => {
+    ZConv.convert({ bytes, name }, { maxPages: 6 })
+      .then(() => saveJSON(flagKey, Date.now()))
+      .catch(() => { /* 自动建档失败不打扰阅读，材料页还能手动转 */ });
+  }, 1500);
+}
+
 async function openPdfFile(f) {
   view.innerHTML = '<div class="empty">正在打开 PDF…</div>';
   try {
     await ensurePdfJs();
     resetBook();
     const buf = await f.arrayBuffer();
+    // pdf.js 会把 buf 接管（detach）掉，建档案要用的那份先拷出来
+    let archBytes = null;
+    try { archBytes = new Uint8Array(buf).slice(); } catch { archBytes = null; }
     RDR.fontRisk = pdfFontRisk(buf);
     RDR.srcUrl = URL.createObjectURL(new Blob([buf], { type: 'application/pdf' }));
     RDR.textLines = [];
@@ -3027,6 +3072,9 @@ async function openPdfFile(f) {
     RDR.key = docKey(f);
     applyReadPos();
     renderReader();
+    // A 批遗留：打开 PDF 就顺手建档案（只转前 6 页，抽不到就如实标红）。
+    // 同一份一天只自动转一次，免得每次翻书都烧一遍 CPU。
+    schedulePdfArchive(archBytes, f.name, RDR.key);
   } catch (err) {
     if (nativePort() && await tryNativePdfRender()) return;
     view.innerHTML = '<div class="empty">打不开这个 PDF<br><span class="sub">' + esc(err.message) + '</span>'
