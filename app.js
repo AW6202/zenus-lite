@@ -1,7 +1,7 @@
 // 学习机 Lite — 静态 PWA：内容来自 pack.json，进度存本地，AI 直连 OpenAI 兼容接口
 'use strict';
 
-const BUILD = '2026-11-14.4';
+const BUILD = '2026-11-14.5';
 
 const LS = {
   progress: 'zenus.progress.v1',
@@ -37,6 +37,7 @@ const DEFAULT_SETTINGS = {
   readFont: 16,
   readLine: 1.8,
   radarLang: 'auto',   // 生词雷达目标语言：auto/en/ja/zh
+  readerLang: 'zh',    // 原生 OCR 用哪个识别模型：zh/en/ja → 中文模型；fr/de/es → 拉丁模型
 };
 
 const state = {
@@ -3053,6 +3054,7 @@ function renderReader() {
     + '<button id="tocBtn" class="t-close">目录</button>'
     + '<button id="spreadBtn" class="t-close">' + (RDR.spread ? '单页' : '双页') + '</button>'
     + '<button id="ocrBtn" class="t-close">识别文字</button>'
+    + '<button id="ocrAll" class="t-close">全转</button>'
     + '<button id="kpBtn" class="t-close">知识点</button>'
     + '<button id="radarBtn" class="t-close">生词</button>'
     + '<button id="vizBtn" class="t-close">看图出题</button>'
@@ -3073,6 +3075,8 @@ function renderReader() {
   if (sysBtn2) sysBtn2.onclick = openWithSystemApp;
   const ocrb = document.getElementById('ocrBtn');
   if (ocrb) ocrb.onclick = () => { hideTools(); ocrCurrentPage(); };
+  const ocrAllBtn = document.getElementById('ocrAll');
+  if (ocrAllBtn) ocrAllBtn.onclick = () => { hideTools(); ocrAllPages(); };
   const ts = document.getElementById('toggleScroll');
   if (ts) ts.onclick = () => { RDR.pdfScroll = true; renderReader(); };
   const tb = document.getElementById('tocBtn');
@@ -3126,12 +3130,116 @@ function ocrStatus(text) {
   el.textContent = text;
 }
 
+// 渲染一张约 1800px 宽的高清页给 OCR（屏幕画布只有 ~700px，认字太糊）
+async function renderHiResPageCanvas(pageNo) {
+  const page = await RDR.pdf.getPage(pageNo);
+  const base = page.getViewport({ scale: 1 });
+  const scale = Math.max(1.5, Math.min(4, 1800 / base.width));
+  const vp = page.getViewport({ scale: scale });
+  const hi = document.createElement('canvas');
+  hi.width = Math.floor(vp.width);
+  hi.height = Math.floor(vp.height);
+  await page.render({ canvasContext: hi.getContext('2d'), viewport: vp }).promise;
+  return hi;
+}
+
+// 手机上的原生 OCR（A3）：走桥 ocr.image（PP-OCRv5 + ONNX Runtime）。
+// 浏览器里没有原生桥，返回 null → 调用方退回 Tesseract（SPEC §4：电脑 = 网页 WASM 兜底）。
+async function ocrCanvasNative(canvas) {
+  if (!nativePort()) return null;
+  try {
+    const b64 = String(canvas.toDataURL('image/png')).replace(/^data:image\/png;base64,/, '');
+    const t0 = Date.now();
+    const r = await coreCall('ocr.image', { base64: b64, lang: settings.readerLang || 'zh' }, 90000);
+    if (!r || typeof r.text !== 'string' || !r.text.trim()) return null;
+    const lines = r.text.split('\n').map((s) => s.trim()).filter(Boolean);
+    if (!lines.length) return null;
+    return { lines, ms: Number(r.ms) || (Date.now() - t0), boxes: Number(r.boxes) || 0 };
+  } catch { return null; }
+}
+
+// 识别结果落档（§3 第 3 级：每段标 ocr、覆盖率可见、同页重转是替换）
+async function saveOcrPage(lines, ms, page) {
+  if (!window.ZConv || !RDR.key) return null;
+  try {
+    return await ZConv.upsertPageText({
+      key: RDR.key,
+      name: RDR.name || RDR.book?.name || '未命名材料',
+      kind: 'pdf',
+      page: page || RDR.page,
+      lines,
+      ms,
+      total: RDR.total || 0,
+      lang: settings.readerLang || 'zh',
+    });
+  } catch { return null; }
+}
+
+// 「全转」：从当前页开始连着 OCR 若干页（默认最多 10 页），每页并进同一份档案。
+// 为什么要它：扫描件「覆盖了多少页、坏在哪几页」只有整段转完才说得清，单页转完看不出来。
+async function ocrAllPages() {
+  if (ocrBusy || !RDR.pdf) return;
+  const from = RDR.page;
+  const last = Math.min(RDR.total, from + 9);
+  if (last > from && !confirm('从第 ' + from + ' 页开始，连转 ' + (last - from + 1) + ' 页？\n每页几秒；抽不完整会如实标红。')) return;
+  ocrBusy = true;
+  let done = 0;
+  let failed = 0;
+  let streak = 0;
+  let lastReport = null;
+  try {
+    for (let n = from; n <= last; n++) {
+      ocrStatus('转第 ' + n + ' / ' + last + ' 页…（成功 ' + done + '，失败 ' + failed + '）');
+      const hi = await renderHiResPageCanvas(n).catch(() => null);
+      const native = hi ? await ocrCanvasNative(hi) : null;
+      if (native && native.lines.length) {
+        const saved = await saveOcrPage(native.lines, native.ms, n);
+        if (saved) lastReport = saved.archive.coverage;
+        done++;
+        streak = 0;
+      } else {
+        failed++;
+        streak++;
+        if (streak >= 3) break;          // 连着三页抽不到，别把电耗在这
+      }
+    }
+  } finally {
+    ocrBusy = false;
+    const st = document.getElementById('ocrStatus');
+    if (st) st.remove();
+    RDR.textMode = false;
+    if (done) renderReader();
+    const cov = lastReport
+      ? '；整份 ' + lastReport.pagesOk + '/' + lastReport.docPages + ' 页，失败 ' + lastReport.pagesFail + ' 页'
+      : '';
+    toast('全转结束：成功 ' + done + ' 页，失败 ' + failed + ' 页' + cov);
+  }
+}
+
 async function ocrCurrentPage() {
   if (ocrBusy) return;
   const canvas = document.getElementById('pdfCanvas');
   if (!canvas || !canvas.width) return toast('先把这一页渲染出来');
   ocrBusy = true;
   try {
+    // ① 手机：先试原生 PaddleOCR（准、快、离线）
+    ocrStatus('正在用原生 OCR 识别…');
+    let hi = null;
+    try { hi = await renderHiResPageCanvas(RDR.page); } catch { hi = null; }
+    const native = hi ? await ocrCanvasNative(hi) : null;
+    if (native) {
+      RDR.textLines = native.lines;
+      RDR.textMode = true;
+      const saved = await saveOcrPage(native.lines, native.ms);
+      const st = document.getElementById('ocrStatus');
+      if (st) st.remove();
+      renderReader();
+      toast('识别完成：' + native.lines.length + ' 行 · ' + (native.ms / 1000).toFixed(1) + 's'
+        + (saved ? '（已存进档案，可听）' : ''));
+      return;
+    }
+
+    // ② 电脑/浏览器：退回 Tesseract（WASM，自托管）
     ocrStatus('正在准备识别引擎（首次约 9MB，之后走缓存）…');
     const T = await ensureTesseract();
     const worker = await T.createWorker(['chi_sim', 'eng'], 1, {
@@ -3145,25 +3253,18 @@ async function ocrCurrentPage() {
     });
     try {
       ocrStatus('渲染高清页…');
-      // 屏幕上的画布只有 ~700px 宽，认字太糊；单独渲染一张 ~1800px 的给 OCR
-      const page = await RDR.pdf.getPage(RDR.page);
-      const base = page.getViewport({ scale: 1 });
-      const scale = Math.max(1.5, Math.min(4, 1800 / base.width));
-      const vp = page.getViewport({ scale: scale });
-      const hi = document.createElement('canvas');
-      hi.width = Math.floor(vp.width);
-      hi.height = Math.floor(vp.height);
-      await page.render({ canvasContext: hi.getContext('2d'), viewport: vp }).promise;
+      const hi2 = hi || await renderHiResPageCanvas(RDR.page);
       ocrStatus('识别中…');
-      const { data } = await worker.recognize(hi);
+      const { data } = await worker.recognize(hi2);
       const lines = String(data.text || '').split('\n').map((s) => s.trim()).filter(Boolean);
       if (!lines.length) throw new Error('这一页没认出文字');
       RDR.textLines = lines;
       RDR.textMode = true;
+      const saved = await saveOcrPage(lines, 0);
       const st = document.getElementById('ocrStatus');
       if (st) st.remove();
       renderReader();
-      toast('识别完成：' + lines.length + ' 行');
+      toast('识别完成：' + lines.length + ' 行' + (saved ? '（已存进档案）' : ''));
     } finally {
       try { await worker.terminate(); } catch { /* 已结束 */ }
     }
@@ -7041,6 +7142,7 @@ function renderPdfScroll() {
     + '<button id="tocBtn" class="t-close">目录</button>'
     + '<button id="spreadBtn" class="t-close">' + (RDR.spread ? '单页' : '双页') + '</button>'
     + '<button id="ocrBtn" class="t-close">识别文字</button>'
+    + '<button id="ocrAll" class="t-close">全转</button>'
     + '<button id="kpBtn" class="t-close">知识点</button>'
     + '<button id="radarBtn" class="t-close">生词</button>'
     + '<button id="vizBtn" class="t-close">看图出题</button>'
@@ -7085,6 +7187,8 @@ function renderPdfScroll() {
   document.getElementById('closePdf').onclick = () => { saveReadPos(); resetBook(); renderReader(); };
   const ocrb = document.getElementById('ocrBtn');
   if (ocrb) ocrb.onclick = () => { hideTools(); ocrCurrentPage(); };
+  const ocrAllBtn = document.getElementById('ocrAll');
+  if (ocrAllBtn) ocrAllBtn.onclick = () => { hideTools(); ocrAllPages(); };
   const ts = document.getElementById('toggleScroll');
   if (ts) ts.onclick = () => { RDR.pdfScroll = true; renderReader(); };
   const tb = document.getElementById('tocBtn');

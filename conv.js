@@ -933,6 +933,68 @@ window.ZConv = (function () {
     return { ...archive, view: which };
   }
 
+  // ── 逐页 OCR 写进档案（A3 + §3 第 3 级）────────────────
+  // 阅读器里一页一页转，每次把「这一页」的 OCR 行并进同一份档案：同页重转是替换、不是追加。
+  // docId 用「材料键」的 hash（PDF 在阅读器里未必留着原始字节，不能靠文件 hash）。
+  // 页级统计（字数/段数/是否失败页）现算，所以材料页能直接显示覆盖率。
+  async function upsertPageText(opts) {
+    const o = opts || {};
+    const key = String(o.key || o.name || 'untitled');
+    const name = String(o.name || key);
+    const page = Math.max(1, Number(o.page) || 1);
+    const lines = (o.lines || []).map((s) => String(s || '').trim()).filter(Boolean);
+    if (!lines.length) throw new Error('这一页没识别出文字');
+    const docId = 'doc-' + (await sha256Hex(new TextEncoder().encode(key))).slice(0, 16);
+    const doc = await docGet(docId);
+    const prev = doc ? await arcCurrent(docId) : null;
+    const keep = ((prev && prev.paragraphs) || []).filter((p) => (p.page || 0) !== page);
+    const paragraphs = keep
+      .concat(lines.map((text) => ({ text, src: SRC.OCR, page, y: null, conf: null })))
+      .map((p, i) => ({ ...p, i }));
+
+    const pageMap = new Map();
+    for (const p of paragraphs) {
+      const k = p.page || 1;
+      const cur = pageMap.get(k) || { i: k, chars: 0, paras: 0, ok: false, reason: '' };
+      cur.chars += p.text.length;
+      cur.paras += 1;
+      cur.ok = cur.chars >= TH.minPageChars;
+      cur.reason = cur.ok ? '' : '这一页只识别到 ' + cur.chars + ' 字';
+      pageMap.set(k, cur);
+    }
+    const pages = Array.from(pageMap.values()).sort((a, b) => a.i - b.i);
+    const startedAt = prev ? prev.startedAt : Date.now();
+    const coverage = coverageOf({
+      pages, paragraphs, ms: o.ms || 0, startedAt,
+      docPages: Math.max(Number(o.total) || 0, pages.length),
+    });
+    const verdict = verdictOf(coverage);
+    const archive = {
+      id: docId + '@' + Date.now().toString(36),
+      docId, name, kind: o.kind || 'pdf', level: 3, levelName: LEVEL[3],
+      lang: o.lang || '',
+      fingerprint: (prev && prev.fingerprint) || {
+        fileHash: docId.slice(4), convVersion: CONV_VERSION, promptVersion: CLEAN_PROMPT_VERSION, pipeline: 'ocr/1',
+      },
+      paragraphs, pages, pageMap: buildPageMap(paragraphs), coverage,
+      verdict, playable: verdict === 'ok', partial: false, nextPage: null,
+      clean: null, view: 'text', startedAt, finishedAt: Date.now(),
+    };
+    await dbPut(S_ARC, archive);
+    const rec = doc || { docId, name, kind: archive.kind, createdAt: startedAt, archiveIds: [], deletedAt: null };
+    rec.name = name;
+    rec.kind = archive.kind;
+    rec.key = key;
+    rec.fingerprint = archive.fingerprint;
+    rec.lang = archive.lang;
+    rec.currentArchiveId = archive.id;
+    rec.archiveIds = (rec.archiveIds || []).concat(archive.id);
+    rec.updatedAt = Date.now();
+    await docSave(rec);
+    await pruneArchives(rec);
+    return { doc: rec, archive, report: reportText(archive) };
+  }
+
   // ── 报告（材料页要显示的东西）──────────────────────
   function fmtTime(ts) {
     const d = new Date(ts || Date.now());
@@ -1039,7 +1101,7 @@ window.ZConv = (function () {
     // 常量
     CONV_VERSION, CLEAN_PROMPT_VERSION, TH, SRC, LEVEL, DB_NAME, DB_VER,
     // 主流程
-    convert, archiveBook, coverageOf, verdictOf, reportText,
+    convert, archiveBook, coverageOf, verdictOf, reportText, upsertPageText,
     // 档案读写
     arcGet, arcAll, arcListOf, arcCurrent, paragraphsOf, applyClean, cleanArchive, setView,
     docGet, docAll, markDocDeleted, setDocMeta, docByUrl,

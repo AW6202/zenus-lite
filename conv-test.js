@@ -328,6 +328,39 @@ const SRC_SET = ['dom', 'text', 'ocr', 'ai'];
     check('重跑：旧档留着、当前指针指向最新一版',
       hist.ids === 2 && hist.oldKept === true && hist.curIsNewest === true, hist);
 
+    // ── 7. 逐页 OCR 并进档案（A3：材料页「转文字」的落库口径）──
+    const ocrPages = await evalT(cdp, `
+      const key = 'ocr-fixture.pdf';
+      const lorem = '這是一頁掃描件的辨識結果，字數要夠多才算抽到。';
+      const p1 = await ZConv.upsertPageText({ key, name: '扫描件.pdf', kind: 'pdf', page: 1,
+        lines: [lorem.repeat(3), lorem.repeat(3), lorem.repeat(3)], ms: 2100, total: 2, lang: 'zh' });
+      const p2 = await ZConv.upsertPageText({ key, name: '扫描件.pdf', kind: 'pdf', page: 2,
+        lines: [lorem.repeat(3), lorem.repeat(3), lorem.repeat(3)], ms: 1900, total: 2, lang: 'zh' });
+      const again = await ZConv.upsertPageText({ key, name: '扫描件.pdf', kind: 'pdf', page: 1,
+        lines: ['重抽这一页第一句。'.repeat(3), '重抽这一页第二句。'.repeat(3), '重抽这一页第三句。'.repeat(3)],
+        ms: 800, total: 2, lang: 'zh' });
+      const srcs = Array.from(new Set(again.archive.paragraphs.map((p) => p.src)));
+      const page1 = again.archive.paragraphs.filter((p) => p.page === 1).length;
+      return {
+        level: again.archive.level,
+        pages: again.archive.coverage.pages,
+        docPages: again.archive.coverage.docPages,
+        verdict: again.archive.verdict,
+        srcs,
+        page1Paras: page1,
+        totalParas: again.archive.paragraphs.length,
+        report: again.report,
+        playable: again.archive.playable,
+      };
+    `, 60000);
+    check('OCR 逐页并进档案：每段标 ocr、页数正确、能听',
+      ocrPages.level === 3 && ocrPages.pages === 2 && ocrPages.srcs.length === 1 && ocrPages.srcs[0] === 'ocr'
+      && ocrPages.verdict === 'ok' && ocrPages.playable === true, ocrPages);
+    check('同一页重转是「替换」不是「追加」',
+      ocrPages.page1Paras === 3 && ocrPages.totalParas === 6, ocrPages);
+    check('OCR 档案的报告里带覆盖率与失败页数',
+      /覆盖：2\/2 页/.test(ocrPages.report) && /失败 0 页/.test(ocrPages.report), ocrPages.report);
+
     // ── 报告文件 + 表格 ──
     fs.writeFileSync(path.join(TMP, 'report.json'), JSON.stringify({ at: new Date().toISOString(), rows, results }, null, 2));
     console.log('');
