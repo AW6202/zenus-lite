@@ -89,6 +89,14 @@ const STUB = `
         { title: '狄公案', author: '高罗佩', chapterIndex: 11, workKey: '狄公案\\n高罗佩' },
         { title: '英文教材', author: '', chapterIndex: 0, workKey: '英文教材\\n' }
       ] },
+    // B7「记下这页」的原生档案：一条能听、一条只收藏
+    pages: [
+      { id: 'pg-1', url: 'https://example.com/a', title: '示例网页甲', domain: 'example.com',
+        text: '这是一段足够长的网页正文。'.repeat(20), chars: 260, level: 1,
+        keywords: ['关键词甲', '关键词乙'] },
+      { id: 'pg-2', url: 'https://example.org/b', title: '示例网页乙', domain: 'example.org',
+        text: '', chars: 0, level: 4, why: '阅读模式没抽到正文', keywords: ['仅标题'] }
+    ],
     calls: []
   };
   window.zenus = {
@@ -101,6 +109,10 @@ const STUB = `
       if (req.cmd === 'shelf.list') {
         window.__shelf.calls.push(req.cmd);
         return this._emit({ id: req.id, ok: true, data: window.__shelf.reply });
+      }
+      if (req.cmd === 'page.list') {
+        window.__shelf.calls.push(req.cmd);
+        return this._emit({ id: req.id, ok: true, data: window.__shelf.pages });
       }
       this._emit({ id: req.id, ok: true, data: null });
     }
@@ -135,17 +147,45 @@ const STUB = `
       await render();
       return {
         cards: view.querySelectorAll('.shelfCard').length,
+        books: view.querySelectorAll('.shelfCard[data-type="book"]').length,
+        webs: view.querySelectorAll('.shelfCard[data-type="web"]').length,
         banner: (view.querySelector('.banner') || {}).textContent || '',
         titles: Array.from(view.querySelectorAll('.shelfCard .st')).map((e) => e.textContent),
         chips: Array.from(view.querySelectorAll('#shelfFilters button')).map((b) => b.textContent),
         calls: window.__shelf.calls.length,
       };
     `);
-    check('书架页拿到 NG 书目（2 本）并画出卡片',
-      first.cards === 2 && first.calls >= 1, first);
+    check('书架页拿到 NG 书目（2 本）+ 记下的 2 页网页',
+      first.books === 2 && first.webs === 2 && first.calls >= 2, first);
     check('卡片上有书名', first.titles.join(',').includes('狄公案') && first.titles.join(',').includes('英文教材'), first.titles);
     check('顶部标「数据截至」', /数据截至/.test(first.banner) && !/缓存/.test(first.banner), first.banner);
     check('筛选三档都在', first.chips.join(',') === '全部,只看书,只看网页', first.chips);
+
+    // ── 1b. B7：网页档案带关键词 + 域名；只收藏的明说「不能听」──
+    const pages = await cdp.eval(`
+      const cards = Array.from(view.querySelectorAll('.shelfCard[data-type="web"]'));
+      const byTitle = (t) => cards.find((c) => c.querySelector('.st').textContent === t);
+      const a = byTitle('示例网页甲');
+      const b = byTitle('示例网页乙');
+      return {
+        aKw: a ? Array.from(a.querySelectorAll('.kw span')).map((e) => e.textContent) : [],
+        aDom: a ? a.querySelector('.dom').textContent : '',
+        bDom: b ? b.querySelector('.dom').textContent : '',
+        bTitle: b ? b.querySelector('.st').textContent : '',
+      };
+    `);
+    check('能听的网页卡片：AI 关键词 + 域名小字',
+      pages.aKw.join(',') === '关键词甲,关键词乙' && /example\.com/.test(pages.aDom), pages);
+    check('抽不到正文的卡片标「仅收藏，不能听」（不冒充可以听）',
+      /仅收藏/.test(pages.bDom) && pages.bTitle === '示例网页乙', pages);
+
+    // ── 1c. 再进一次书架不会重复誊同一页（按 url 去重）──
+    const dedupe = await cdp.eval(`
+      const before = view.querySelectorAll('.shelfCard[data-type="web"]').length;
+      await render(); await render();
+      return { before, after: view.querySelectorAll('.shelfCard[data-type="web"]').length };
+    `);
+    check('同一页反复拉不会重复建卡（按 url 去重）', dedupe.before === dedupe.after, dedupe);
 
     // ── 2. 混排：加一份网页档案，两档筛选各自生效 ──
     const mixed = await cdp.eval(`
@@ -168,10 +208,10 @@ const STUB = `
       const onlyBook = view.querySelectorAll('.shelfCard').length;
       return { all, webCards, kw, dom, onlyWeb, onlyBook };
     `);
-    check('书和网页混排（书 2 + 网页 1）', mixed.all === 3 && mixed.webCards === 1, mixed);
+    check('书和网页混排（书 2 + 网页 3：原生 2 + 新建 1）', mixed.all === 5 && mixed.webCards === 3, mixed);
     check('网页卡片带关键词（没 AI 抽过就退回标题前 8 字）', mixed.kw.length >= 1 && mixed.kw[0].length <= 8, mixed.kw);
     check('「只看网页」只剩网页、「只看书」只剩书',
-      mixed.onlyWeb === 1 && mixed.onlyBook === 2, mixed);
+      mixed.onlyWeb === 3 && mixed.onlyBook === 2, mixed);
 
     // ── 3. NG 不在 → 显示缓存并明说 ──
     const stale = await cdp.eval(`
@@ -184,7 +224,7 @@ const STUB = `
       return { banner: b, cards: view.querySelectorAll('.shelfCard').length, stale: state.shelf.stale };
     `);
     check('NG 不在时仍显示缓存书目，并明说「显示的是缓存」+ 原因',
-      stale.cards === 3 && /缓存/.test(stale.banner) && /数据截至/.test(stale.banner) && /1124/.test(stale.banner), stale);
+      stale.cards === 5 && /缓存/.test(stale.banner) && /数据截至/.test(stale.banner) && /1124/.test(stale.banner), stale);
 
     // ── 4. 浏览器里（没有原生桥）：说明只能看本机档案 ──
     await cdp.eval('window.zenus = undefined; return true;');

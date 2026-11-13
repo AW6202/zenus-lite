@@ -1,7 +1,7 @@
 // 学习机 Lite — 静态 PWA：内容来自 pack.json，进度存本地，AI 直连 OpenAI 兼容接口
 'use strict';
 
-const BUILD = '2026-11-14.3';
+const BUILD = '2026-11-14.4';
 
 const LS = {
   progress: 'zenus.progress.v1',
@@ -1009,11 +1009,57 @@ function shelfDomain(doc) {
   try { return new URL(url).hostname.replace(/^www\./, ''); } catch { return ''; }
 }
 
+// 「记下这页」的原生档案（B7）：只列出、不清空；学习机按 url 去重后誊进自己的文本档案。
+// 正文归学习机（§2.2），原生那份是「学习机没打开时」的备份。
+async function pullNativePages() {
+  if (!nativePort() || !window.ZConv) return 0;
+  let raw = await coreCall('page.list', {}, 10000);
+  let arr = raw;
+  if (typeof raw === 'string') { try { arr = JSON.parse(raw); } catch { arr = null; } }
+  if (!Array.isArray(arr) || !arr.length) return 0;
+  let added = 0;
+  for (const pg of arr) {
+    const url = String((pg && pg.url) || '');
+    if (!url) continue;
+    if (await ZConv.docByUrl(url)) continue;          // 同一页只誊一次
+    const name = String(pg.title || url);
+    const text = String(pg.text || '').trim();
+    // 只收藏（level 4）的页也留一条：卡片上写「仅收藏」，但正文是空的，不假装能听
+    const body = text || name;
+    const r = await ZConv.convert({ text: body, name, kind: 'web' });
+    await ZConv.setDocMeta(r.doc.docId, {
+      url,
+      sourceUrl: url,
+      keywords: Array.isArray(pg.keywords) ? pg.keywords : [],
+      sourceLevel: Number(pg.level) || 4,
+      sourceChars: Number(pg.chars) || 0,
+      sourceWhy: String(pg.why || ''),
+    });
+    added++;
+  }
+  return added;
+}
+
+// 长按卡片：重抽关键词（只重算关键词，不动正文）
+async function refreshPageKeywords(docId) {
+  const doc = await ZConv.docGet(docId);
+  if (!doc || !doc.url) return false;
+  const raw = await coreCall('page.list', {}, 10000);
+  let arr = raw;
+  if (typeof raw === 'string') { try { arr = JSON.parse(raw); } catch { arr = null; } }
+  const hit = Array.isArray(arr) ? arr.find((p) => p && p.url === doc.url) : null;
+  if (!hit) return false;
+  await ZConv.setDocMeta(docId, { keywords: Array.isArray(hit.keywords) ? hit.keywords : [] });
+  return true;
+}
+
 async function renderShelfTab() {
   if (state.shelf.at === 0 && nativePort() && !state.shelfPulling) {
     view.innerHTML = '<div class="empty">正在向 NG 取书架…</div>';
     await pullShelf(true);
   }
+  // 「记下这页」的原生档案先誊进来（按 url 去重，重复进来不会多一张卡）
+  if (nativePort() && window.ZConv) await pullNativePages();
   const docs = (window.ZConv ? await ZConv.docAll() : []).filter((d) => !d.deletedAt);
   const webKinds = ['html', 'web'];
   const books = (state.shelf.books || []).map((b) => ({
@@ -1034,6 +1080,7 @@ async function renderShelfTab() {
       at: Number(d.updatedAt) || 0,
       keywords: shelfKeywords(d),
       domain: shelfDomain(d),
+      level4: Number(d.sourceLevel) === 4,
       docId: d.docId,
       key: d.key || d.docId,
       order: 0,
@@ -1065,7 +1112,8 @@ async function renderShelfTab() {
       ? '<div class="kw">' + it.keywords.map((k) => '<span>' + esc(k) + '</span>').join('') + '</div>'
       : '';
     const bottom = it.type === 'web'
-      ? '<div class="dom">' + (it.domain ? '来源：' + esc(it.domain) : '本机档案') + '</div>'
+      ? '<div class="dom">' + (it.domain ? '来源：' + esc(it.domain) : '本机档案')
+        + (it.level4 ? ' · 仅收藏，不能听' : '') + '</div>'
       : '<div class="dom">' + (it.sub ? esc(it.sub) : 'NG 书架') + '</div>';
     return `<div class="shelfCard" data-i="${i}" data-type="${it.type}">`
       + '<div class="st">' + esc(it.title) + '</div>' + kw + bottom + '</div>';
@@ -1085,6 +1133,14 @@ async function renderShelfTab() {
       if (!it) return;
       if (it.type === 'web' && it.key) { await openStoredMaterial(it.key); return; }
       toast('书的正文在 NG 里打开；这里只列目录');
+    };
+    // 长按网页卡片：重抽关键词（§2.2「长按可重抽」；手改留到有编辑框时再做）
+    el.oncontextmenu = async (ev) => {
+      ev.preventDefault();
+      if (it.type !== 'web' || !it.docId) return;
+      const ok = await refreshPageKeywords(it.docId);
+      toast(ok ? '关键词已重抽' : '这条没有对应的原生档案（或原生没开）');
+      if (ok) render();
     };
   });
 }

@@ -798,9 +798,10 @@ window.ZConv = (function () {
             r2 = await epubExtract(bytes);
           } else if (kind === 'docx' && bytes) {
             r2 = await docxExtract(bytes);
-          } else if ((kind === 'md' || kind === 'txt' || kind === 'text') && (bytes || typeof input.text === 'string')) {
+          } else if ((kind === 'md' || kind === 'txt' || kind === 'text' || kind === 'web')
+            && (bytes || typeof input.text === 'string')) {
             const txt = typeof input.text === 'string' ? input.text : new TextDecoder().decode(bytes);
-            r2 = plainExtract(txt, name, kind);
+            r2 = plainExtract(txt, name, kind === 'web' ? 'txt' : kind);
           }
           // HTML 没有第 2 级的网页实现：真实链路是「WebView 打印成 PDF」（原生 bridge，
           // 网页里没有）。去掉第 1 级就该一路掉到第 4 级并报红 —— 不许拿「剥标签」冒充抽字，
@@ -1017,6 +1018,23 @@ window.ZConv = (function () {
     return docSave(doc);
   }
 
+  // 补文档级元信息（B7：网页档案要记完整网址 + 关键词 + 来源等级）
+  // 只改 doc 上那几个字段，不碰档案正文，所以不会把已有段落弄丢。
+  async function setDocMeta(docId, patch) {
+    const doc = await docGet(docId);
+    if (!doc) return null;
+    const allowed = ['url', 'sourceUrl', 'keywords', 'sourceLevel', 'sourceChars', 'sourceWhy'];
+    for (const k of allowed) if (patch[k] !== undefined) doc[k] = patch[k];
+    doc.updatedAt = Date.now();
+    return docSave(doc);
+  }
+
+  async function docByUrl(url) {
+    if (!url) return null;
+    const all = await docAll();
+    return all.find((d) => !d.deletedAt && (d.url === url || d.sourceUrl === url)) || null;
+  }
+
   return {
     // 常量
     CONV_VERSION, CLEAN_PROMPT_VERSION, TH, SRC, LEVEL, DB_NAME, DB_VER,
@@ -1024,7 +1042,7 @@ window.ZConv = (function () {
     convert, archiveBook, coverageOf, verdictOf, reportText,
     // 档案读写
     arcGet, arcAll, arcListOf, arcCurrent, paragraphsOf, applyClean, cleanArchive, setView,
-    docGet, docAll, markDocDeleted,
+    docGet, docAll, markDocDeleted, setDocMeta, docByUrl,
     // 拆出来给测试/调试用
     sha256Hex, kindOf, pdfRows, rowToParas, htmlExtract, pdfExtract, plainExtract,
     langFromMeta, guessLangByText,
