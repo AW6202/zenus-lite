@@ -169,6 +169,11 @@ const SRC_SET = ['dom', 'text', 'ocr', 'ai'];
     const ready = await cdp.eval('return { has: typeof ZConv === "object", conv: ZConv && ZConv.CONV_VERSION, th: ZConv && ZConv.thresholds() };');
     check('ZConv 已加载，转换器版本与阈值可读',
       ready.has && !!ready.conv && !!ready.th && ready.th.minChars > 0, ready);
+    // 阈值口径锁死：这些数是从 15 份真实文件基线推出来的（DECISIONS D-018），
+    // 改它们等于改验收，必须连测试一起改 —— 不许悄悄放宽。
+    check('判定阈值与基线推导值一致（改它等于改验收）',
+      ready.th.minChars === 200 && ready.th.minParas === 3 && ready.th.minPageChars === 30
+      && Math.abs(ready.th.minBodyRatio - 0.35) < 1e-6 && ready.th.maxFailRatio === 0, ready.th);
 
     // 干净库：同一台机器重复跑要能重现同一份覆盖率
     await cdp.eval('await new Promise((r) => { const q = indexedDB.deleteDatabase("zenus_materials");'
