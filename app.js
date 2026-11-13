@@ -1,7 +1,7 @@
 // 学习机 Lite — 静态 PWA：内容来自 pack.json，进度存本地，AI 直连 OpenAI 兼容接口
 'use strict';
 
-const BUILD = '2026-11-14.2';
+const BUILD = '2026-11-14.3';
 
 const LS = {
   progress: 'zenus.progress.v1',
@@ -50,6 +50,10 @@ const state = {
   chat: [],
   busy: false,
   inbox: [],
+  // 书架（B5）：NG 书目 + 网页档案混排；at = 数据截至的时间，stale = 这是缓存
+  shelf: { at: 0, source: '', stale: false, error: '', books: [] },
+  shelfFilter: 'all',
+  shelfPulling: false,
 };
 
 const $ = (s) => document.querySelector(s);
@@ -656,6 +660,7 @@ function render() {
   syncReadingChrome();
   try {
     if (state.tab === 'review') return renderReview();
+    if (state.tab === 'shelf') return renderShelfTab();
     if (state.tab === 'browse') return renderBrowse();
     if (state.tab === 'reader') return renderReader();
     if (state.tab === 'quiz') return renderQuizTab();
@@ -954,6 +959,134 @@ function renderBrowse() {
     <h2>${esc(course()?.title || '')} · ${allCards().length} 张</h2>
     <div class="list">${items || '<div class="empty">这门课还没有卡片</div>'}</div>`;
   $('#aiQuizBtn2').onclick = () => { state.tab = 'quiz'; state.quiz = null; render(); };
+}
+
+// ── 书架（B5）：NG 书目 + 网页档案混排 ──────────────────────────
+// 两条数据来源：① 原生桥 shelf.list（NG 活着拉最新；NG 不在就回缓存，并带「数据截至」）
+//              ② 本机文本档案（conv.js 的 documents：网页 / 文章）
+// 只做展示，**不改 NG 的书架**（SPEC §8.3：不合并书架）。
+async function pullShelf(force) {
+  if (!nativePort() || state.shelfPulling) return false;
+  if (!force && state.shelf.at && Date.now() - state.shelf.at < 60000) return false;
+  state.shelfPulling = true;
+  try {
+    const snap = await coreCall('shelf.list', {}, 25000);
+    if (!snap || typeof snap !== 'object') return false;
+    state.shelf = {
+      at: Number(snap.at) || 0,
+      source: String(snap.source || ''),
+      stale: !!snap.stale,
+      error: String(snap.error || ''),
+      books: Array.isArray(snap.books) ? snap.books : [],
+    };
+    return true;
+  } finally {
+    state.shelfPulling = false;
+  }
+}
+
+function fmtWhen(ts) {
+  if (!ts) return '未知时间';
+  const d = new Date(ts);
+  const p = (n) => String(n).padStart(2, '0');
+  return p(d.getMonth() + 1) + '-' + p(d.getDate()) + ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
+}
+
+// 卡片上的 1–5 个关键词：保存时 AI 抽过就用它；没有就退回标题前 8 字（不装成「AI 抽的」）
+function shelfKeywords(doc) {
+  if (doc && Array.isArray(doc.keywords) && doc.keywords.length) {
+    return doc.keywords.map((k) => String(k || '').trim()).filter(Boolean).slice(0, 5);
+  }
+  const base = String((doc && doc.name) || '').replace(/\.[a-z0-9]+$/i, '');
+  const parts = base.split(/[\s·—_\-|,，、]+/).filter(Boolean);
+  if (parts.length > 1) return parts.slice(0, 3).map((s) => s.slice(0, 8));
+  return [base.slice(0, 8)].filter(Boolean);
+}
+
+function shelfDomain(doc) {
+  const url = String((doc && (doc.url || doc.sourceUrl)) || '');
+  if (!url) return '';
+  try { return new URL(url).hostname.replace(/^www\./, ''); } catch { return ''; }
+}
+
+async function renderShelfTab() {
+  if (state.shelf.at === 0 && nativePort() && !state.shelfPulling) {
+    view.innerHTML = '<div class="empty">正在向 NG 取书架…</div>';
+    await pullShelf(true);
+  }
+  const docs = (window.ZConv ? await ZConv.docAll() : []).filter((d) => !d.deletedAt);
+  const webKinds = ['html', 'web'];
+  const books = (state.shelf.books || []).map((b) => ({
+    type: 'book',
+    title: String(b.title || (b.workKey || '').split('\n')[0] || '未命名'),
+    sub: [b.author, (Number(b.chapterIndex) || 0) > 0 ? '第 ' + (Number(b.chapterIndex) + 1) + ' 章' : '']
+      .filter(Boolean).join(' · '),
+    at: Number(b.lastReadAt) || 0,
+    keywords: [],
+    domain: '',
+    order: 1,
+  }));
+  const webs = docs.filter((d) => webKinds.includes(String(d.kind || 'html')))
+    .map((d) => ({
+      type: 'web',
+      title: String(d.name || '未命名网页'),
+      sub: '',
+      at: Number(d.updatedAt) || 0,
+      keywords: shelfKeywords(d),
+      domain: shelfDomain(d),
+      docId: d.docId,
+      key: d.key || d.docId,
+      order: 0,
+    }));
+  const f = state.shelfFilter;
+  let items = books.concat(webs);
+  if (f === 'book') items = items.filter((x) => x.type === 'book');
+  if (f === 'web') items = items.filter((x) => x.type === 'web');
+  // 按最近阅读排：网页有真时间戳，书没有就用 NG 返回的顺序（浏览器排序是稳定的）
+  items = items.slice().sort((a, b) => (b.at || 0) - (a.at || 0) || (b.order - a.order));
+
+  const chips = [['all', '全部'], ['book', '只看书'], ['web', '只看网页']]
+    .map(([k, label]) => `<button class="${f === k ? 'on' : ''}" data-filter="${k}">${label}</button>`).join('');
+
+  let banner = '';
+  if (!nativePort()) {
+    banner = '<div class="banner">现在是在浏览器里：只能看本机档案，NG 上的书要装 App 才取得到。</div>';
+  } else if (!state.shelf.at) {
+    banner = '<div class="banner">还没拿到 NG 书架' + (state.shelf.error ? '：' + esc(state.shelf.error) : '') + '</div>';
+  } else if (state.shelf.stale) {
+    banner = '<div class="banner">NG 现在不在，显示的是缓存 —— 数据截至 ' + fmtWhen(state.shelf.at)
+      + (state.shelf.error ? '（' + esc(state.shelf.error) + '）' : '') + '</div>';
+  } else {
+    banner = '<div class="banner">数据截至 ' + fmtWhen(state.shelf.at) + '　共 ' + books.length + ' 本书 · ' + webs.length + ' 篇网页</div>';
+  }
+
+  const cards = items.map((it, i) => {
+    const kw = it.keywords.length
+      ? '<div class="kw">' + it.keywords.map((k) => '<span>' + esc(k) + '</span>').join('') + '</div>'
+      : '';
+    const bottom = it.type === 'web'
+      ? '<div class="dom">' + (it.domain ? '来源：' + esc(it.domain) : '本机档案') + '</div>'
+      : '<div class="dom">' + (it.sub ? esc(it.sub) : 'NG 书架') + '</div>';
+    return `<div class="shelfCard" data-i="${i}" data-type="${it.type}">`
+      + '<div class="st">' + esc(it.title) + '</div>' + kw + bottom + '</div>';
+  }).join('');
+
+  view.innerHTML = `<div class="filters" id="shelfFilters">${chips}</div>`
+    + banner
+    + (cards ? '<div class="shelfGrid">' + cards + '</div>'
+      : '<div class="empty">' + (f === 'book' ? 'NG 书架是空的' : f === 'web' ? '还没有网页档案' : '书架还是空的') + '</div>');
+
+  document.querySelectorAll('#shelfFilters button').forEach((b) => {
+    b.onclick = () => { state.shelfFilter = b.dataset.filter; render(); };
+  });
+  view.querySelectorAll('.shelfCard').forEach((el) => {
+    el.onclick = async () => {
+      const it = items[Number(el.dataset.i)];
+      if (!it) return;
+      if (it.type === 'web' && it.key) { await openStoredMaterial(it.key); return; }
+      toast('书的正文在 NG 里打开；这里只列目录');
+    };
+  });
 }
 
 function renderChat() {

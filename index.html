@@ -67,6 +67,18 @@ h2{font-size:13px;color:var(--dim);font-weight:600;margin:18px 2px 8px;letter-sp
 .list{display:flex;flex-direction:column;gap:8px}
 .list .it{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:11px 13px;font-size:14px;display:flex;justify-content:space-between;gap:10px}
 .list .it small{color:var(--dim);font-size:12px;white-space:nowrap}
+/* 书架（B5）：白纸卡片 + 关键词 + 域名小字；墨水屏上要一眼看清 */
+.filters{display:flex;gap:8px;margin:4px 0 10px;flex-wrap:wrap}
+.filters button{background:var(--card);border:1px solid var(--line);color:var(--text);border-radius:999px;padding:6px 12px;font-size:13px}
+.filters button.on{background:var(--acc);border-color:var(--acc);color:#fff}
+.shelfGrid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.shelfCard{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px 12px 10px;display:flex;flex-direction:column;gap:6px;min-height:96px}
+.shelfCard .st{font-size:15px;line-height:1.35;font-weight:600;word-break:break-word}
+.shelfCard .kw{display:flex;flex-wrap:wrap;gap:4px}
+.shelfCard .kw span{font-size:11px;color:var(--dim);border:1px solid var(--line);border-radius:6px;padding:1px 5px}
+.shelfCard .dom{font-size:11px;color:var(--dim);margin-top:auto}
+.shelfCard .sub{font-size:11px;color:var(--dim)}
+.banner{border:1px solid var(--line);background:var(--card);color:var(--dim);border-radius:10px;padding:8px 11px;font-size:12px;margin:6px 0 10px}
 .chat{display:flex;flex-direction:column;gap:10px;padding-bottom:8px}
 .msg{max-width:86%;padding:10px 13px;border-radius:14px;font-size:15px;white-space:pre-wrap;word-break:break-word}
 .msg.me{background:var(--acc);color:#fff;align-self:flex-end}
@@ -182,6 +194,9 @@ input.t{width:100%;background:var(--card);border:1px solid var(--line);color:var
   <button data-tab="review" class="on">
     <svg viewBox="0 0 24 24"><path d="M4 5h16v12H4z"/><path d="M8 21h8"/><path d="M12 17v4"/></svg>复习
   </button>
+  <button data-tab="shelf">
+    <svg viewBox="0 0 24 24"><path d="M4 4h5v16H4z"/><path d="M11 4h4v16h-4z"/><path d="M17 5l4 15"/></svg>书架
+  </button>
   <button data-tab="browse">
     <svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/></svg>浏览
   </button>
@@ -252,8 +267,8 @@ input.t{width:100%;background:var(--card);border:1px solid var(--line);color:var
 </script>
 
 <!-- 版本号必须跟 app.js 的 BUILD 一起改：否则手机 WebView 会吃旧缓存，看不到新功能 -->
-<script src="conv.js?v=2026-11-14.2"></script>
-<script src="sync.js?v=2026-11-14.2"></script>
-<script src="app.js?v=2026-11-14.2"></script>
+<script src="conv.js?v=2026-11-14.3"></script>
+<script src="sync.js?v=2026-11-14.3"></script>
+<script src="app.js?v=2026-11-14.3"></script>
 </body>
 </html>
