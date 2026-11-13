@@ -87,6 +87,11 @@ h2{font-size:13px;color:var(--dim);font-weight:600;margin:18px 2px 8px;letter-sp
 .todayRow button{flex:1;background:var(--card);border:1px solid var(--line);color:var(--text);border-radius:12px;padding:12px 8px;font-size:14px;text-align:center}
 .todayRow button b{display:block;font-size:20px;line-height:1.2}
 .todayRow button span{font-size:11px;color:var(--dim)}
+/* D14 统计：7 天柱状图（墨水屏上只要高度能对比） */
+.bars{display:flex;align-items:flex-end;gap:6px;height:96px;margin:8px 0 4px}
+.barCol{flex:1;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;height:100%}
+.barCol .bar{width:100%;background:var(--acc);border-radius:4px 4px 0 0;min-height:2px}
+.barCol span{font-size:10px;color:var(--dim);margin-top:4px}
 .chat{display:flex;flex-direction:column;gap:10px;padding-bottom:8px}
 .msg{max-width:86%;padding:10px 13px;border-radius:14px;font-size:15px;white-space:pre-wrap;word-break:break-word}
 .msg.me{background:var(--acc);color:#fff;align-self:flex-end}
@@ -278,8 +283,8 @@ input.t{width:100%;background:var(--card);border:1px solid var(--line);color:var
 </script>
 
 <!-- 版本号必须跟 app.js 的 BUILD 一起改：否则手机 WebView 会吃旧缓存，看不到新功能 -->
-<script src="conv.js?v=2026-11-14.6"></script>
-<script src="sync.js?v=2026-11-14.6"></script>
-<script src="app.js?v=2026-11-14.6"></script>
+<script src="conv.js?v=2026-11-14.7"></script>
+<script src="sync.js?v=2026-11-14.7"></script>
+<script src="app.js?v=2026-11-14.7"></script>
 </body>
 </html>

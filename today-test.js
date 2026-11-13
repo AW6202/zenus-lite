@@ -85,6 +85,15 @@ const STUB = `
   window.__today = {
     current: { ok: true, title: '狄公案', author: '高罗佩', chapterIndex: 11, chapterPos: 420 },
     reading: [{ book: '狄公案', chapter: 11, kind: 'read_ng' }, { book: '教材', chapter: 3, kind: 'read_ng' }],
+    stats: [
+      { date: '2026-11-08', seconds: 0, chars: 0 },
+      { date: '2026-11-09', seconds: 120, chars: 600 },
+      { date: '2026-11-10', seconds: 60, chars: 300 },
+      { date: '2026-11-11', seconds: 0, chars: 0 },
+      { date: '2026-11-12', seconds: 300, chars: 1500 },
+      { date: '2026-11-13', seconds: 240, chars: 1200 },
+      { date: '2026-11-14', seconds: 180, chars: 900 }
+    ],
     calls: []
   };
   window.zenus = {
@@ -97,6 +106,7 @@ const STUB = `
       window.__today.calls.push(r.cmd);
       if (r.cmd === 'shelf.current') return this._emit({ id: r.id, ok: true, data: window.__today.current });
       if (r.cmd === 'reading.state') return this._emit({ id: r.id, ok: true, data: window.__today.reading });
+      if (r.cmd === 'stats.get') return this._emit({ id: r.id, ok: true, data: window.__today.stats });
       if (r.cmd === 'inbox.list') return this._emit({ id: r.id, ok: true, data: [] });
       this._emit({ id: r.id, ok: true, data: null });
     }
@@ -144,6 +154,21 @@ const STUB = `
       && first.stats.every((s, i) => /到期复习|没学过|待确认生词/.test(s)), first.stats);
     check('最近在读列出 reading.state 的行', first.recent.length === 2 && /教材/.test(first.recent.join('')), first.recent);
     check('确实问了 NG（shelf.current）', first.calls.includes('shelf.current'), first.calls);
+
+    // ── 1b. D14 统计：7 根柱子 + 合计 + 口径文案 ──
+    const stats = await cdp.eval(`
+      return {
+        bars: document.querySelectorAll('.barCol .bar').length,
+        labels: Array.from(document.querySelectorAll('.barCol span')).map((e) => e.textContent),
+        hint: (Array.from(document.querySelectorAll('.hint')).map((e) => e.textContent).join('|')),
+        calls: window.__today.calls,
+      };
+    `);
+    check('近 7 天听书画成 7 根柱子', stats.bars === 7 && stats.labels.length === 7 && stats.labels[6] === '11-14', stats);
+    check('统计合计与口径文案都在（明说只算 Aegis 听的）',
+      /共 15 分钟/.test(stats.hint) && /4500 字/.test(stats.hint) && /只算 Aegis 听的/.test(stats.hint)
+      && /NG 里读的/.test(stats.hint), stats.hint);
+    check('确实问了 stats.get', stats.calls.includes('stats.get'), stats.calls);
 
     // ── 2. NG 不在：如实说，不糊假书名 ──
     const offline = await cdp.eval(`

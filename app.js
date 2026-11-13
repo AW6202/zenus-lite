@@ -1,7 +1,7 @@
 // 学习机 Lite — 静态 PWA：内容来自 pack.json，进度存本地，AI 直连 OpenAI 兼容接口
 'use strict';
 
-const BUILD = '2026-11-14.6';
+const BUILD = '2026-11-14.7';
 
 const LS = {
   progress: 'zenus.progress.v1',
@@ -1170,6 +1170,8 @@ async function pullToday(force) {
   };
   const rows = await coreCall('reading.state', { kind: 'read_ng' }, 8000);
   if (Array.isArray(rows)) state.today.reading = rows.slice(0, 5);
+  const stats = await coreCall('stats.get', { days: 7 }, 8000);
+  state.today.stats = Array.isArray(stats) ? stats : [];
   return ok;
 }
 
@@ -1204,6 +1206,22 @@ async function renderToday() {
       + '<small>第 ' + (Number(r.chapter) + 1) + ' 章</small></div>').join('') + '</div>'
     : '';
 
+  // D14 统计：近 7 天听书（只算 Aegis 自己听的）
+  const stats = state.today.stats || [];
+  let listenBlock = '';
+  if (stats.length) {
+    const maxSec = Math.max(1, ...stats.map((d) => Number(d.seconds) || 0));
+    const totalMin = Math.round(stats.reduce((n, d) => n + (Number(d.seconds) || 0), 0) / 60);
+    const totalChars = stats.reduce((n, d) => n + (Number(d.chars) || 0), 0);
+    listenBlock = '<h2>近 7 天听书</h2>'
+      + '<div class="bars">' + stats.map((d) => {
+        const h = Math.round(((Number(d.seconds) || 0) / maxSec) * 100);
+        return '<div class="barCol"><div class="bar" style="height:' + Math.max(2, h) + '%"></div>'
+          + '<span>' + esc(String(d.date || '').slice(5)) + '</span></div>';
+      }).join('') + '</div>'
+      + '<div class="hint">共 ' + totalMin + ' 分钟 · ' + totalChars + ' 字（只算 Aegis 听的）</div>';
+  }
+
   view.innerHTML = bookBlock
     + '<div class="todayRow">'
     + '<button id="todayReview"><b>' + c.due + '</b><span>到期复习</span></button>'
@@ -1211,7 +1229,8 @@ async function renderToday() {
     + '<button id="todayInbox"><b>' + c.inbox + '</b><span>待确认生词</span></button>'
     + '</div>'
     + readingBlock
-    + '<div class="hint" style="margin-top:14px">统计口径：这里只有本机记到的复习与生词；'
+    + listenBlock
+    + '<div class="hint" style="margin-top:14px">统计口径：这里只有本机记到的复习与生词、以及 <b>Aegis 自己听的</b>时长与字数；'
     + '在 NG 里读的、在电脑上听的时间拿不到（§D8）。</div>';
 
   const go = (tab) => { state.tab = tab; render(); };
