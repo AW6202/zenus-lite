@@ -249,10 +249,15 @@ const SRC_SET = ['dom', 'text', 'ocr', 'ai'];
         const r = await ZConv.convert({ bytes: new Uint8Array(buf), name: ${JSON.stringify(files[htmlIdx].name)} },
           { levels: [2, 3, 4] });
         return { level: r.archive.level, verdict: r.archive.verdict, playable: r.archive.playable,
-                 reasons: r.archive.coverage.reasons, paras: r.archive.paragraphs.length };
+                 reasons: r.archive.coverage.reasons, paras: r.archive.paragraphs.length,
+                 snapshotChars: (r.archive.snapshot && r.archive.snapshot.text || '').length,
+                 sourceChars: ZConv.sourceText(r.archive).length,
+                 report: r.report };
       `, 120000);
       check('负向：去掉第 1 级 → HTML 掉到第 4 级且报红（不许拿剥标签冒充抽字）',
         neg.level === 4 && neg.verdict !== 'ok' && neg.playable === false, neg);
+      check('第 4 级留了原文快照（只能看不能听，报告里写明）',
+        neg.snapshotChars > 0 && neg.sourceChars === neg.snapshotChars && /原文：留了快照/.test(neg.report), neg);
       check('对照：同一份 HTML 带第 1 级时是可听的',
         !!rowOk && rowOk.playable === true && rowOk.level === 1, rowOk || {});
     } else {

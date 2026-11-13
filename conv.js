@@ -755,6 +755,13 @@ window.ZConv = (function () {
       if (prev && prev.docId !== docId) prev = null;     // 文件变了就不能续跑
     }
 
+    // 第 4 级要留的原文（PDF/EPUB 的字节不在这里解，太大；只留文本类）
+    let snapshotText = typeof input.html === 'string' ? input.html
+      : (typeof input.text === 'string' ? input.text : '');
+    if (!snapshotText && bytes && (kind === 'html' || kind === 'txt' || kind === 'md' || kind === 'web')) {
+      try { snapshotText = new TextDecoder().decode(bytes); } catch (e) { snapshotText = ''; }
+    }
+
     let result = null;
     let partial = false;
     let nextPage = null;
@@ -854,6 +861,11 @@ window.ZConv = (function () {
       partial,
       nextPage,
       clean: null,
+      // 第 4 级「仅存档」：把原文留一份快照，卡片上写「仅收藏」，用户还能切回原文看
+      snapshot: (result && result.paragraphs && result.paragraphs.length) ? null : {
+        text: String(snapshotText).slice(0, 200000),
+        at: Date.now(),
+      },
       view: 'text',
       startedAt,
       finishedAt: Date.now(),
@@ -894,6 +906,11 @@ window.ZConv = (function () {
     if (!archive) return [];
     if (which === 'ai') return (archive.clean && archive.clean.paragraphs) ? archive.clean.paragraphs : [];
     return archive.paragraphs || [];
+  }
+
+  /** 原文视图：第 4 级留下的快照（没有就返回空，界面不许假装有原文）。 */
+  function sourceText(archive) {
+    return (archive && archive.snapshot && archive.snapshot.text) ? archive.snapshot.text : '';
   }
 
   async function applyClean(archive, cleanedParas, meta) {
@@ -1018,6 +1035,7 @@ window.ZConv = (function () {
       lines.push('失败页：' + c.failPages.map((p) => 'p' + p.i + (p.reason ? '（' + p.reason + '）' : '')).join('、'));
     }
     if (c.partial) lines.push('状态：转到第 ' + (c.nextPage ? c.nextPage - 1 : c.pages) + ' 页先停下，下次从第 ' + c.nextPage + ' 页续');
+    if (archive.snapshot && archive.snapshot.text) lines.push('原文：留了快照（只能看，不能听）');
     lines.push('判定：' + (archive.playable ? '可以听'
       : '不能听 —— ' + ((c.reasons || []).join('；') || (c.partial ? '还没转完（分批）' : '仅收藏'))));
     lines.push('指纹：' + String(fc.fileHash || '').slice(0, 8) + ' · ' + (fc.convVersion || '') + ' · ' + (fc.promptVersion || ''));
@@ -1103,7 +1121,7 @@ window.ZConv = (function () {
     // 主流程
     convert, archiveBook, coverageOf, verdictOf, reportText, upsertPageText,
     // 档案读写
-    arcGet, arcAll, arcListOf, arcCurrent, paragraphsOf, applyClean, cleanArchive, setView,
+    arcGet, arcAll, arcListOf, arcCurrent, paragraphsOf, sourceText, applyClean, cleanArchive, setView,
     docGet, docAll, markDocDeleted, setDocMeta, docByUrl,
     // 拆出来给测试/调试用
     sha256Hex, kindOf, pdfRows, rowToParas, htmlExtract, pdfExtract, plainExtract,
