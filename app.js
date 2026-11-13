@@ -1,7 +1,7 @@
 // 学习机 Lite — 静态 PWA：内容来自 pack.json，进度存本地，AI 直连 OpenAI 兼容接口
 'use strict';
 
-const BUILD = '2026-11-14.1';
+const BUILD = '2026-11-14.2';
 
 const LS = {
   progress: 'zenus.progress.v1',
@@ -168,9 +168,12 @@ async function importToCoreOnce() {
   }
 }
 
-// 拉原生「待确认」：取走即清空，落到本地 inbox，确认后才变成本地卡
+// 拉原生「待确认」：**只列出、不清空**（SPEC §2.3，2026-11-14）。
+// 处理状态在这边（按 id 去重），原生保留 7 天；老 APK 没有 inbox.list，
+// 退回 inbox.take（那时它还是会清，但至少能拉到）。确认后才变成本地卡。
 async function pullCoreInbox() {
-  const arr = await coreCall('inbox.take', {}, 8000);
+  let arr = await coreCall('inbox.list', {}, 8000);
+  if (!Array.isArray(arr)) arr = await coreCall('inbox.take', {}, 8000);
   if (!Array.isArray(arr) || !arr.length) return;
   const seen = new Set(state.inbox.map((x) => x.id || x.front));
   let added = 0;
@@ -186,6 +189,21 @@ async function pullCoreInbox() {
     if (state.tab === 'review') renderReview();
     else toast('有 ' + state.inbox.length + ' 张待确认（阅读器存的）');
   }
+}
+
+// 待确认箱的三个拉取触发（SPEC §2.3）：① 打开页面（init 里已经拉）
+// ② 切回前台（visibilitychange）③ 从听书界面回来（focus / pageshow）。
+// 听书是原生前台服务，回到学习机时 WebView 会先 focus/pageshow，兜住这两个就够。
+function bindInboxPull() {
+  let last = 0;
+  const pull = () => {
+    const t = Date.now();
+    if (t - last < 1500) return;                    // 三个事件常常一起来，别连发
+    last = t;
+    pullCoreInbox();
+  };
+  window.addEventListener('focus', pull);
+  window.addEventListener('pageshow', pull);
 }
 
 function saveInbox() { saveJSON(LS.inbox, state.inbox); }
@@ -7150,6 +7168,8 @@ document.addEventListener('visibilitychange', () => {
     setTimeout(() => { if (!RDR.book && !RDR.pdf && !(RDR.comicUrls || []).length) openPendingFile(); }, 600);
     // 从别的地方点「一键导入」再切回来：把收件箱里的书源接住
     setTimeout(pullSourceImports, 800);
+    // 切回前台也拉一次「待确认」（SPEC §2.3 触发②）；听书结束回到学习机走的也是这条路
+    setTimeout(pullCoreInbox, 300);
     // 刚登录完切回来：自动重测那个源
     if (LOGIN.pendingAction && LOGIN.idx >= 0) {
       const act = LOGIN.pendingAction;
@@ -7493,6 +7513,7 @@ async function pullWebCards() {
     setTimeout(pushAiConfig, 2500);
     pullCoreInbox();
     setTimeout(pullCoreInbox, 2500);
+    bindInboxPull();
     // yuedu:// 一键导入：App 收到链接后放进了收件箱，这里取走并入库
     pullSourceImports();
     setTimeout(pullSourceImports, 2500);

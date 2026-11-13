@@ -157,6 +157,24 @@ A 读到第 3 章、B 读到第 5 章 → 两边最终都是第 5 章且 history
 B 删书/ A 还留着更新位置再推 → 书仍然删着（墓碑单调）；坏远端 JSON 跳过不带崩；
 ETag 第二次 304 命中缓存；自己文件带合并结果、别人文件不被改写。
 
+## D-016 收件箱只列出、不清空；位置落库
+**2026-11-14 定（B 批 6 + C 批 10）。**
+
+- **收件箱（§2.3）**：`inbox.take` 的「取走即清」废弃。原生侧新增 `inbox.list`
+  （Room 表 `inbox` + 网页词 JSON 文件两条链路都改了），保留 7 天，过期的在列出时顺手清掉。
+  处理状态归学习机：它按 `id` 去重，确认后进 `userCards`。
+  为什么改：旧语义下「碰巧没打开学习机」「取走后写本地失败」都等于生词直接丢，而且没人知道。
+- 学习机拉箱：先 `inbox.list`，**老 APK 没有这个命令就退回 `inbox.take`**（否则旧包装上新网页一个词都拉不到）。
+- 三个触发（§2.3）：① 打开页面 ② `visibilitychange` 切回前台 ③ `focus`/`pageshow`
+  从听书界面回来；1.5 秒节流，三个事件一起来只算一次。
+- **位置落库（D4）**：新增 Room 表 `reading_state(kind, book, chapter, pos, updatedAt)`，
+  DB 版本 3→4（只加表，旧表一行不动）。`kind` = `listen` / `read_ng` / `material`。
+  开章时 `ZenusReadingState.remember(...)` 落库，启动时 `restore()` 灌回内存缓存；
+  **NG 的阅读位置不复制、不写回**，只记 NG 不知道的（听到第几句、这次听多久）。
+
+**验收**：`node inbox-test.js` 6 项全绿（走 list 不走 take、三张候选入箱、重复拉不重复、
+切回前台会再拉且节流、老 APK 回退 take 不丢词）。
+
 ## 改动纪律
 - 每次发版：`sw.js` 的 `CACHE` 版本 +1，`app.js` 的 `BUILD` 更新
 - 改阅读器/解析：`node smoke.js --pdf 某文件.pdf` 必须全绿（DOM 断言，不看退出码）
