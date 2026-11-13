@@ -28,6 +28,7 @@ const DEFAULT_SETTINGS = {
   syncToken: '',
   syncRepo: 'AW6202/zenus-state',
   syncDevice: '',
+  syncPerson: '',
   ttsVoice: '',
   searchKey: '',
   visionBase: 'https://api.siliconflow.cn/v1',
@@ -229,7 +230,7 @@ const MAT_MAX_BYTES = 3 * 1024 * 1024;   // 单份上限，超了不入库
 
 function idbOpen() {
   return new Promise((resolve, reject) => {
-    const req = indexedDB.open(MAT_DB, 1);
+    const req = indexedDB.open(MAT_DB, 2);
     // WebView 的 IndexedDB 一旦坏掉，open() 可能永远不回调——页面就永远停在加载态，
     // 看起来就是「这一页打不开」。给个上限：超时按失败算，页面降级（空书架/不入库），
     // 错误会走全局错误条画在屏幕上，而不是静默卡死。
@@ -243,6 +244,16 @@ function idbOpen() {
       const db = req.result;
       if (!db.objectStoreNames.contains(MAT_STORE)) {
         db.createObjectStore(MAT_STORE, { keyPath: 'id' });
+      }
+      // v2：文本档案（conv.js 用）——一份材料一条 documents，每次转换一条 archives。
+      // 两边都要「缺了就建」，否则谁先打开数据库谁就把另一个的 store 漏掉。
+      if (!db.objectStoreNames.contains('documents')) {
+        const s = db.createObjectStore('documents', { keyPath: 'docId' });
+        s.createIndex('fileHash', 'fingerprint.fileHash', { unique: false });
+      }
+      if (!db.objectStoreNames.contains('archives')) {
+        const a = db.createObjectStore('archives', { keyPath: 'id' });
+        a.createIndex('docId', 'docId', { unique: false });
       }
     };
     req.onsuccess = () => {
@@ -320,6 +331,11 @@ async function persistMaterial(kind) {
       all.sort((a, b) => (a.savedAt || 0) - (b.savedAt || 0));
       for (const old of all.slice(0, all.length - MAT_MAX)) await matDelete(old.id);
     }
+    // A 批：顺手建一份「文本档案」（段落 / 每段来源 / 页码映射 / 指纹 / 覆盖率），
+    // 听书和 AI 后面都吃它。建不出来不影响阅读，也不弹提示。
+    try {
+      if (window.ZConv) await ZConv.archiveBook(RDR.book, { kind: kind || RDR.kind, name: RDR.book.name, key: id });
+    } catch (e) { /* 档案失败不阻塞阅读 */ }
   } catch (e) { /* 隐私模式/配额不足：静默，不影响阅读 */ }
 }
 
@@ -989,7 +1005,10 @@ function renderSettings() {
 
     <h2>跨设备同步</h2>
     <div class="hint">私有仓库 ${esc(settings.syncRepo)}；本机设备号 ${esc(deviceId())}。
-    每台设备只写自己的文件，打开时合并，写操作不会互相覆盖。</div>
+    每台设备只写自己的文件，打开时合并，写操作不会互相覆盖。<br>
+    书和阅读位置按<b>一本书一条记录</b>合并（带删除墓碑），复习进度按设备文件合并。</div>
+    <label class="f">这台设备属于谁（同一个人名才互相合并；留空 = 只这台设备）</label>
+    <input class="t" id="s-person" value="${esc(settings.syncPerson || '')}" placeholder="alice / 你自己认的名字">
     <label class="f">GitHub Token（只给这个仓库 contents 读写）</label>
     <input class="t" id="s-gh" type="password" value="${esc(settings.syncToken)}" placeholder="github_pat_...">
     <label class="f">仓库</label>
@@ -1088,6 +1107,7 @@ function renderSettings() {
   if (ds) ds.onclick = async () => {
     settings.syncToken = $('#s-gh').value.trim();
     settings.syncRepo = $('#s-repo').value.trim() || settings.syncRepo;
+    settings.syncPerson = ($('#s-person').value || '').trim();
     saveJSON(LS.settings, settings);
     await syncNow();
     renderSettings();
@@ -1096,6 +1116,7 @@ function renderSettings() {
   if (ss) ss.onclick = () => {
     settings.syncToken = $('#s-gh').value.trim();
     settings.syncRepo = $('#s-repo').value.trim() || settings.syncRepo;
+    settings.syncPerson = ($('#s-person').value || '').trim();
     saveJSON(LS.settings, settings);
     toast('已保存');
   };
@@ -1580,12 +1601,55 @@ async function syncNow(opts) {
     // 2) 推自己的文件
     const own = await ghGet('devices/' + deviceId() + '.json');
     await ghPut('devices/' + deviceId() + '.json', localState(), own && own.sha);
-    if (!quiet) toast('同步完成：合并 ' + files + ' 台设备，更新 ' + pulled + ' 条');
+    // 3) 记录级同步（A 批）：书 + 阅读位置 + 删除墓碑，一本书一条。
+    //    整包那份只管复习进度；书和位置走这里，两台设备交替用才不互相盖掉。
+    let rec = null;
+    if (window.ZSync && window.ZConv) {
+      try { rec = await syncRecords(); } catch (err) { rec = { error: err.message }; }
+    }
+    if (!quiet) {
+      toast('同步完成：合并 ' + files + ' 台设备，复习更新 ' + pulled + ' 条'
+        + (rec && !rec.error ? '，书 ' + rec.books + ' 本（墓碑 ' + rec.tombstones + '）' : '')
+        + (rec && rec.error ? '；书记录同步失败：' + rec.error : ''));
+    }
     return pulled;
   } catch (err) {
     if (!quiet) toast('同步失败：' + err.message);
     return null;
   }
+}
+
+// 把本机的「书 + 位置」整理成记录，交给 ZSync 合并，再把远端结果落回本机。
+// 位置键 = documents 里的 key（材料 id），不是 docId —— 阅读位置一直按前者存。
+async function syncRecords() {
+  const docs = await ZConv.docAll();
+  const records = {};
+  for (const d of docs) {
+    const arc = await ZConv.arcCurrent(d.docId);
+    const key = d.key || d.docId;
+    records[d.docId] = ZSync.recordOf({ doc: d, archive: arc, position: readPositions[key], device: deviceId() });
+  }
+  const r = await ZSync.syncNow({
+    transport: ZSync.ghTransport({ token: settings.syncToken, repo: settings.syncRepo }),
+    person: settings.syncPerson,
+    device: deviceId(),
+    records,
+  });
+  let moved = 0;
+  for (const [docId, rec] of Object.entries(r.state.records || {})) {
+    if (rec.deleted) {
+      await ZConv.markDocDeleted(docId);          // 墓碑：本地也标删，别下次又推上去
+      continue;
+    }
+    const key = rec.key || docId;
+    const cur = readPositions[key];
+    if (rec.position && (!cur || (rec.position.at || 0) > (cur.at || 0))) {
+      readPositions[key] = { ...(cur || {}), ...rec.position };
+      moved++;
+    }
+  }
+  if (moved) saveJSON(LS.readpos, readPositions);
+  return { books: Object.keys(r.state.records || {}).length, tombstones: (r.tombstones || []).length, moved };
 }
 
 let syncTimer = null;

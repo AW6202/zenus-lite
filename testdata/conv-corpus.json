@@ -1,0 +1,22 @@
+{
+  "_note": "A 批 · 转换管线验收语料：真实文件（不是造的 fixture）。路径是本机的；换机器只改 path。maxPages=0 表示转全部页；给了数就是「这次只转这么多页」，档案会标 partial，不许冒充整本。expect: ok=应当可听 / partial=应当标「还没转完」/ incomplete=应当标红 / any=只记录不判定（实测基线，见 DECISIONS.md）。",
+  "files": [
+    { "name": "Read Me English.pdf", "path": "D:\\Civ5+Super Powers Final\\Read Me English.pdf", "lang": "en", "maxPages": 0, "expect": "ok" },
+    { "name": "Read Me German.pdf", "path": "D:\\Civ5+Super Powers Final\\Read Me German.pdf", "lang": "de", "maxPages": 0, "expect": "ok" },
+    { "name": "Read Me French.pdf", "path": "D:\\Civ5+Super Powers Final\\Read Me French.pdf", "lang": "fr", "maxPages": 0, "expect": "ok" },
+    { "name": "Read Me Japanese.pdf", "path": "D:\\Civ5+Super Powers Final\\Read Me Japanese.pdf", "lang": "ja", "maxPages": 0, "expect": "ok" },
+    { "name": "Read Me Korean.pdf", "path": "D:\\Civ5+Super Powers Final\\Read Me Korean.pdf", "lang": "ko", "maxPages": 0, "expect": "ok" },
+    { "name": "Read Me Spanish.pdf", "path": "D:\\Civ5+Super Powers Final\\Read Me Spanish.pdf", "lang": "es", "maxPages": 0, "expect": "ok" },
+    { "name": "Read Me Italian.pdf", "path": "D:\\Civ5+Super Powers Final\\Read Me Italian.pdf", "lang": "it", "maxPages": 0, "expect": "ok" },
+    { "name": "Civ_V_Manual_English.pdf", "path": "D:\\Civ5+Super Powers Final\\Civ_V_Manual_English.pdf", "lang": "en", "maxPages": 25, "expect": "partial" },
+    { "name": "Grim Dawn Modding Guide.pdf", "path": "D:\\Grim Dawn\\Grim Dawn Modding Guide.pdf", "lang": "en", "maxPages": 20, "expect": "partial" },
+    { "name": "SAN13Manual_tc.pdf", "path": "D:\\San13PK\\SAN13Manual_tc.pdf", "lang": "zh", "maxPages": 5, "expect": "partial" },
+    { "name": "说明 文档.pdf", "path": "D:\\sy2\\Sacred 2  Diablo 2 Mod v15C\\说明 文档.pdf", "lang": "zh", "maxPages": 0, "expect": "any" },
+    { "name": "学习机3.0-架构方案.docx", "path": "D:\\work\\zenus\\学习机3.0-架构方案.docx", "maxPages": 0, "expect": "ok" },
+    { "name": "_dom_math_now.html", "path": "D:\\DSH Work\\_dom_math_now.html", "maxPages": 0, "expect": "ok",
+      "why": "真实抓下来的内容页（学习机数学练习）：第 1 级的正向对照，也是「去掉第 1 级必须报红」的对照" },
+    { "name": "yck-single-p3.html", "path": "D:\\work\\zenus\\zenus-lite\\testdata\\yck-single-p3.html", "maxPages": 0, "expect": "any",
+      "why": "真实抓下来的书源目录页（106 个短条目）：第 1 级能读，但它不是文章，判定只记录不定死" },
+    { "name": "wx_article.txt", "path": "D:\\DSH Work\\wx_article.txt", "maxPages": 0, "expect": "any" }
+  ]
+}
