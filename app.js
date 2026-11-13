@@ -1,7 +1,7 @@
 // 学习机 Lite — 静态 PWA：内容来自 pack.json，进度存本地，AI 直连 OpenAI 兼容接口
 'use strict';
 
-const BUILD = '2026-11-14.5';
+const BUILD = '2026-11-14.6';
 
 const LS = {
   progress: 'zenus.progress.v1',
@@ -52,6 +52,8 @@ const state = {
   busy: false,
   inbox: [],
   // 书架（B5）：NG 书目 + 网页档案混排；at = 数据截至的时间，stale = 这是缓存
+  // 今天页（D7）：当前在 NG 读的是哪本 + 该复习多少 + 待确认多少
+  today: { at: 0, book: null, reading: [], error: '' },
   shelf: { at: 0, source: '', stale: false, error: '', books: [] },
   shelfFilter: 'all',
   shelfPulling: false,
@@ -660,6 +662,7 @@ function render() {
   if (state.tab !== 'reader') window.__zenusMenuMode = '';
   syncReadingChrome();
   try {
+    if (state.tab === 'today') return renderToday();
     if (state.tab === 'review') return renderReview();
     if (state.tab === 'shelf') return renderShelfTab();
     if (state.tab === 'browse') return renderBrowse();
@@ -1144,6 +1147,84 @@ async function renderShelfTab() {
       if (ok) render();
     };
   });
+}
+
+// ── 今天页（D7）──────────────────────────────────────────
+// 一条原则：只回答「现在该干什么」，不做数据仪表盘。
+// 当前书从 NG 取（shelf.current），复习/待确认是本机的数；拿不到就如实说拿不到。
+async function pullToday(force) {
+  if (!nativePort()) return false;
+  if (!force && state.today.at && Date.now() - state.today.at < 60000) return false;
+  const r = await coreCall('shelf.current', {}, 20000);
+  const ok = !!(r && r.ok);
+  state.today = {
+    at: Date.now(),
+    book: ok ? {
+      title: String(r.title || ''),
+      author: String(r.author || ''),
+      chapterIndex: Number(r.chapterIndex) || 0,
+      chapterPos: Number(r.chapterPos) || 0,
+    } : null,
+    reading: state.today.reading || [],
+    error: ok ? '' : String((r && r.error) || 'NG 没响应'),
+  };
+  const rows = await coreCall('reading.state', { kind: 'read_ng' }, 8000);
+  if (Array.isArray(rows)) state.today.reading = rows.slice(0, 5);
+  return ok;
+}
+
+function todayCounts() {
+  const all = allCards();
+  const now = Date.now();
+  const due = all.filter((c) => !isKnownCard(c) && entry(c.id).reps > 0 && entry(c.id).due <= now).length;
+  const fresh = all.filter((c) => !isKnownCard(c) && entry(c.id).reps === 0).length;
+  return { due, fresh, inbox: (state.inbox || []).length };
+}
+
+async function renderToday() {
+  if (!state.today.at && nativePort()) {
+    view.innerHTML = '<div class="empty">正在问 NG：你现在在读哪本…</div>';
+    await pullToday();
+  }
+  const c = todayCounts();
+  const b = state.today.book;
+  const bookBlock = b && b.title
+    ? '<div class="todayCard">'
+      + '<div class="tt">' + esc(b.title) + '</div>'
+      + '<div class="ts">' + esc(b.author || 'NG 当前书') + ' · 第 ' + (b.chapterIndex + 1) + ' 章'
+      + (b.chapterPos > 0 ? ' · 本章第 ' + b.chapterPos + ' 字' : '') + '</div>'
+      + '<div class="todayRow"><button id="todayListen"><b>▶</b><span>继续听</span></button>'
+      + '<button id="todayOpenShelf"><b>≡</b><span>书架</span></button></div></div>'
+    : '<div class="todayCard"><div class="tt">还不知道你在读哪本</div>'
+      + '<div class="ts">' + esc(nativePort() ? (state.today.error || 'NG 没响应') : '浏览器里取不到 NG 的书') + '</div></div>';
+
+  const readingBlock = (state.today.reading || []).length
+    ? '<h2>最近在读</h2><div class="list">' + state.today.reading.map((r) =>
+      '<div class="it"><span>' + esc(String(r.book || '')) + '</span>'
+      + '<small>第 ' + (Number(r.chapter) + 1) + ' 章</small></div>').join('') + '</div>'
+    : '';
+
+  view.innerHTML = bookBlock
+    + '<div class="todayRow">'
+    + '<button id="todayReview"><b>' + c.due + '</b><span>到期复习</span></button>'
+    + '<button id="todayFresh"><b>' + c.fresh + '</b><span>没学过</span></button>'
+    + '<button id="todayInbox"><b>' + c.inbox + '</b><span>待确认生词</span></button>'
+    + '</div>'
+    + readingBlock
+    + '<div class="hint" style="margin-top:14px">统计口径：这里只有本机记到的复习与生词；'
+    + '在 NG 里读的、在电脑上听的时间拿不到（§D8）。</div>';
+
+  const go = (tab) => { state.tab = tab; render(); };
+  const l = document.getElementById('todayListen');
+  if (l) l.onclick = () => toast('听书在 NG 的阅读界面里点「听书」；Aegis 不抢它的阅读界面');
+  const s = document.getElementById('todayOpenShelf');
+  if (s) s.onclick = () => go('shelf');
+  const r1 = document.getElementById('todayReview');
+  if (r1) r1.onclick = () => go('review');
+  const r2 = document.getElementById('todayFresh');
+  if (r2) r2.onclick = () => go('review');
+  const r3 = document.getElementById('todayInbox');
+  if (r3) r3.onclick = () => go('review');
 }
 
 function renderChat() {

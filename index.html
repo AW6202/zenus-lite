@@ -79,6 +79,14 @@ h2{font-size:13px;color:var(--dim);font-weight:600;margin:18px 2px 8px;letter-sp
 .shelfCard .dom{font-size:11px;color:var(--dim);margin-top:auto}
 .shelfCard .sub{font-size:11px;color:var(--dim)}
 .banner{border:1px solid var(--line);background:var(--card);color:var(--dim);border-radius:10px;padding:8px 11px;font-size:12px;margin:6px 0 10px}
+/* 今天页（D7）：一眼看到「该做什么」，不做仪表盘 */
+.todayCard{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px;margin:10px 0}
+.todayCard .tt{font-size:16px;font-weight:600;line-height:1.4}
+.todayCard .ts{font-size:12px;color:var(--dim);margin-top:4px}
+.todayRow{display:flex;gap:10px;margin-top:12px}
+.todayRow button{flex:1;background:var(--card);border:1px solid var(--line);color:var(--text);border-radius:12px;padding:12px 8px;font-size:14px;text-align:center}
+.todayRow button b{display:block;font-size:20px;line-height:1.2}
+.todayRow button span{font-size:11px;color:var(--dim)}
 .chat{display:flex;flex-direction:column;gap:10px;padding-bottom:8px}
 .msg{max-width:86%;padding:10px 13px;border-radius:14px;font-size:15px;white-space:pre-wrap;word-break:break-word}
 .msg.me{background:var(--acc);color:#fff;align-self:flex-end}
@@ -191,6 +199,9 @@ input.t{width:100%;background:var(--card);border:1px solid var(--line);color:var
 <main id="view"></main>
 
 <nav class="tabbar">
+  <button data-tab="today">
+    <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/></svg>今天
+  </button>
   <button data-tab="review" class="on">
     <svg viewBox="0 0 24 24"><path d="M4 5h16v12H4z"/><path d="M8 21h8"/><path d="M12 17v4"/></svg>复习
   </button>
@@ -267,8 +278,8 @@ input.t{width:100%;background:var(--card);border:1px solid var(--line);color:var
 </script>
 
 <!-- 版本号必须跟 app.js 的 BUILD 一起改：否则手机 WebView 会吃旧缓存，看不到新功能 -->
-<script src="conv.js?v=2026-11-14.5"></script>
-<script src="sync.js?v=2026-11-14.5"></script>
-<script src="app.js?v=2026-11-14.5"></script>
+<script src="conv.js?v=2026-11-14.6"></script>
+<script src="sync.js?v=2026-11-14.6"></script>
+<script src="app.js?v=2026-11-14.6"></script>
 </body>
 </html>
