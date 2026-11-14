@@ -368,6 +368,14 @@ const SRC_SET = ['dom', 'text', 'ocr', 'ai'];
       && ocrPages.verdict === 'ok' && ocrPages.playable === true, ocrPages);
     check('同一页重转是「替换」不是「追加」',
       ocrPages.page1Paras === 3 && ocrPages.totalParas === 6, ocrPages);
+    // 分辨率护栏：低分辨率扫描件识别不可靠，必须标红（不是「可以听」）
+    const lowres = await evalT(cdp, `
+      const r = await ZConv.upsertPageText({ key: 'lowres-fixture.pdf', name: '低分辨率扫描.pdf', kind: 'pdf', page: 1,
+        lines: ['这是一段足够长的识别文本，用来让字数过线。'.repeat(4)], ms: 900, total: 1, lang: 'zh', lowRes: true });
+      return { verdict: r.archive.verdict, playable: r.archive.playable, reasons: r.archive.coverage.reasons };
+    `, 60000);
+    check('低分辨率 OCR 必须标红、不许标可听' ,
+      lowres.verdict === 'incomplete' && lowres.playable === false && lowres.reasons.join('').includes('分辨率低'), lowres);
     check('OCR 档案的报告里带覆盖率与失败页数',
       /覆盖：2\/2 页/.test(ocrPages.report) && /失败 0 页/.test(ocrPages.report), ocrPages.report);
 
