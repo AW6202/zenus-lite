@@ -937,21 +937,83 @@ window.ZConv = (function () {
     return rec;
   }
 
-  // 清洗只做一次、落盘：askFn(messages) → 文本。不做默认自动（成本要可控）。
-  async function cleanArchive(archive, askFn) {
-    const text = (archive.paragraphs || []).map((p) => p.text).join('\n');
-    const chunks = [];
-    const size = 6000;
-    for (let i = 0; i < text.length; i += size) chunks.push(text.slice(i, i + size));
-    const out = [];
-    for (const chunk of chunks) {
-      const res = await askFn([
-        { role: 'system', content: '你在把 OCR/抽字稿整理成可朗读的正文：去掉页眉页脚、断句错乱、图注噪声；保留原意和段落；只输出正文。' },
-        { role: 'user', content: chunk },
-      ]);
-      String(res || '').split(/\n{2,}/).map((s) => s.trim()).filter(Boolean).forEach((s) => out.push(s));
+  // ── 按章清洗 + 章级缓存（2026-11-14）────────────────────
+  // 为什么按章：断词/标点/术语的一致性依赖上下文，跨章硬切会丢；按章还能「读到哪洗到哪」，
+  // 长书不必一次洗完。章内再按 6000 字符二次切，保证单次请求不会大到爆上下文。
+  const CHAPTER_MAX = 6000;
+
+  function hash8(s) {
+    let h = 2166136261;
+    for (let i = 0; i < s.length; i++) {
+      h ^= s.charCodeAt(i);
+      h = (h * 16777619) >>> 0;
     }
-    return applyClean(archive, out, { chunks: chunks.length });
+    return h.toString(16).padStart(8, '0');
+  }
+
+  // 章节边界：靠「短且像标题」判；判不出来就把整篇当一章（宁可少切，不要乱切）
+  function chapterRanges(paragraphs) {
+    const isHeading = (t) => {
+      const s = String(t || '').trim();
+      if (!s || s.length > 40) return false;
+      return /^(第[一二三四五六七八九十百千零〇\d]+[章节回卷篇]|chapter\s+\d+|part\s+\d+|\d+[.、]\s*\S{0,24})$/i.test(s);
+    };
+    const marks = [];
+    for (let i = 0; i < paragraphs.length; i++) {
+      if (i > 0 && isHeading(paragraphs[i].text)) marks.push(i);
+    }
+    if (!marks.length) return [{ from: 0, to: paragraphs.length }];
+    const out = [];
+    if (marks[0] > 0) out.push({ from: 0, to: marks[0] });
+    marks.forEach((m, k) => out.push({ from: m, to: k + 1 < marks.length ? marks[k + 1] : paragraphs.length }));
+    return out;
+  }
+
+  /**
+   * 按章清洗：每章单独问 AI，结果按「章号+内容哈希」缓存。
+   * 缓存命中就完全不发请求；force=true 时整本重洗。
+   */
+  async function cleanArchive(archive, askFn, opts) {
+    const o = opts || {};
+    const paragraphs = archive.paragraphs || [];
+    const ranges = chapterRanges(paragraphs);
+    const cache = { ...(archive.cleanChapters || {}) };
+    const out = [];
+    let reused = 0;
+    let calls = 0;
+    for (let ci = 0; ci < ranges.length; ci++) {
+      const range = ranges[ci];
+      const chapterText = paragraphs.slice(range.from, range.to).map((p) => p.text).join('\n');
+      const key = 'c' + ci + ':' + hash8(chapterText);
+      const hit = !o.force && cache[key] && cache[key].promptVersion === CLEAN_PROMPT_VERSION;
+      if (hit) {
+        reused += 1;
+        cache[key].paragraphs.forEach((t) => out.push(t));
+        continue;
+      }
+      const produced = [];
+      const size = CHAPTER_MAX;
+      for (let i = 0; i < chapterText.length; i += size) {
+        const chunk = chapterText.slice(i, i + size);
+        const res = await askFn([
+          { role: 'system', content: '你在把 OCR/抽字稿整理成可朗读的正文：去掉页眉页脚、断句错乱、图注噪声；保留原意和段落；只输出正文。' },
+          { role: 'user', content: chunk },
+        ]);
+        calls += 1;
+        String(res || '').split(/\n{2,}/).map((s) => s.trim()).filter(Boolean).forEach((s) => produced.push(s));
+      }
+      if (produced.length) {
+        cache[key] = { promptVersion: CLEAN_PROMPT_VERSION, at: Date.now(), paragraphs: produced };
+        produced.forEach((t) => out.push(t));
+      } else {
+        // 这一章没洗出来：保留原文，别把内容弄丢
+        paragraphs.slice(range.from, range.to).forEach((p) => out.push(p.text));
+      }
+    }
+    const rec = await applyClean(archive, out, { chunks: calls, chapters: ranges.length, reused });
+    const withCache = { ...rec, cleanChapters: cache };
+    await dbPut(S_ARC, withCache);
+    return withCache;
   }
 
   function setView(archive, which) {
