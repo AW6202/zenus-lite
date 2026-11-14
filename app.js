@@ -1,7 +1,7 @@
 // 学习机 Lite — 静态 PWA：内容来自 pack.json，进度存本地，AI 直连 OpenAI 兼容接口
 'use strict';
 
-const BUILD = '2026-11-14.16';
+const BUILD = '2026-11-14.17';
 
 const LS = {
   progress: 'zenus.progress.v1',
@@ -113,6 +113,19 @@ function coreCall(cmd, args = {}, timeout = 15000) {
   if (!nativePort()) return Promise.resolve(null);
   return nativeCall(cmd, args, timeout).catch(() => null);
 }
+
+// 桌面快捷方式：原生把 route 记在 SharedPreferences（网页读不到它），由桥的 shortcut.take 取走即清。
+// 冷启动（init 里调）和「App 已开时点图标」（原生发 zenus:shortcut 事件）都走这一条。
+// 听书那条 route 不会到网页：原生点了就直接起前台服务，不绕网页。
+async function takeShortcut() {
+  const r = await coreCall('shortcut.take', {}, 4000);
+  const route = r && typeof r.route === 'string' ? r.route : '';
+  if (route !== 'learn') return;
+  if (state.tab === 'today') return;   // 已经在这一页，不用白重绘
+  state.tab = 'today';
+  render();
+}
+window.addEventListener('zenus:shortcut', () => { takeShortcut(); });
 
 // AI 收口：App 里走原生 ai.ask（统一 key/规则/偏好/产物），浏览器里返回 null 走原来的直连
 async function coreAsk(skill, opts = {}) {
@@ -8037,6 +8050,10 @@ async function pullWebCards() {
     pullWebCards();
     setTimeout(pullWebCards, 1500);
     setTimeout(pullWebCards, 6000);
+    // 桌面快捷方式「学习机」：切到「今天」页。桥同样可能晚到，按同一节奏重试（取走即清，多调无副作用）
+    takeShortcut();
+    setTimeout(takeShortcut, 1200);
+    setTimeout(takeShortcut, 3500);
     // 原生学习内核：首次导入本机进度（幂等）+ 拉阅读器存的待确认卡
     importToCoreOnce();
     setTimeout(importToCoreOnce, 2000);
