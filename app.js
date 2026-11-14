@@ -1,7 +1,7 @@
 // 学习机 Lite — 静态 PWA：内容来自 pack.json，进度存本地，AI 直连 OpenAI 兼容接口
 'use strict';
 
-const BUILD = '2026-11-14.14';
+const BUILD = '2026-11-14.15';
 
 const LS = {
   progress: 'zenus.progress.v1',
@@ -364,6 +364,29 @@ async function persistMaterial(kind) {
   } catch (e) { /* 隐私模式/配额不足：静默，不影响阅读 */ }
 }
 
+// NG 当前章 → 学习机材料（打通 MCP 听的文字与学习机阅读/测验/问 AI）
+// 依赖原生桥 ng.chapter；取不到就明说，不伪造内容。
+async function importNgChapter(chapterIndex) {
+  if (!nativePort()) return toast('要在 App 里用（浏览器取不到 NG）');
+  const r = await coreCall('ng.chapter', { chapter: Number(chapterIndex) || 0 }, 20000);
+  if (!r || !r.ok || !r.text || !String(r.text).trim()) {
+    return toast((r && r.error) || '取不到 NG 的章节（先在 NG 里打开一本书）');
+  }
+  const name = (r.book || 'NG 书') + ' · 第 ' + ((Number(r.chapter) || 0) + 1) + ' 章';
+  const id = 'ng:' + (r.book || '') + ':' + (Number(r.chapter) || 0);
+  const chapters = [{ title: r.title || name, text: String(r.text) }];
+  await matPut({
+    id, name, kind: 'text', savedAt: Date.now(),
+    bytes: JSON.stringify(chapters).length, chapters, origin: { ng: true },
+  });
+  try {
+    if (window.ZConv) {
+      await ZConv.archiveBook({ name, chapters, origin: { ng: true } }, { kind: 'text', name, key: id });
+    }
+  } catch (e) { /* 建档失败不阻塞导入 */ }
+  toast('已导入：' + name);
+  return { id, name };
+}
 // 从库里重新打开一份材料
 async function openStoredMaterial(id) {
   try {
