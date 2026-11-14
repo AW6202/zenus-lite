@@ -1,7 +1,7 @@
 // 学习机 Lite — 静态 PWA：内容来自 pack.json，进度存本地，AI 直连 OpenAI 兼容接口
 'use strict';
 
-const BUILD = '2026-11-14.15';
+const BUILD = '2026-11-14.16';
 
 const LS = {
   progress: 'zenus.progress.v1',
@@ -1336,6 +1336,7 @@ async function renderToday() {
     + '</div>'
     + readingBlock
     + listenBlock
+    + (nativePort() ? '<div class="row" style="margin-top:12px"><button class="btn" id="todayImportNg">导入 NG 当前章（可读 / 可测 / 可问）</button></div>' : '')
     + '<div class="hint" style="margin-top:14px">统计口径：这里只有本机记到的复习与生词、以及 <b>Aegis 自己听的</b>时长与字数；'
     + '在 NG 里读的、在电脑上听的时间拿不到（§D8）。</div>';
 
@@ -1350,6 +1351,18 @@ async function renderToday() {
   if (r2) r2.onclick = () => go('review');
   const r3 = document.getElementById('todayInbox');
   if (r3) r3.onclick = () => go('review');
+  // 「导入 NG 当前章」：把 MCP 听的文字变成学习机能读/能测的材料
+  const im = document.getElementById('todayImportNg');
+  if (im) im.onclick = async () => {
+    im.disabled = true;
+    try {
+      const idx = (state.today.book && state.today.book.chapterIndex) || 0;
+      const r = await importNgChapter(idx);
+      if (r) go('shelf');
+    } finally {
+      im.disabled = false;
+    }
+  };
 }
 
 function renderChat() {
