@@ -1,7 +1,7 @@
 // 学习机 Lite — 静态 PWA：内容来自 pack.json，进度存本地，AI 直连 OpenAI 兼容接口
 'use strict';
 
-const BUILD = '2026-11-14.11';
+const BUILD = '2026-11-14.12';
 
 const LS = {
   progress: 'zenus.progress.v1',
@@ -3356,12 +3356,12 @@ async function ocrCanvasNative(canvas) {
     if (!r || typeof r.text !== 'string' || !r.text.trim()) return null;
     const lines = r.text.split('\n').map((s) => s.trim()).filter(Boolean);
     if (!lines.length) return null;
-    return { lines, ms: Number(r.ms) || (Date.now() - t0), boxes: Number(r.boxes) || 0 };
+    return { lines, ms: Number(r.ms) || (Date.now() - t0), boxes: Number(r.boxes) || 0, lowRes: !!r.lowRes };
   } catch { return null; }
 }
 
 // 识别结果落档（§3 第 3 级：每段标 ocr、覆盖率可见、同页重转是替换）
-async function saveOcrPage(lines, ms, page) {
+async function saveOcrPage(lines, ms, page, lowRes) {
   if (!window.ZConv || !RDR.key) return null;
   try {
     return await ZConv.upsertPageText({
@@ -3372,6 +3372,7 @@ async function saveOcrPage(lines, ms, page) {
       lines,
       ms,
       total: RDR.total || 0,
+      lowRes: !!lowRes,
       lang: settings.readerLang || 'zh',
     });
   } catch { return null; }
@@ -3395,7 +3396,7 @@ async function ocrAllPages() {
       const hi = await renderHiResPageCanvas(n).catch(() => null);
       const native = hi ? await ocrCanvasNative(hi) : null;
       if (native && native.lines.length) {
-        const saved = await saveOcrPage(native.lines, native.ms, n);
+        const saved = await saveOcrPage(native.lines, native.ms, n, native.lowRes);
         if (saved) lastReport = saved.archive.coverage;
         done++;
         streak = 0;
@@ -3432,7 +3433,7 @@ async function ocrCurrentPage() {
     if (native) {
       RDR.textLines = native.lines;
       RDR.textMode = true;
-      const saved = await saveOcrPage(native.lines, native.ms);
+      const saved = await saveOcrPage(native.lines, native.ms, RDR.page, native.lowRes);
       const st = document.getElementById('ocrStatus');
       if (st) st.remove();
       renderReader();
@@ -3462,7 +3463,7 @@ async function ocrCurrentPage() {
       if (!lines.length) throw new Error('这一页没认出文字');
       RDR.textLines = lines;
       RDR.textMode = true;
-      const saved = await saveOcrPage(lines, 0);
+      const saved = await saveOcrPage(lines, 0, RDR.page, false);
       const st = document.getElementById('ocrStatus');
       if (st) st.remove();
       renderReader();

@@ -850,6 +850,8 @@ window.ZConv = (function () {
       pages, paragraphs, allChars: result && result.allChars, ms: Date.now() - t0, startedAt, partial, nextPage,
       docPages: result && result.docPages,
     });
+    // 分辨率护栏：短边不足 1600 的扫描件识别不可靠，必须标红，不许当可听
+    if (o.lowRes) coverage.reasons.push("识别分辨率低（短边 < 1600），结果不可靠");
     const verdict = verdictOf(coverage);
     const archive = {
       id: docId + '@' + startedAt.toString(36),
@@ -993,6 +995,8 @@ window.ZConv = (function () {
       pages, paragraphs, ms: o.ms || 0, startedAt,
       docPages: Math.max(Number(o.total) || 0, pages.length),
     });
+    // 分辨率护栏：短边不足 1600 的扫描件识别不可靠，必须标红，不许当可听
+    if (o.lowRes) coverage.reasons.push("识别分辨率低（短边 < 1600），结果不可靠");
     const verdict = verdictOf(coverage);
     const archive = {
       id: docId + '@' + Date.now().toString(36),
