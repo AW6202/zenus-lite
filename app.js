@@ -1,7 +1,7 @@
 // 学习机 Lite — 静态 PWA：内容来自 pack.json，进度存本地，AI 直连 OpenAI 兼容接口
 'use strict';
 
-const BUILD = '2026-11-15.21';
+const BUILD = '2026-11-15.22';
 
 const LS = {
   progress: 'zenus.progress.v1',
@@ -1214,6 +1214,7 @@ async function renderShelfTab() {
 
   let mats = [];
   try { mats = await matAll(); } catch { mats = []; }
+  mats = await migrateLegacyNgMaterials(mats);
   mats.sort((a, b) => (b.savedAt || 0) - (a.savedAt || 0));
   const docs = (window.ZConv ? await ZConv.docAll() : []).filter((d) => !d.deletedAt);
 
@@ -1381,6 +1382,42 @@ async function renderShelfTab() {
 }
 
 function normTitle(s) { return String(s || '').replace(/\s+/g, '').trim(); }
+
+// 2026-11-15：老版本「导入 NG 当前章」是**一章一份材料**（id `ng:<书>:<章>`，名字带「· 第 N 章」），
+// 新版本一本书一份（`ngbook:<书>`）。书架里因此会同时出现「书名」和「书名 · 第 537 章」两本。
+// 这里把存量逐章材料并进书里再删掉——只搬正文，不动 NG，也不新建重复卡。
+async function migrateLegacyNgMaterials(mats) {
+  const legacy = (mats || []).filter((m) => /^ng:/.test(String(m.id || '')));
+  if (!legacy.length) return mats;
+  for (const old of legacy) {
+    const mm = /^(.*) · 第 (\d+) 章$/.exec(String(old.name || ''));
+    if (!mm) continue;
+    const book = mm[1].trim();
+    const idx = Math.max(0, (Number(mm[2]) || 1) - 1);
+    const targetId = 'ngbook:' + book;
+    const target = (mats || []).find((m) => m.id === targetId);
+    const chapters = ((target && target.chapters) || []).slice();
+    for (const c of (old.chapters || [])) {
+      const ci = (c.idx != null) ? Number(c.idx) : idx;
+      if (!chapters.some((x) => Number(x.idx) === ci)) {
+        chapters.push({ idx: ci, title: c.title || ('第 ' + (ci + 1) + ' 章'), text: c.text || '' });
+      }
+    }
+    chapters.sort((a, b) => (Number(a.idx) || 0) - (Number(b.idx) || 0));
+    const payload = chapters.map((c) => ({ idx: Number(c.idx) || 0, title: c.title || '', text: c.text || '' }));
+    await matPut({
+      id: targetId,
+      name: book,
+      kind: 'text',
+      savedAt: Date.now(),
+      bytes: JSON.stringify(payload).length,
+      chapters: payload,
+      origin: (target && target.origin) || { ng: true, title: book },
+    });
+    await matDelete(old.id);
+  }
+  return matAll();
+}
 
 // 网页档案 → 材料 → 阅读器。
 // 第一次点会把档案正文落成一份材料（id = doc:<docId>），之后就是普通材料；档案本身不动。
@@ -3550,7 +3587,9 @@ function renderReader() {
       + '<input type="file" id="pdfFile" accept=".pdf,.epub,.docx,.txt,.md,.png,.jpg,.jpeg,.webp,image/*,application/pdf,application/epub+zip,'
       + 'application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain" style="display:none">';
     document.getElementById('pickPdf').onclick = () => document.getElementById('pdfFile').click();
-    document.getElementById('shelfBtn').onclick = () => go('shelf');
+    // 2026-11-15 修：这里不能调 go()——go 是 renderToday() 里的局部函数（见上面 const go），
+    // 拿到外面就是 ReferenceError: go is not defined（用户点「书架」直接报错）。
+    document.getElementById('shelfBtn').onclick = () => { state.tab = 'shelf'; render(); };
     document.getElementById('srcBtn').onclick = () => renderSourceManager();
     document.getElementById('findBooks').onclick = () => renderFind();
     document.getElementById('lookupBtn').onclick = () => renderLookup();

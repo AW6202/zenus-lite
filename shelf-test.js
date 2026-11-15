@@ -377,6 +377,31 @@ const STUB = `
     check('非当前 NG 书也能点开（从第 1 章开始）',
       ngOther.found && ngOther.book === '英文教材' && ngOther.first === 0, ngOther);
 
+    // ── 7. 2026-11-15：材料页「书架」按钮的 ReferenceError + 老版逐章材料合并 ──
+    const shelfBtn = await cdp.eval(`
+      resetBook(); state.tab = 'reader'; render();
+      const btn = document.getElementById('shelfBtn');
+      let err = '';
+      try { btn.click(); } catch (e) { err = String((e && e.message) || e); }
+      await new Promise((r) => setTimeout(r, 500));
+      return { err, tab: state.tab };
+    `);
+    check('材料页点「书架」不再报 ReferenceError，直接切到书架 tab',
+      shelfBtn.err === '' && shelfBtn.tab === 'shelf', shelfBtn);
+
+    const legacyMerge = await cdp.eval(`
+      await matPut({ id: 'ng:某书:536', name: '某书 · 第 537 章', kind: 'text', savedAt: Date.now(),
+        bytes: 10, chapters: [{ title: '第 537 章', text: '旧章节正文。'.repeat(20) }], origin: { ng: true } });
+      state.tab = 'shelf'; state.shelfFilter = 'all'; await renderShelfTab();
+      const mats = await matAll();
+      const merged = mats.find((m) => m.id === 'ngbook:某书');
+      return { legacyGone: !mats.some((m) => m.id === 'ng:某书:536'),
+               mergedChapters: merged ? merged.chapters.length : 0,
+               firstIdx: merged && merged.chapters[0] ? merged.chapters[0].idx : null };
+    `);
+    check('老版「一章一份材料」并入一本书，书架不再出现两本同名书',
+      legacyMerge.legacyGone && legacyMerge.mergedChapters === 1 && legacyMerge.firstIdx === 536, legacyMerge);
+
     console.log('');
   } catch (err) {
     check('跑完整个流程', false, { err: err.message, stack: String(err.stack || '').slice(0, 500) });
