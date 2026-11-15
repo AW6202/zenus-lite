@@ -1,7 +1,7 @@
 // 学习机 Lite — 静态 PWA：内容来自 pack.json，进度存本地，AI 直连 OpenAI 兼容接口
 'use strict';
 
-const BUILD = '2026-11-14.17';
+const BUILD = '2026-11-15.18';
 
 const LS = {
   progress: 'zenus.progress.v1',
@@ -349,7 +349,8 @@ async function matDelete(id) {
 async function persistMaterial(kind) {
   try {
     if (!RDR.book || !RDR.book.chapters || !RDR.book.chapters.length) return;
-    const payload = RDR.book.chapters.map((c) => ({ title: c.title || '', text: c.text || '', html: c.html || '' }));
+    // 章节上的额外字段（NG 书的 idx）也要保住，否则「继续抓」不知道抓到第几章了
+    const payload = RDR.book.chapters.map((c) => ({ ...c, title: c.title || '', text: c.text || '', html: c.html || '' }));
     const json = JSON.stringify(payload);
     if (json.length > MAT_MAX_BYTES) return;          // 太大就不存，别把配额撑爆
     const id = RDR.key || (RDR.book.name + '|' + json.length);
@@ -379,29 +380,23 @@ async function persistMaterial(kind) {
 
 // NG 当前章 → 学习机材料（打通 MCP 听的文字与学习机阅读/测验/问 AI）
 // 依赖原生桥 ng.chapter；取不到就明说，不伪造内容。
+// 2026-11-15：不再「一章一份材料」——同一本书归到同一个材料（ngbook:<书名>），
+// 否则书架每导一章就多一张卡，点开还不是同一本。
 async function importNgChapter(chapterIndex) {
   if (!nativePort()) return toast('要在 App 里用（浏览器取不到 NG）');
   const r = await coreCall('ng.chapter', { chapter: Number(chapterIndex) || 0 }, 20000);
   if (!r || !r.ok || !r.text || !String(r.text).trim()) {
     return toast((r && r.error) || '取不到 NG 的章节（先在 NG 里打开一本书）');
   }
-  const name = (r.book || 'NG 书') + ' · 第 ' + ((Number(r.chapter) || 0) + 1) + ' 章';
-  const id = 'ng:' + (r.book || '') + ':' + (Number(r.chapter) || 0);
-  const chapters = [{ title: r.title || name, text: String(r.text) }];
-  await matPut({
-    id, name, kind: 'text', savedAt: Date.now(),
-    bytes: JSON.stringify(chapters).length, chapters, origin: { ng: true },
-  });
-  try {
-    if (window.ZConv) {
-      await ZConv.archiveBook({ name, chapters, origin: { ng: true } }, { kind: 'text', name, key: id });
-    }
-  } catch (e) { /* 建档失败不阻塞导入 */ }
-  toast('已导入：' + name);
-  return { id, name };
+  const book = r.book || 'NG 书';
+  const idx = Number(r.chapter) || 0;
+  const saved = await saveNgChapter(book, idx, r.title, r.text);
+  toast('已导入：《' + book + '》第 ' + (idx + 1) + ' 章（书架里可直接打开）');
+  return { id: saved.id, name: book };
 }
-// 从库里重新打开一份材料
-async function openStoredMaterial(id) {
+// 从库里重新打开一份材料。chIndex 给了就跳到那一章（NG 书点开时用），
+// 不给才按上次的阅读位置恢复。
+async function openStoredMaterial(id, chIndex) {
   try {
     const all = await matAll();
     const rec = all.find((r) => r.id === id);
@@ -413,8 +408,14 @@ async function openStoredMaterial(id) {
     RDR.ch = 0;
     RDR.key = rec.id;
     RDR.pageIdx = 0;
-    // 从书架重开也要回到上次读到的章/页：applyReadPos() 会把 RDR.ch 和待恢复的页内比例填好
-    const ratio = applyReadPos();
+    let ratio = 0;
+    if (chIndex != null && Number.isFinite(Number(chIndex)) && chIndex >= 0) {
+      // 明确要读这一章：别让「上次读到第几章」把位置抢走
+      RDR.ch = Math.min(Number(chIndex) || 0, Math.max(0, (rec.chapters || []).length - 1));
+      RDR.pendingRatio = 0;
+    } else {
+      ratio = applyReadPos();
+    }
     renderReader();
     if (ratio) requestAnimationFrame(() => scrollToRatio(ratio));
   } catch (e) {
@@ -1168,44 +1169,84 @@ async function openArchiveViewer(docId) {
   }
 }
 
+// 2026-11-15：底部「书架」= **唯一书架**。
+// 以前有两个书架（底部这个只列 NG 目录、材料里那个才能读），用户明确要求收敛成一个入口：
+// 这里把 ①材料（书源书/文件/漫画/NG 导入）②网页档案 ③NG 书目 放在同一页，点卡片就是读。
 async function renderShelfTab() {
+  window.__zenusMenuMode = '';
   if (state.shelf.at === 0 && nativePort() && !state.shelfPulling) {
     view.innerHTML = '<div class="empty">正在向 NG 取书架…</div>';
     await pullShelf(true);
   }
   // 「记下这页」的原生档案先誊进来（按 url 去重，重复进来不会多一张卡）
   if (nativePort() && window.ZConv) await pullNativePages();
+
+  let mats = [];
+  try { mats = await matAll(); } catch { mats = []; }
+  mats.sort((a, b) => (b.savedAt || 0) - (a.savedAt || 0));
   const docs = (window.ZConv ? await ZConv.docAll() : []).filter((d) => !d.deletedAt);
-  const webKinds = ['html', 'web'];
-  const books = (state.shelf.books || []).map((b) => ({
-    type: 'book',
-    title: String(b.title || (b.workKey || '').split('\n')[0] || '未命名'),
-    sub: [b.author, (Number(b.chapterIndex) || 0) > 0 ? '第 ' + (Number(b.chapterIndex) + 1) + ' 章' : '']
-      .filter(Boolean).join(' · '),
-    at: Number(b.lastReadAt) || 0,
+
+  const kindName = (k) => k === 'epub' ? 'EPUB' : k === 'docx' ? 'DOCX' : k === 'md' ? 'MD'
+    : k === 'web' ? '网页' : k === 'comic' ? '漫画' : '文本';
+  // 文档已经落成过材料（doc.key 或材料 origin.docId）就不再重复列一张卡
+  const matIds = new Set(mats.map((m) => m.id));
+  const linkedDocs = new Set(mats.map((m) => (m.origin && m.origin.docId) || '').filter(Boolean));
+
+  // ① 材料：点开直接读（材料里的书源书还能「继续抓」）
+  const matItems = mats.map((r) => ({
+    type: r.kind === 'web' ? 'web' : 'book',
+    src: 'mat',
+    title: String(r.name || '未命名'),
+    sub: (r.origin && r.origin.ng ? 'NG · ' : '') + kindName(r.kind) + ' · ' + Math.round((r.bytes || 0) / 1024) + 'KB'
+      + (flatWarn(r) ? ' · 旧版抓取（没分段）' : ''),
+    at: Number(r.savedAt) || 0,
+    order: 0,
     keywords: [],
     domain: '',
-    order: 1,
+    level4: false,
+    id: r.id,
+    mat: r,
   }));
-  const webs = docs.filter((d) => webKinds.includes(String(d.kind || 'html')))
+  // ② 网页档案：点开就读（第一次点把正文落成材料，之后按材料读；档案本身不动）
+  const docItems = docs
+    .filter((d) => ['html', 'web'].includes(String(d.kind || 'html')))
+    .filter((d) => !(d.key && matIds.has(d.key)) && !linkedDocs.has(d.docId))
     .map((d) => ({
       type: 'web',
+      src: 'doc',
       title: String(d.name || '未命名网页'),
       sub: '',
       at: Number(d.updatedAt) || 0,
+      order: 2,
       keywords: shelfKeywords(d),
       domain: shelfDomain(d),
       level4: Number(d.sourceLevel) === 4,
       docId: d.docId,
-      key: d.key || d.docId,
-      order: 0,
     }));
+  // ③ NG 书目：已经导入过的（材料 id = ngbook:<书名>）不再重复列一张卡。
+  // 只有「NG 正在读的那一本」能当场导入本章，其余等下一批接目录接口。
+  const importedNg = new Set(mats.map((m) => String(m.id || '')).filter((id) => id.startsWith('ngbook:')));
+  const books = (state.shelf.books || []).filter((b) => {
+    const t = String(b.title || (b.workKey || '').split('\n')[0] || '');
+    return !importedNg.has('ngbook:' + t);
+  }).map((b) => ({
+    type: 'book',
+    src: 'ng',
+    title: String(b.title || (b.workKey || '').split('\n')[0] || '未命名'),
+    sub: [b.author, (Number(b.chapterIndex) || 0) > 0 ? '第 ' + (Number(b.chapterIndex) + 1) + ' 章' : '']
+      .filter(Boolean).join(' · '),
+    at: Number(b.lastReadAt) || 0,
+    order: 1,
+    keywords: [],
+    domain: '',
+    book: b,
+  }));
+
   const f = state.shelfFilter;
-  let items = books.concat(webs);
+  let items = matItems.concat(books, docItems);
   if (f === 'book') items = items.filter((x) => x.type === 'book');
   if (f === 'web') items = items.filter((x) => x.type === 'web');
-  // 按最近阅读排：网页有真时间戳，书没有就用 NG 返回的顺序（浏览器排序是稳定的）
-  items = items.slice().sort((a, b) => (b.at || 0) - (a.at || 0) || (b.order - a.order));
+  items = items.slice().sort((a, b) => (b.at || 0) - (a.at || 0) || (a.order - b.order));
 
   const chips = [['all', '全部'], ['book', '只看书'], ['web', '只看网页']]
     .map(([k, label]) => `<button class="${f === k ? 'on' : ''}" data-filter="${k}">${label}</button>`).join('');
@@ -1219,27 +1260,57 @@ async function renderShelfTab() {
     banner = '<div class="banner">NG 现在不在，显示的是缓存 —— 数据截至 ' + fmtWhen(state.shelf.at)
       + (state.shelf.error ? '（' + esc(state.shelf.error) + '）' : '') + '</div>';
   } else {
-    banner = '<div class="banner">数据截至 ' + fmtWhen(state.shelf.at) + '　共 ' + books.length + ' 本书 · ' + webs.length + ' 篇网页</div>';
+    banner = '<div class="banner">数据截至 ' + fmtWhen(state.shelf.at) + '　共 ' + books.length + ' 本书 · '
+      + docItems.length + ' 篇网页</div>';
   }
+  const matLine = mats.length
+    ? '<div class="hint">本机材料 ' + mats.length + ' 份：点卡片直接读；读到抓完的那章，在目录里点「继续抓」。</div>'
+    : '';
 
   const cards = items.map((it, i) => {
     const kw = it.keywords.length
       ? '<div class="kw">' + it.keywords.map((k) => '<span>' + esc(k) + '</span>').join('') + '</div>'
       : '';
-    const bottom = it.type === 'web'
-      ? '<div class="dom">' + (it.domain ? '来源：' + esc(it.domain) : '本机档案')
+    let bottom;
+    if (it.src === 'mat') {
+      bottom = '<div class="dom">' + (it.sub ? esc(it.sub) : '材料')
+        + (it.mat && it.mat.origin && it.mat.origin.raw
+          ? ' <button class="matBtn" data-refetch="' + esc(it.id) + '">重抓</button>' : '')
+        + ' <button class="matBtn" data-del="' + esc(it.id) + '">删除</button></div>';
+    } else if (it.src === 'doc') {
+      bottom = '<div class="dom">' + (it.domain ? '来源：' + esc(it.domain) : '本机档案')
         + (it.level4 ? ' · 仅收藏，不能听' : '')
         + (it.docId ? ' <button class="arcBtn" data-doc="' + esc(it.docId) + '">档案</button>' : '')
-        + '</div>'
-      : '<div class="dom">' + (it.sub ? esc(it.sub) : 'NG 书架') + '</div>';
-    return `<div class="shelfCard" data-i="${i}" data-type="${it.type}">`
+        + '</div>';
+    } else {
+      bottom = '<div class="dom">' + (it.sub ? esc(it.sub) + ' · ' : '') + 'NG 书架</div>';
+    }
+    return `<div class="shelfCard" data-i="${i}" data-type="${it.type}" data-src="${it.src}">`
       + '<div class="st">' + esc(it.title) + '</div>' + kw + bottom + '</div>';
   }).join('');
 
   view.innerHTML = `<div class="filters" id="shelfFilters">${chips}</div>`
-    + banner
+    + '<div class="row" style="margin:2px 0 8px;flex-wrap:wrap">'
+    + '<button class="btn ghost" id="shSources">书源管理（' + sources.length + '）</button>'
+    + (nativePort() ? '<button class="btn ghost" id="shRefresh">刷新 NG 书目</button>' : '')
+    + '</div>'
+    + banner + matLine
     + (cards ? '<div class="shelfGrid">' + cards + '</div>'
-      : '<div class="empty">' + (f === 'book' ? 'NG 书架是空的' : f === 'web' ? '还没有网页档案' : '书架还是空的') + '</div>');
+      : '<div class="empty">' + (f === 'book' ? '还没有书' : f === 'web' ? '还没有网页档案'
+        : '书架还是空的。<br><span class="sub">在壳里打开网页 → ≡ 菜单「存到书架」；或直接导入本地文件。</span>') + '</div>');
+
+  const srcBtn = document.getElementById('shSources');
+  if (srcBtn) srcBtn.onclick = () => renderSourceManager();
+  const refreshBtn = document.getElementById('shRefresh');
+  if (refreshBtn) {
+    refreshBtn.onclick = async () => {
+      refreshBtn.disabled = true;
+      refreshBtn.textContent = '刷新中…';
+      await pullShelf(true);
+      state.shelfFilter = 'all';
+      await renderShelfTab();
+    };
+  }
 
   document.querySelectorAll('#shelfFilters button').forEach((b) => {
     b.onclick = () => { state.shelfFilter = b.dataset.filter; render(); };
@@ -1247,25 +1318,102 @@ async function renderShelfTab() {
   view.querySelectorAll('.shelfCard').forEach((el) => {
     const it = items[Number(el.dataset.i)];
     el.onclick = async (ev) => {
-      // 「档案」小按钮：看原文 / 抽字稿 / 清洗稿，不要触发「打开材料」
+      const ds = (ev.target && ev.target.dataset) || {};
+      // 「档案」小按钮：看原文 / 抽字稿 / 清洗稿，不要触发「打开」
       if (ev.target && ev.target.classList && ev.target.classList.contains('arcBtn')) {
         ev.stopPropagation();
         if (it && it.docId) await openArchiveViewer(it.docId);
         return;
       }
+      if (ds.del) { ev.stopPropagation(); await matDelete(ds.del); renderShelfTab(); return; }
+      if (ds.refetch) { ev.stopPropagation(); await refetchMaterial(ds.refetch, ev.target); return; }
       if (!it) return;
-      if (it.type === 'web' && it.key) { await openStoredMaterial(it.key); return; }
-      toast('书的正文在 NG 里打开；这里只列目录');
+      if (it.src === 'mat') { await openStoredMaterial(it.id); return; }
+      if (it.src === 'doc') { await openDocAsMaterial(it.docId); return; }
+      await openNgBook(it.book);
     };
     // 长按网页卡片：重抽关键词（§2.2「长按可重抽」；手改留到有编辑框时再做）
     el.oncontextmenu = async (ev) => {
       ev.preventDefault();
-      if (it.type !== 'web' || !it.docId) return;
+      if (!it || it.src !== 'doc' || !it.docId) return;
       const ok = await refreshPageKeywords(it.docId);
       toast(ok ? '关键词已重抽' : '这条没有对应的原生档案（或原生没开）');
       if (ok) render();
     };
   });
+  view.scrollTop = 0;
+}
+
+function normTitle(s) { return String(s || '').replace(/\s+/g, '').trim(); }
+
+// 网页档案 → 材料 → 阅读器。
+// 第一次点会把档案正文落成一份材料（id = doc:<docId>），之后就是普通材料；档案本身不动。
+async function openDocAsMaterial(docId) {
+  if (!window.ZConv) return toast('这个版本没有档案功能');
+  try {
+    const doc = await ZConv.docGet(docId);
+    if (!doc) return toast('这份档案已经不在了');
+    const arc = await ZConv.arcCurrent(docId);
+    const ai = arc ? ZConv.paragraphsOf(arc, 'ai') : [];
+    const src = ai.length ? ai : (arc ? ZConv.paragraphsOf(arc, 'text') : []);
+    const text = src.map((p) => p.text).filter(Boolean).join('\n').trim();
+    if (!text) { await openArchiveViewer(docId); return toast('这份档案没有正文，只能看原文快照'); }
+    const id = 'doc:' + docId;
+    const all = await matAll();
+    const old = all.find((m) => m.id === id);
+    const name = doc.name || '网页';
+    const chapters = [{ title: name, text }];
+    if (!old || !old.chapters || !old.chapters[0] || old.chapters[0].text !== text) {
+      await matPut({
+        id, name, kind: 'text', savedAt: Date.now(),
+        bytes: JSON.stringify(chapters).length, chapters,
+        origin: { docId, url: doc.url || doc.sourceUrl || '', kind: 'doc' },
+      });
+    }
+    await openStoredMaterial(id);
+  } catch (e) {
+    toast('打开失败：' + (e.message || e));
+  }
+}
+
+// NG 书目 → 只有「NG 正在读的那一本」能当场读：用现成的 ng.chapter 取当前章。
+// 其余书要点开即读，得等下一批加上 ng.toc / ng.text（目录 + 任意章）。
+async function openNgBook(book) {
+  const b = book || {};
+  if (!nativePort()) return toast('要在 App 里才能取 NG 的书');
+  const cur = await coreCall('shelf.current', {}, 15000);
+  if (!cur || !cur.ok) return toast('NG 没开（或没有正在读的书）：' + ((cur && cur.error) || '1124 连不上'));
+  if (normTitle(cur.title) !== normTitle(b.title)) {
+    return toast('《' + (b.title || '') + '》的正文在 NG 里。点开即读要等下一批（要加目录接口）；'
+      + '现在先在 NG 里打开它，再回书架点它。');
+  }
+  const idx = Math.max(0, Number(cur.chapterIndex) || 0);
+  const r = await coreCall('ng.chapter', { chapter: idx }, 20000);
+  if (!r || !r.ok || !String(r.text || '').trim()) {
+    return toast((r && r.error) || '这一章还没缓存：先在 NG 里打开这一章，再回来点');
+  }
+  const saved = await saveNgChapter(cur.title || b.title, idx, r.title, r.text);
+  await openStoredMaterial(saved.id, saved.pos);
+}
+
+// 把 NG 的一章写进「这本书」的材料里（同一本书一本书、章节按 idx 排序）。
+// 返回 { id, pos }：pos 是这一章在 chapters 里的下标，打开时直接定位。
+async function saveNgChapter(bookTitle, idx, title, text) {
+  const id = 'ngbook:' + (bookTitle || 'NG 书');
+  const all = await matAll();
+  const old = all.find((m) => m.id === id);
+  const chapters = ((old && old.chapters) || []).slice();
+  const ch = { idx: Number(idx) || 0, title: title || ('第 ' + ((Number(idx) || 0) + 1) + ' 章'), text: String(text || '') };
+  const pos = chapters.findIndex((c) => Number(c.idx) === ch.idx);
+  if (pos >= 0) chapters[pos] = ch;
+  else { chapters.push(ch); chapters.sort((a, c) => (Number(a.idx) || 0) - (Number(c.idx) || 0)); }
+  const payload = chapters.map((c) => ({ idx: Number(c.idx) || 0, title: c.title || '', text: c.text || '' }));
+  await matPut({
+    id, name: bookTitle || 'NG 书', kind: 'text', savedAt: Date.now(),
+    bytes: JSON.stringify(payload).length, chapters: payload,
+    origin: { ng: true, title: bookTitle || '' },
+  });
+  return { id, pos: chapters.findIndex((c) => (Number(c.idx) || 0) === ch.idx) };
 }
 
 // ── 今天页（D7）──────────────────────────────────────────
@@ -3281,7 +3429,7 @@ function renderReader() {
       + '<input type="file" id="pdfFile" accept=".pdf,.epub,.docx,.txt,.md,.png,.jpg,.jpeg,.webp,image/*,application/pdf,application/epub+zip,'
       + 'application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain" style="display:none">';
     document.getElementById('pickPdf').onclick = () => document.getElementById('pdfFile').click();
-    document.getElementById('shelfBtn').onclick = () => renderShelf();
+    document.getElementById('shelfBtn').onclick = () => go('shelf');
     document.getElementById('srcBtn').onclick = () => renderSourceManager();
     document.getElementById('findBooks').onclick = () => renderFind();
     document.getElementById('lookupBtn').onclick = () => renderLookup();
@@ -4368,50 +4516,9 @@ async function srcTestClear() {
   setTestRoundStart('', false);
 }
 
-async function renderShelf() {
-  window.__zenusMenuMode = '';
-  let mats = [];
-  try { mats = await matAll(); } catch { mats = []; }
-  mats.sort((a, b) => (b.savedAt || 0) - (a.savedAt || 0));
-  const kindName = (k) => k === 'epub' ? 'EPUB' : k === 'docx' ? 'DOCX' : k === 'md' ? 'MD' : k === 'web' ? '网页' : k === 'comic' ? '漫画' : '文本';
-  const rows = mats.map((r) =>
-    '<div class="it" data-open="' + esc(r.id) + '" style="display:flex;align-items:center;gap:8px">'
-    + '<div style="flex:1;min-width:0">'
-    + '<div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(r.name || '未命名') + '</div>'
-    + '<div class="sub">' + kindName(r.kind) + (r.kind === 'comic' ? ' · ' + ((r.images || []).length) + ' 张' : '')
-    + ' · ' + new Date(r.savedAt || 0).toLocaleDateString()
-    + ' · ' + Math.round((r.bytes || 0) / 1024) + 'KB'
-    + (flatWarn(r) ? ' · <span style="color:#c00">旧版抓取（没分段）</span>' : '') + '</div></div>'
-    + (r.origin
-      ? '<button class="btn ghost" data-refetch="' + esc(r.id) + '" style="width:auto;padding:6px 10px;font-size:12px">重抓</button>'
-      : '')
-    + '<button class="btn ghost" data-del="' + esc(r.id) + '" style="width:auto;padding:6px 10px;font-size:12px">删除</button>'
-    + '</div>').join('');
-
-  view.innerHTML =
-    '<div class="meta"><span>书架</span><span>' + mats.length + ' 份材料 · ' + sources.length + ' 个书源</span></div>'
-    + '<div class="hint">小说、电子书、书源抓来的书都在这里；读到抓完的那章时，在目录里点「继续抓」。'
-    + '书源在「书源管理」里导入、测试、按源搜书。</div>'
-    + '<div class="row" style="margin:8px 0;flex-wrap:wrap">'
-    + '<button class="btn ghost" id="shBack">← 回材料</button>'
-    + '<button class="btn primary" id="shSources">书源管理（' + sources.length + '）</button></div>'
-    + (rows || '<div class="empty">书架还是空的。<br><span class="sub">在壳里打开网页 → ≡ 菜单「存到书架」；或直接导入本地文件。</span></div>');
-  document.getElementById('shBack').onclick = () => { state.tab = 'reader'; render(); };
-  document.getElementById('shSources').onclick = () => renderSourceManager();
-  view.querySelectorAll('[data-open]').forEach((el) => {
-    el.onclick = (e) => {
-      if (e.target.dataset && (e.target.dataset.del || e.target.dataset.refetch)) return;
-      openStoredMaterial(el.dataset.open);
-    };
-  });
-  view.querySelectorAll('[data-refetch]').forEach((el) => {
-    el.onclick = (e) => { e.stopPropagation(); refetchMaterial(el.dataset.refetch, el); };
-  });
-  view.querySelectorAll('[data-del]').forEach((el) => {
-    el.onclick = async (e) => { e.stopPropagation(); await matDelete(el.dataset.del); renderShelf(); };
-  });
-  view.scrollTop = 0;
-}
+// 2026-11-15：材料书架已并入底部「书架」（renderShelfTab），不再单独渲染一套列表。
+// 保留这个名字给内部调用（书源管理返回、重抓/删除后重绘），避免十几处调用点全改。
+async function renderShelf() { return renderShelfTab(); }
 
 // 旧版抓取的材料是「整章压成一行」（v46 之前 text() 把段落拼平了）。
 // 这类材料没法事后补分段——正文里本来就没有换行信息，只能按书源重抓一遍。
@@ -5774,6 +5881,8 @@ async function fetchMoreChapters(n) {
   if (!b) return;
   const o = b.origin || null;
   const btn = document.getElementById('moreCh');
+  // NG 导进来的书走另一条路（ng.chapter 一次一章，且 NG 那边得先缓存过）
+  if (o && o.ng) return fetchMoreNgChapters(btn);
   if (!o || !o.raw) { toast('这本书没有书源信息（可能是导入的文件），抓不了后面的章节'); return; }
   if (!o.tocUrl) { toast('这本书没记目录地址，抓不了后面的章节'); return; }
   // 换过源的书章节不是从目录第 1 章开始的：origin.baseChapter 记着 chapters[0] 在目录里的位置
@@ -5823,6 +5932,48 @@ async function fetchMoreChapters(n) {
     toast('抓取失败：' + (e.message || e));
   } finally {
     if (btn) { btn.disabled = false; btn.textContent = '继续抓 ' + MORE_BATCH + ' 章'; }
+  }
+}
+
+// 「继续抓 NG 章」：NG 的书一次一章（ng.chapter），NG 那边没缓存就当场失败，
+// 所以一次只抓 3 章、失败立刻停并说原因，不空转。
+async function fetchMoreNgChapters(btn) {
+  const b = RDR.book;
+  if (!b) return;
+  if (!nativePort()) { toast('要在 App 里才能取 NG 的章节'); return; }
+  const o = b.origin || { ng: true };
+  const lastIdx = (b.chapters || []).reduce((m, c) => Math.max(m, Number(c.idx) || 0), -1);
+  const start = lastIdx + 1;
+  const WANT = 3;
+  if (btn) { btn.disabled = true; btn.textContent = '抓取中…'; }
+  let added = 0;
+  let why = '';
+  try {
+    for (let i = 0; i < WANT; i++) {
+      const idx = start + i;
+      const r = await coreCall('ng.chapter', { chapter: idx }, 25000);
+      if (!r || !r.ok || !String(r.text || '').trim()) {
+        why = (r && r.error) || '这一章还没缓存（先在 NG 里翻到这一章）';
+        break;
+      }
+      b.chapters.push({ idx, title: r.title || ('第 ' + (idx + 1) + ' 章'), text: String(r.text) });
+      added++;
+    }
+    if (!added) throw new Error(why || '没抓到正文');
+    o.ng = true;
+    o.lastIdx = start + added - 1;
+    b.origin = o;
+    const payload = b.chapters.map((c) => ({ idx: Number(c.idx) || 0, title: c.title || '', text: c.text || '' }));
+    await matPut({
+      id: RDR.key, name: b.name || 'NG 书', kind: 'text', savedAt: Date.now(),
+      bytes: JSON.stringify(payload).length, chapters: payload, origin: o,
+    });
+    toast('又抓了 ' + added + ' 章（共 ' + b.chapters.length + ' 章）' + (why ? '；下一章：' + why : ''));
+    if (document.getElementById('bookText')) renderTextBook(); else showBookToc();
+  } catch (e) {
+    toast('继续抓失败：' + (e.message || e));
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '继续抓 NG 3 章'; }
   }
 }
 
@@ -7003,10 +7154,13 @@ function renderTextBook() {
   // 读到「已抓到的最后一章」时给条明路：书源的书是一次一批抓下来的，
   // 不提示的话用户会以为这本书到这就完了（实测：加入书架只抓前 5 章）。
   const atTail = RDR.ch >= b.chapters.length - 1;
-  const tailHint = atTail && b.origin && b.origin.raw && b.origin.tocUrl
+  const tailHint = atTail && b.origin && b.origin.ng
     ? '<div class="hint" style="margin:14px 0 40px">已是已抓到的最后一章（' + b.chapters.length + ' 章）。'
-      + '去「目录」点「继续抓 ' + MORE_BATCH + ' 章」往后读。</div>'
-    : '';
+      + '去「目录」点「继续抓 NG 3 章」往后取（NG 里没翻到的章会当场说没缓存）。</div>'
+    : atTail && b.origin && b.origin.raw && b.origin.tocUrl
+      ? '<div class="hint" style="margin:14px 0 40px">已是已抓到的最后一章（' + b.chapters.length + ' 章）。'
+        + '去「目录」点「继续抓 ' + MORE_BATCH + ' 章」往后读。</div>'
+      : '';
   view.innerHTML =
     '<div class="meta"><span>' + esc(b.name) + '</span><span id="pageLabel">'
     + (RDR.paged ? (RDR.pageIdx + 1) + ' / ' + (RDR.pages || 1) : (RDR.ch + 1) + ' / ' + b.chapters.length)
@@ -7283,8 +7437,10 @@ function showBookToc() {
     '<div class="meta"><span>目录</span><span>' + b.chapters.length + ' 节</span></div>'
     + '<div class="row" style="margin:6px 0 10px"><button class="btn ghost" id="tocBack">← 回正文</button>'
     + '<button class="btn ghost" id="tocJump">跳到第…节</button>'
-    + (b.origin && b.origin.raw && b.origin.tocUrl
-      ? '<button class="btn" id="moreCh">继续抓 ' + MORE_BATCH + ' 章</button>' : '')
+    + (b.origin && b.origin.ng
+      ? '<button class="btn" id="moreCh">继续抓 NG 3 章</button>'
+      : b.origin && b.origin.raw && b.origin.tocUrl
+        ? '<button class="btn" id="moreCh">继续抓 ' + MORE_BATCH + ' 章</button>' : '')
     + (b.chapters[cur] && b.chapters[cur].url && !isSourceSpecUrl(b.chapters[cur].url)
       ? '<button class="btn" id="tocReader">阅读模式打开本章</button>'
         + '<button class="btn ghost" id="tocBrowser">浏览器打开本章</button>' : '')

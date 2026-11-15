@@ -276,6 +276,81 @@ const STUB = `
       && arcView.body2 === arcView.body1, arcView);
     check('界面写明「听的时候不能切视图」', arcView.hasHint === true, arcView);
 
+    // ── 6. 2026-11-15 书架收敛：一个书架，点卡片就是读 ──
+    // 材料卡：点开直接进阅读器
+    const matOpen = await cdp.eval(`
+      await matPut({ id: 'm-test', name: '测试材料', kind: 'text', savedAt: Date.now(), bytes: 100,
+        chapters: [{ title: '第一章', text: '测试正文。'.repeat(50) }], origin: null });
+      state.tab = 'shelf'; state.shelfFilter = 'all'; await renderShelfTab();
+      const card = Array.from(view.querySelectorAll('.shelfCard[data-src="mat"]'))
+        .find((c) => c.querySelector('.st').textContent === '测试材料');
+      if (!card) return { found: false };
+      card.click(); await new Promise((r) => setTimeout(r, 600));
+      return { found: true, book: RDR.book && RDR.book.name,
+               hasText: /测试正文/.test((document.getElementById('bookText') || {}).textContent || '') };
+    `);
+    check('材料卡片点开直接进阅读器（不再是「只列目录」）',
+      matOpen.found && matOpen.book === '测试材料' && matOpen.hasText, matOpen);
+
+    // 网页档案卡：点开直接读，且第一次点会把正文落成材料
+    const docOpen = await cdp.eval(`
+      state.tab = 'shelf'; state.shelfFilter = 'all'; await renderShelfTab();
+      const card = Array.from(view.querySelectorAll('.shelfCard[data-src="doc"]'))
+        .find((c) => c.querySelector('.st').textContent === '示例网页甲');
+      if (!card) return { found: false };
+      card.click(); await new Promise((r) => setTimeout(r, 900));
+      const mats = await matAll();
+      return { found: true, book: RDR.book && RDR.book.name,
+               docMat: mats.some((m) => String(m.id || '').startsWith('doc:')),
+               body: /网页正文/.test((document.getElementById('bookText') || {}).textContent || '') };
+    `);
+    check('网页档案卡点开直接读（第一次点落成材料，不再弹「这份材料已经不在了」）',
+      docOpen.found && docOpen.book === '示例网页甲' && docOpen.docMat && docOpen.body, docOpen);
+
+    // NG 当前书：点开就把「NG 正在读的那一章」导入并直接打开
+    const ngOpen = await cdp.eval(`
+      // 前面测「浏览器模式」时把桥关了，这里恢复一个最小的（只认 shelf.current / ng.chapter）
+      window.zenus = {
+        _ls: [],
+        addEventListener(_t, fn) { this._ls.push(fn); },
+        _emit(m) { this._ls.forEach((f) => f({ data: JSON.stringify(m) })); },
+        postMessage(raw) {
+          let req = {};
+          try { req = JSON.parse(raw); } catch (e) { return; }
+          const ok = (data) => this._emit({ id: req.id, ok: true, data });
+          if (req.cmd === 'shelf.current') return ok({ ok: true, title: '狄公案', chapterIndex: 11 });
+          if (req.cmd === 'ng.chapter') return ok({ ok: true, book: '狄公案', chapter: req.args.chapter,
+            title: '第十二回 黄金案', text: '第十二回正文。'.repeat(40) });
+          return ok(null);
+        }
+      };
+      state.shelf.at = Date.now(); state.tab = 'shelf'; state.shelfFilter = 'all';
+      await renderShelfTab();
+      const card = Array.from(view.querySelectorAll('.shelfCard[data-src="ng"]'))
+        .find((c) => c.querySelector('.st').textContent === '狄公案');
+      if (!card) return { found: false };
+      card.click(); await new Promise((r) => setTimeout(r, 900));
+      const mats = await matAll();
+      const m = mats.find((x) => x.id === 'ngbook:狄公案');
+      return { found: true, book: RDR.book && RDR.book.name, ch: RDR.ch,
+               chapters: m ? m.chapters.length : 0, idx: m && m.chapters[0] ? m.chapters[0].idx : null,
+               body: /第十二回正文/.test((document.getElementById('bookText') || {}).textContent || '') };
+    `);
+    check('点 NG 当前书 → 落成「一本书」的材料并直接打开正在读的那章',
+      ngOpen.found && ngOpen.book === '狄公案' && ngOpen.chapters === 1 && ngOpen.idx === 11 && ngOpen.body, ngOpen);
+
+    // 非当前书：明确说「要等下一批」，不假装能读
+    const ngOther = await cdp.eval(`
+      state.shelfFilter = 'all'; await renderShelfTab();
+      const card = Array.from(view.querySelectorAll('.shelfCard[data-src="ng"]'))
+        .find((c) => c.querySelector('.st').textContent === '英文教材');
+      if (!card) return { found: false };
+      card.click(); await new Promise((r) => setTimeout(r, 500));
+      return { found: true, book: RDR.book && RDR.book.name };
+    `);
+    check('非当前 NG 书点击不假装能读（不改当前阅读状态）',
+      ngOther.found && ngOther.book === '狄公案', ngOther);
+
     console.log('');
   } catch (err) {
     check('跑完整个流程', false, { err: err.message, stack: String(err.stack || '').slice(0, 500) });
