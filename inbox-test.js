@@ -187,6 +187,26 @@ const STUB = `
     check('老 APK（没有 inbox.list）能退回 inbox.take，一个词都不少',
       fallback.inbox === 3 && fallback.cmds[0] === 'inbox.list' && fallback.cmds.includes('inbox.take'), fallback);
 
+    // ── 5. 处理过的卡：跳过 / 加入之后，再拉不会回来（2026-11-15 用户报的「跳过的词又出现」）──
+    const handled = await cdp.eval(`
+      window.__inbox.supportsList = true;
+      state.inbox = [];
+      await pullCoreInbox();
+      const before = state.inbox.map((x) => x.id).sort();
+      showInboxSheet();
+      const o = document.getElementById('inboxOverlay');
+      const rows = o.querySelectorAll('[data-row]');
+      rows[0].querySelector('[data-skip]').click();          // alpha：跳过 = 我认识
+      rows[1].querySelector('[data-add]').click();           // beta：加入我的生词
+      await new Promise((r) => setTimeout(r, 900));
+      const close = o.querySelector('#inboxClose');
+      if (close) close.click();
+      await pullCoreInbox();                                  // 原生还是返回三条
+      return { before, left: state.inbox.map((x) => x.id).sort() };
+    `);
+    check('跳过/加入过的待确认，再拉不会重复出现',
+      handled.before.join(',') === 'w-alpha,w-beta,w-gamma' && handled.left.join(',') === 'w-gamma', handled);
+
     console.log('');
   } catch (err) {
     check('跑完整个流程', false, { err: err.message, stack: String(err.stack || '').slice(0, 500) });

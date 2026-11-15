@@ -1,7 +1,7 @@
 // 学习机 Lite — 静态 PWA：内容来自 pack.json，进度存本地，AI 直连 OpenAI 兼容接口
 'use strict';
 
-const BUILD = '2026-11-15.19';
+const BUILD = '2026-11-15.20';
 
 const LS = {
   progress: 'zenus.progress.v1',
@@ -16,6 +16,7 @@ const LS = {
   schema: 'zenus.schema.v2',
   sources: 'zenus.sources.v1',   // Legado 书源（先只存元信息，规则解析下周做）
   inbox: 'zenus.inbox.v1',       // 原生学习内核的「待确认」卡（阅读器存的）
+  inboxDone: 'zenus.inbox.done.v1',   // 已处理过的待确认（id + 词）：原生不清空，这边要记住，否则会反复出现
 };
 
 const DEFAULT_SETTINGS = {
@@ -200,6 +201,7 @@ async function pullCoreInbox() {
   for (const it of arr) {
     const key = it.id || it.front;
     if (!key || seen.has(key)) continue;
+    if (inboxDoneHas(it)) continue;          // 已经加入/跳过的，别再塞回来
     seen.add(key);
     state.inbox.push(it);
     added++;
@@ -227,6 +229,28 @@ function bindInboxPull() {
 }
 
 function saveInbox() { saveJSON(LS.inbox, state.inbox); }
+
+// 已处理过的待确认（2026-11-15）：
+// 原生 inbox 是「只列出、不清空」+ 7 天过期，学习机这边如果只从 state.inbox 里删掉，
+// 下一次 focus/pageshow 拉取会把刚「加入生词」或「跳过」的同一张卡又塞回来 —— 用户看到的就是
+// 「跳过的词又出现了」。所以处理过就记一笔（id + 归一化词），拉取时先过滤。
+let inboxDone = loadJSON(LS.inboxDone, {});
+function inboxDoneHas(it) {
+  if (!it) return false;
+  if (it.id && inboxDone['id:' + it.id]) return true;
+  const w = normWord(it.front || '');
+  return !!(w && inboxDone['w:' + w]);
+}
+function inboxDoneMark(it) {
+  if (!it) return;
+  const now = Date.now();
+  if (it.id) inboxDone['id:' + it.id] = now;
+  const w = normWord(it.front || '');
+  if (w) inboxDone['w:' + w] = now;
+  const cutoff = now - 14 * 24 * 3600 * 1000;      // 原生留 7 天，这边留 14 天
+  Object.keys(inboxDone).forEach((k) => { if (!(inboxDone[k] > cutoff)) delete inboxDone[k]; });
+  saveJSON(LS.inboxDone, inboxDone);
+}
 
 // 读剪贴板：App 里走原生（WebView 常被拒），浏览器里走标准 API
 async function readClipText() {
@@ -809,6 +833,7 @@ function showInboxSheet() {
       }
       // 不要按索引 splice：后面的按钮还拿着旧索引，会跳项。标记后按对象过滤。
       it._resolved = true;
+      inboxDoneMark(it);                       // 记住这张卡已处理，原生那边还留着也不会再回来
       state.inbox = state.inbox.filter((x) => !x._resolved);
       saveInbox();
       const left = state.inbox.length;
@@ -834,6 +859,7 @@ function showInboxSheet() {
         coreCall('learner.markKnown', { word: it.front, why: 'skip' }, 3000).catch(() => {});
       }
       if (it) it._resolved = true;
+      if (it) inboxDoneMark(it);              // 跳过 = 我认识：本地 known + 原生 known + 这里记一笔
       state.inbox = state.inbox.filter((x) => !x._resolved);
       saveInbox();
       const left = state.inbox.length;
@@ -6861,7 +6887,12 @@ async function radarWords() {
 // 本地兜底：不给原生也能跑（浏览器/旧包/原生报错时）。用本机 key + 本地 known
 async function radarWordsLocal(text, bookTitle, chapter, lang) {
   if (!settings.key) return null;
-  const knownList = Object.keys(known).slice(-300);
+  const knownList = Array.from(new Set([
+    ...Object.keys(known),
+    // 已有卡片（我的生词）和还在待确认的，也别再挑一遍（以前只避开「已掌握」）
+    ...((typeof userCards !== 'undefined' && userCards ? userCards : []).map((c) => normWord(c.front))),
+    ...((state.inbox || []).map((c) => normWord(c.front))),
+  ].filter(Boolean))).slice(-300);
   const schema = '{"words":[{"w":"词或搭配","cn":"中文释义","note":"读音/用法/搭配要点","example":"原句"}]}';
   const sysByLang = {
     zh: '你在给中文母语的学习者挑中文词。只输出 JSON，格式必须是：' + schema + '。'
