@@ -1,7 +1,7 @@
 // 学习机 Lite — 静态 PWA：内容来自 pack.json，进度存本地，AI 直连 OpenAI 兼容接口
 'use strict';
 
-const BUILD = '2026-11-15.22';
+const BUILD = '2026-11-15.23';
 
 const LS = {
   progress: 'zenus.progress.v1',
@@ -1661,7 +1661,13 @@ async function renderToday() {
 
   const go = (tab) => { state.tab = tab; render(); };
   const l = document.getElementById('todayListen');
-  if (l) l.onclick = () => toast('听书在 NG 的阅读界面里点「听书」；Aegis 不抢它的阅读界面');
+  // 2026-11-15：直接起 Aegis 自己的听书服务（桥 listen.start），不再只弹「去 NG 点听书」。
+  // 手搓听书早就不依赖 NG 的阅读界面，这里和桌面快捷方式「听当前书」是同一个行为。
+  if (l) l.onclick = async () => {
+    const r = await coreCall('listen.start', {}, 8000);
+    if (r && r.ok) { toast('开始听书：Aegis 自己念，不用回 NG'); return; }
+    toast('启动听书失败：' + ((r && r.error) || '原生桥不可用（装最新包）'));
+  };
   const s = document.getElementById('todayOpenShelf');
   if (s) s.onclick = () => go('shelf');
   const r1 = document.getElementById('todayReview');

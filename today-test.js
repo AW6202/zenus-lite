@@ -108,6 +108,7 @@ const STUB = `
       if (r.cmd === 'reading.state') return this._emit({ id: r.id, ok: true, data: window.__today.reading });
       if (r.cmd === 'stats.get') return this._emit({ id: r.id, ok: true, data: window.__today.stats });
       if (r.cmd === 'inbox.list') return this._emit({ id: r.id, ok: true, data: [] });
+      if (r.cmd === 'listen.start') return this._emit({ id: r.id, ok: true, data: { ok: true } });
       this._emit({ id: r.id, ok: true, data: null });
     }
   };
@@ -182,6 +183,24 @@ const STUB = `
     `);
     check('NG 不在时明说「还不知道你在读哪本」+ 原因',
       /还不知道/.test(offline.title) && /1124/.test(offline.sub), offline);
+
+    // ── 2b. 「继续听」直接起原生听书（2026-11-15）──
+    const listenBtn = await cdp.eval(`
+      window.__today.current = { ok: true, title: '狄公案', author: '高罗佩', chapterIndex: 11, chapterPos: 420 };
+      state.today.at = 0;
+      await render();
+      const b = document.getElementById('todayListen');
+      if (!b) return { found: false };
+      window.__today.calls.length = 0;
+      b.click();
+      await new Promise((r) => setTimeout(r, 600));
+      const calls = window.__today.calls.slice();
+      // 还原今天页状态，别影响后面「浏览器里」那条（它要靠 book=null 才会显示提示）
+      state.today = { at: 0, book: null, reading: [], error: '', stats: [] };
+      return { found: true, calls };
+    `);
+    check('「继续听」直接调原生 listen.start（不再只弹「去 NG 点听书」）',
+      listenBtn.found && listenBtn.calls.includes('listen.start'), listenBtn);
 
     // ── 3. 浏览器里：说明取不到 NG ──
     await cdp.eval('window.zenus = undefined; return true;');
