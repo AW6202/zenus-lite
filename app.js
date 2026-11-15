@@ -1,7 +1,7 @@
 // 学习机 Lite — 静态 PWA：内容来自 pack.json，进度存本地，AI 直连 OpenAI 兼容接口
 'use strict';
 
-const BUILD = '2026-11-15.18';
+const BUILD = '2026-11-15.19';
 
 const LS = {
   progress: 'zenus.progress.v1',
@@ -390,7 +390,7 @@ async function importNgChapter(chapterIndex) {
   }
   const book = r.book || 'NG 书';
   const idx = Number(r.chapter) || 0;
-  const saved = await saveNgChapter(book, idx, r.title, r.text);
+  const saved = await saveNgChapter(book, idx, r.title, r.text, r.workKey);
   toast('已导入：《' + book + '》第 ' + (idx + 1) + ' 章（书架里可直接打开）');
   return { id: saved.id, name: book };
 }
@@ -1328,7 +1328,12 @@ async function renderShelfTab() {
       if (ds.del) { ev.stopPropagation(); await matDelete(ds.del); renderShelfTab(); return; }
       if (ds.refetch) { ev.stopPropagation(); await refetchMaterial(ds.refetch, ev.target); return; }
       if (!it) return;
-      if (it.src === 'mat') { await openStoredMaterial(it.id); return; }
+      if (it.src === 'mat') {
+        // NG 的书走「补目录 / 预取 / 定位当前章」那条；普通材料直接开
+        if (it.mat && it.mat.origin && it.mat.origin.ng) { await openNgMaterial(it.mat); return; }
+        await openStoredMaterial(it.id);
+        return;
+      }
       if (it.src === 'doc') { await openDocAsMaterial(it.docId); return; }
       await openNgBook(it.book);
     };
@@ -1376,29 +1381,107 @@ async function openDocAsMaterial(docId) {
   }
 }
 
-// NG 书目 → 只有「NG 正在读的那一本」能当场读：用现成的 ng.chapter 取当前章。
-// 其余书要点开即读，得等下一批加上 ng.toc / ng.text（目录 + 任意章）。
+// NG 书目 → 学习机阅读（第二批 2026-11-15）：任意一本都能点开。
+// 目录走 ng.toc，正文走 ng.text（先查原生缓存，没有再问 NG）；打开后后台预取下一章。
 async function openNgBook(book) {
   const b = book || {};
   if (!nativePort()) return toast('要在 App 里才能取 NG 的书');
+  const title = String(b.title || '').trim();
+  if (!title) return toast('这本书没有书名');
+  const workKey = String((b.book && b.book.workKey) || b.workKey || '').trim();
+  if (!workKey) return toast('这本书缺 work_key（NG 那边字段没对上），取不了目录');
+  const all = await matAll();
+  const mat = all.find((m) => m.id === 'ngbook:' + title) || null;
+  return openNgBookCore(title, workKey, mat);
+}
+
+// 已经落成材料的 NG 书：从书架点材料卡也走这里（补目录 / 预取 / 定位当前章）。
+async function openNgMaterial(mat) {
+  const o = (mat && mat.origin) || {};
+  if (!o.workKey) return openStoredMaterial(mat.id);
+  return openNgBookCore(mat.name || o.title || 'NG 书', o.workKey, mat);
+}
+
+async function openNgBookCore(title, workKey, mat) {
+  const id = 'ngbook:' + title;
+  const chapters = ((mat && mat.chapters) || []).slice();
+  // 是不是 NG 正在读的那本：是就从 NG 当前章打开，不是就从上次读到的那章 / 第 0 章
   const cur = await coreCall('shelf.current', {}, 15000);
-  if (!cur || !cur.ok) return toast('NG 没开（或没有正在读的书）：' + ((cur && cur.error) || '1124 连不上'));
-  if (normTitle(cur.title) !== normTitle(b.title)) {
-    return toast('《' + (b.title || '') + '》的正文在 NG 里。点开即读要等下一批（要加目录接口）；'
-      + '现在先在 NG 里打开它，再回书架点它。');
+  const isCurrent = !!(cur && cur.ok && normTitle(cur.title) === normTitle(title));
+  let startIdx;
+  if (isCurrent) {
+    startIdx = Math.max(0, Number(cur.chapterIndex) || 0);
+  } else if (chapters.length) {
+    const rp = readPositions[id];
+    const lastPos = Math.max(0, Math.min(Number((rp && rp.ch) || 0), chapters.length - 1));
+    startIdx = Number(chapters[lastPos].idx) || 0;
+  } else {
+    startIdx = 0;
   }
-  const idx = Math.max(0, Number(cur.chapterIndex) || 0);
-  const r = await coreCall('ng.chapter', { chapter: idx }, 20000);
+  // 目录：材料里存过就用，没有再问 NG（上限 300 章）
+  let toc = (mat && mat.origin && Array.isArray(mat.origin.toc) && mat.origin.toc.length)
+    ? mat.origin.toc : null;
+  if (!toc) {
+    const r = await coreCall('ng.toc', { workKey, start: 0, limit: 300 }, 25000);
+    if (r && r.ok && Array.isArray(r.chapters)) {
+      toc = r.chapters.map((c) => ({ idx: Number(c.index) || 0, title: String(c.title || ''), cached: !!c.cached }));
+    }
+  }
+  const origin = { ng: true, workKey, title, toc: toc || [] };
+
+  // 要打开的那一章：本地有就用，没有就 ng.text
+  let pos = chapters.findIndex((c) => Number(c.idx) === startIdx);
+  if (pos < 0) {
+    const r = await coreCall('ng.text', { workKey, index: startIdx }, 25000);
+    if (r && r.ok && String(r.text || '').trim()) {
+      chapters.push({ idx: startIdx, title: r.title || ('第 ' + (startIdx + 1) + ' 章'), text: String(r.text) });
+      chapters.sort((a, c) => (Number(a.idx) || 0) - (Number(c.idx) || 0));
+      pos = chapters.findIndex((c) => Number(c.idx) === startIdx);
+    }
+  }
+  const payload = chapters.map((c) => ({ idx: Number(c.idx) || 0, title: c.title || '', text: c.text || '' }));
+  await matPut({
+    id, name: title, kind: 'text', savedAt: Date.now(),
+    bytes: JSON.stringify(payload).length, chapters: payload, origin,
+  });
+
+  if (pos < 0) {
+    await openStoredMaterial(id);
+    return toast('目录拿到了，但第 ' + (startIdx + 1) + ' 章还没缓存：在「目录」里挑一章，或先在 NG 里打开它');
+  }
+  await openStoredMaterial(id, pos);
+  // 后台预取：让 NG 排后面 2 章 + 把下一章正文预热进本地缓存（不阻塞阅读）
+  const nextIdx = startIdx + 1;
+  coreCall('ng.prefetch', { workKey, start: nextIdx, count: 2 }, 8000);
+  coreCall('ng.text', { workKey, index: nextIdx }, 20000);
+}
+
+// 从 NG 取某一章进当前这本书（目录里点「未下载」的章走这里）。
+async function ngLoadChapter(idx) {
+  const b = RDR.book;
+  const workKey = (b && b.origin && b.origin.workKey) || '';
+  if (!workKey) { toast('这本书缺 work_key，取不了这一章'); return -1; }
+  const r = await coreCall('ng.text', { workKey, index: idx }, 25000);
   if (!r || !r.ok || !String(r.text || '').trim()) {
-    return toast((r && r.error) || '这一章还没缓存：先在 NG 里打开这一章，再回来点');
+    toast((r && r.error) || '这一章还没缓存（先在 NG 里打开这一章）');
+    return -1;
   }
-  const saved = await saveNgChapter(cur.title || b.title, idx, r.title, r.text);
-  await openStoredMaterial(saved.id, saved.pos);
+  const chapters = b.chapters || (b.chapters = []);
+  const ch = { idx: Number(idx) || 0, title: r.title || ('第 ' + ((Number(idx) || 0) + 1) + ' 章'), text: String(r.text) };
+  let pos = chapters.findIndex((c) => Number(c.idx) === ch.idx);
+  if (pos >= 0) chapters[pos] = ch;
+  else { chapters.push(ch); chapters.sort((a, c) => (Number(a.idx) || 0) - (Number(c.idx) || 0)); }
+  const payload = chapters.map((c) => ({ idx: Number(c.idx) || 0, title: c.title || '', text: c.text || '' }));
+  await matPut({
+    id: RDR.key, name: b.name || 'NG 书', kind: 'text', savedAt: Date.now(),
+    bytes: JSON.stringify(payload).length, chapters: payload, origin: b.origin,
+  });
+  return chapters.findIndex((c) => (Number(c.idx) || 0) === ch.idx);
 }
 
 // 把 NG 的一章写进「这本书」的材料里（同一本书一本书、章节按 idx 排序）。
 // 返回 { id, pos }：pos 是这一章在 chapters 里的下标，打开时直接定位。
-async function saveNgChapter(bookTitle, idx, title, text) {
+async function saveNgChapter(bookTitle, idx, title, text, workKey, toc) {
   const id = 'ngbook:' + (bookTitle || 'NG 书');
   const all = await matAll();
   const old = all.find((m) => m.id === id);
@@ -1408,10 +1491,17 @@ async function saveNgChapter(bookTitle, idx, title, text) {
   if (pos >= 0) chapters[pos] = ch;
   else { chapters.push(ch); chapters.sort((a, c) => (Number(a.idx) || 0) - (Number(c.idx) || 0)); }
   const payload = chapters.map((c) => ({ idx: Number(c.idx) || 0, title: c.title || '', text: c.text || '' }));
+  const prev = (old && old.origin) || {};
   await matPut({
     id, name: bookTitle || 'NG 书', kind: 'text', savedAt: Date.now(),
     bytes: JSON.stringify(payload).length, chapters: payload,
-    origin: { ng: true, title: bookTitle || '' },
+    origin: {
+      ...prev,
+      ng: true,
+      title: bookTitle || '',
+      workKey: workKey || prev.workKey || '',
+      toc: Array.isArray(toc) ? toc : (prev.toc || []),
+    },
   });
   return { id, pos: chapters.findIndex((c) => (Number(c.idx) || 0) === ch.idx) };
 }
@@ -5942,6 +6032,8 @@ async function fetchMoreNgChapters(btn) {
   if (!b) return;
   if (!nativePort()) { toast('要在 App 里才能取 NG 的章节'); return; }
   const o = b.origin || { ng: true };
+  const workKey = String(o.workKey || '');
+  if (!workKey) { toast('这本书缺 work_key（NG 那边字段没对上），取不了后面的章节'); return; }
   const lastIdx = (b.chapters || []).reduce((m, c) => Math.max(m, Number(c.idx) || 0), -1);
   const start = lastIdx + 1;
   const WANT = 3;
@@ -5951,7 +6043,7 @@ async function fetchMoreNgChapters(btn) {
   try {
     for (let i = 0; i < WANT; i++) {
       const idx = start + i;
-      const r = await coreCall('ng.chapter', { chapter: idx }, 25000);
+      const r = await coreCall('ng.text', { workKey, index: idx }, 25000);
       if (!r || !r.ok || !String(r.text || '').trim()) {
         why = (r && r.error) || '这一章还没缓存（先在 NG 里翻到这一章）';
         break;
@@ -7433,6 +7525,42 @@ function showBookToc() {
   if (!b) return;
   hideTools();
   const cur = RDR.ch;
+  // NG 的书：目录可能比「已下载的章节」长得多（ng.toc 最多 300 章），
+  // 已下载的直接跳，未下载的点了当场取（ng.text）。
+  const ngToc = (b.origin && b.origin.ng && Array.isArray(b.origin.toc) && b.origin.toc.length)
+    ? b.origin.toc : null;
+  if (ngToc) {
+    const loaded = new Map((b.chapters || []).map((c, i) => [Number(c.idx), i]));
+    view.innerHTML =
+      '<div class="meta"><span>目录</span><span>' + ngToc.length + ' 章 · 已下载 '
+      + (b.chapters || []).length + '</span></div>'
+      + '<div class="row" style="margin:6px 0 10px"><button class="btn ghost" id="tocBack">← 回正文</button>'
+      + '<button class="btn" id="moreCh">继续抓 NG 3 章</button></div>'
+      + '<div class="list">' + ngToc.map((t) => {
+        const idx = Number(t.idx) || 0;
+        const p = loaded.has(idx) ? loaded.get(idx) : -1;
+        const state = p >= 0 ? ('第 ' + (p + 1) + ' 章 · 已下载') : ('第 ' + (idx + 1) + ' 章 · 未下载');
+        return '<button class="tocItem' + (p === cur ? ' on' : '') + '" data-idx="' + idx + '">'
+          + '<span>' + esc(t.title || ('第 ' + (idx + 1) + ' 章')) + '</span>'
+          + '<small>' + state + '</small></button>';
+      }).join('') + '</div>';
+    document.getElementById('tocBack').onclick = () => renderTextBook();
+    const mc = document.getElementById('moreCh');
+    if (mc) mc.onclick = () => fetchMoreChapters(MORE_BATCH);
+    view.querySelectorAll('.tocItem').forEach((btn) => {
+      btn.onclick = async () => {
+        const idx = Number(btn.dataset.idx) || 0;
+        const p = (b.chapters || []).findIndex((c) => Number(c.idx) === idx);
+        if (p >= 0) { RDR.pageIdx = 0; gotoChapter(p, 'first'); return; }
+        btn.disabled = true;
+        const np = await ngLoadChapter(idx);
+        if (np >= 0) { RDR.pageIdx = 0; gotoChapter(np, 'first'); }
+        else { btn.disabled = false; }
+      };
+    });
+    view.scrollTop = 0;
+    return;
+  }
   view.innerHTML =
     '<div class="meta"><span>目录</span><span>' + b.chapters.length + ' 节</span></div>'
     + '<div class="row" style="margin:6px 0 10px"><button class="btn ghost" id="tocBack">← 回正文</button>'

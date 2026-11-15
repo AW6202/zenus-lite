@@ -307,9 +307,9 @@ const STUB = `
     check('网页档案卡点开直接读（第一次点落成材料，不再弹「这份材料已经不在了」）',
       docOpen.found && docOpen.book === '示例网页甲' && docOpen.docMat && docOpen.body, docOpen);
 
-    // NG 当前书：点开就把「NG 正在读的那一章」导入并直接打开
+    // NG 书：第二批起任意一本都能点开（ng.toc 拿目录、ng.text 取正文）
     const ngOpen = await cdp.eval(`
-      // 前面测「浏览器模式」时把桥关了，这里恢复一个最小的（只认 shelf.current / ng.chapter）
+      // 前面测「浏览器模式」时把桥关了，这里恢复一个最小的（shelf.current / ng.toc / ng.text / ng.prefetch）
       window.zenus = {
         _ls: [],
         addEventListener(_t, fn) { this._ls.push(fn); },
@@ -319,8 +319,16 @@ const STUB = `
           try { req = JSON.parse(raw); } catch (e) { return; }
           const ok = (data) => this._emit({ id: req.id, ok: true, data });
           if (req.cmd === 'shelf.current') return ok({ ok: true, title: '狄公案', chapterIndex: 11 });
-          if (req.cmd === 'ng.chapter') return ok({ ok: true, book: '狄公案', chapter: req.args.chapter,
-            title: '第十二回 黄金案', text: '第十二回正文。'.repeat(40) });
+          if (req.cmd === 'ng.toc') return ok({ ok: true, workKey: req.args.workKey, chapters: [
+            { index: 10, title: '第十一回', cached: true },
+            { index: 11, title: '第十二回 黄金案', cached: true },
+            { index: 12, title: '第十三回', cached: true }
+          ] });
+          if (req.cmd === 'ng.text') {
+            const i = Number(req.args.index) || 0;
+            return ok({ ok: true, index: i, title: '第' + (i + 1) + '回', text: '第十二回正文。'.repeat(40), from: 'ng' });
+          }
+          if (req.cmd === 'ng.prefetch') return ok({ ok: true });
           return ok(null);
         }
       };
@@ -334,22 +342,40 @@ const STUB = `
       const m = mats.find((x) => x.id === 'ngbook:狄公案');
       return { found: true, book: RDR.book && RDR.book.name, ch: RDR.ch,
                chapters: m ? m.chapters.length : 0, idx: m && m.chapters[0] ? m.chapters[0].idx : null,
+               toc: m && m.origin && m.origin.toc ? m.origin.toc.length : 0,
                body: /第十二回正文/.test((document.getElementById('bookText') || {}).textContent || '') };
     `);
-    check('点 NG 当前书 → 落成「一本书」的材料并直接打开正在读的那章',
-      ngOpen.found && ngOpen.book === '狄公案' && ngOpen.chapters === 1 && ngOpen.idx === 11 && ngOpen.body, ngOpen);
+    check('点 NG 当前书 → 拿目录 + 打开正在读的那章',
+      ngOpen.found && ngOpen.book === '狄公案' && ngOpen.chapters === 1 && ngOpen.idx === 11
+      && ngOpen.toc === 3 && ngOpen.body, ngOpen);
 
-    // 非当前书：明确说「要等下一批」，不假装能读
+    // 目录：未下载的章点一下当场取（ng.text），不用回 NG
+    const lazy = await cdp.eval(`
+      showBookToc();
+      const items = Array.from(view.querySelectorAll('.tocItem'));
+      const target = items.find((b) => /第十三回/.test(b.textContent));
+      if (!target) return { found: false, count: items.length };
+      target.click(); await new Promise((r) => setTimeout(r, 900));
+      return { found: true, count: items.length, chapters: RDR.book.chapters.length, ch: RDR.ch,
+               body: /第十二回正文/.test((document.getElementById('bookText') || {}).textContent || '') };
+    `);
+    check('目录来自 ng.toc：已下载/未下载都列出来，点未下载的当场取',
+      lazy.found && lazy.count === 3 && lazy.chapters === 2 && lazy.body, lazy);
+
+    // 非当前书也能开：从第 1 章开始（不再要求「必须是 NG 当前书」）
     const ngOther = await cdp.eval(`
       state.shelfFilter = 'all'; await renderShelfTab();
       const card = Array.from(view.querySelectorAll('.shelfCard[data-src="ng"]'))
         .find((c) => c.querySelector('.st').textContent === '英文教材');
       if (!card) return { found: false };
-      card.click(); await new Promise((r) => setTimeout(r, 500));
-      return { found: true, book: RDR.book && RDR.book.name };
+      card.click(); await new Promise((r) => setTimeout(r, 900));
+      const mats = await matAll();
+      const m = mats.find((x) => x.id === 'ngbook:英文教材');
+      return { found: true, book: RDR.book && RDR.book.name,
+               first: m && m.chapters[0] ? m.chapters[0].idx : null };
     `);
-    check('非当前 NG 书点击不假装能读（不改当前阅读状态）',
-      ngOther.found && ngOther.book === '狄公案', ngOther);
+    check('非当前 NG 书也能点开（从第 1 章开始）',
+      ngOther.found && ngOther.book === '英文教材' && ngOther.first === 0, ngOther);
 
     console.log('');
   } catch (err) {
