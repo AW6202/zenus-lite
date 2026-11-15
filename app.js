@@ -1,7 +1,7 @@
 // 学习机 Lite — 静态 PWA：内容来自 pack.json，进度存本地，AI 直连 OpenAI 兼容接口
 'use strict';
 
-const BUILD = '2026-11-15.20';
+const BUILD = '2026-11-15.21';
 
 const LS = {
   progress: 'zenus.progress.v1',
@@ -197,11 +197,16 @@ async function pullCoreInbox() {
   if (!Array.isArray(arr)) arr = await coreCall('inbox.take', {}, 8000);
   if (!Array.isArray(arr) || !arr.length) return;
   const seen = new Set(state.inbox.map((x) => x.id || x.front));
+  // 已经有卡片 / 已标记掌握 / 处理过的，都别再进待确认（2026-11-15）
+  const haveCard = new Set((typeof userCards !== 'undefined' && userCards ? userCards : [])
+    .map((c) => normWord(c.front)));
   let added = 0;
   for (const it of arr) {
     const key = it.id || it.front;
     if (!key || seen.has(key)) continue;
     if (inboxDoneHas(it)) continue;          // 已经加入/跳过的，别再塞回来
+    const w = normWord(it.front || '');
+    if (w && (isKnown(it.front) || haveCard.has(w))) continue;   // 认识的/已有的，不该再问
     seen.add(key);
     state.inbox.push(it);
     added++;
