@@ -1471,6 +1471,17 @@ class CDP {
     check('内容包自检（check_pack.py）通过', false, { err: (e.stdout || e.message || '').slice(-300) });
   }
 
+  // 构建版本一致性：index.html 的 app.js?v= 必须跟 BUILD 同步。
+  // 2026-11-15 发版时 .23 没跟着改，手机吃旧缓存，人看到的是半新半旧 —— 固化成断言，别再靠记性。
+  try {
+    const fs = require('fs');
+    const build = (fs.readFileSync('app.js', 'utf8').match(/const BUILD = '([^']+)'/) || [])[1];
+    const v = (fs.readFileSync('index.html', 'utf8').match(/app\.js\?v=([^"'&]+)/) || [])[1];
+    check('index.html 的 app.js?v 与 BUILD 一致', !!build && build === v, { build, v });
+  } catch (e) {
+    check('index.html 的 app.js?v 与 BUILD 一致', false, { err: e.message });
+  }
+
   const bad = results.filter((r) => !r.ok);
   console.log(`\n${results.length - bad.length}/${results.length} 通过`);
   if (bad.length) { console.log('失败项：' + bad.map((b) => b.name).join('；')); process.exit(1); }

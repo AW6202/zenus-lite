@@ -1,7 +1,7 @@
 // 学习机 Lite — 静态 PWA：内容来自 pack.json，进度存本地，AI 直连 OpenAI 兼容接口
 'use strict';
 
-const BUILD = '2026-11-15.23';
+const BUILD = '2026-11-16.1';
 
 const LS = {
   progress: 'zenus.progress.v1',
@@ -30,6 +30,8 @@ const DEFAULT_SETTINGS = {
   syncRepo: 'AW6202/zenus-state',
   syncDevice: '',
   syncPerson: '',
+  syncLast: 0,        // 上次成功同步的时间戳（0 = 从未成功）；设置页按它标「已 N 天没同步」
+  syncError: '',      // 上次失败原因（成功即清空）
   ttsVoice: '',
   searchKey: '',
   visionBase: 'https://api.siliconflow.cn/v1',
@@ -1765,6 +1767,8 @@ function renderSettings() {
     <input class="t" id="s-gh" type="password" value="${esc(settings.syncToken)}" placeholder="github_pat_...">
     <label class="f">仓库</label>
     <input class="t" id="s-repo" value="${esc(settings.syncRepo)}">
+    <div class="hint" id="syncAge" style="margin-top:8px"></div>
+    <div class="hint" id="bundleInfo" style="display:none"></div>
     <div class="row" style="margin-top:10px">
       <button class="btn primary" id="doSync">立即同步</button>
       <button class="btn" id="saveSync">保存</button>
@@ -1817,6 +1821,21 @@ function renderSettings() {
     toast('设置已保存');
   };
   refreshNativeStatus();
+  // 同步年龄：2026-11-16 实测「同步静默停了 14 天没人知道」，所以这里必须显式写出来
+  (function showSyncAge() {
+    const el = $('#syncAge');
+    if (!el) return;
+    const last = Number(settings.syncLast) || 0;
+    const ageD = last ? Math.floor((Date.now() - last) / 86400000) : -1;
+    const stale = !last || ageD > 7;
+    const when = last ? fmtWhen(last) : '从未成功同步';
+    const ageTxt = !last ? '' : (ageD <= 0 ? '（今天）' : '（' + ageD + ' 天前）');
+    el.style.color = stale ? '#b00020' : '';
+    el.textContent = '上次同步：' + when + ageTxt
+      + (stale ? ' —— 数据只在这台手机，换机或清缓存会丢' : '')
+      + (settings.syncError ? '；上次失败：' + settings.syncError : '');
+  })();
+  showBundleInfo();
   const bi = $('#btnInstall');
   const ih = $('#installHint');
   if (bi && ih) {
@@ -2332,6 +2351,23 @@ function mergeState(remote) {
   return changed;
 }
 
+// APK 里那份「断网兜底副本」的版本：老包没有 learn.bundle 命令时静默不显示。
+// 它落后于线上会让断网用户悄悄用旧版 —— 设置页必须写出来（2026-11-16 实测落后 12 天）。
+async function showBundleInfo() {
+  const el = document.getElementById('bundleInfo');
+  if (!el || !nativePort()) return;
+  try {
+    const b = await coreCall('learn.bundle', {}, 3000);
+    if (!b || !b.build) return;
+    const same = String(b.build) === String(BUILD);
+    el.style.display = 'block';
+    el.style.color = same ? '' : '#b00020';
+    el.textContent = 'APK 内置离线副本：' + b.build
+      + (b.commit ? ' @ ' + b.commit : '')
+      + (same ? '（与当前线上一致）' : '（与当前 ' + BUILD + ' 不一致 —— 断网时会回到旧版）');
+  } catch { /* 老包没有这个命令 */ }
+}
+
 async function syncNow(opts) {
   const quiet = opts && opts.quiet;
   if (!settings.syncToken) {
@@ -2359,6 +2395,9 @@ async function syncNow(opts) {
     if (window.ZSync && window.ZConv) {
       try { rec = await syncRecords(); } catch (err) { rec = { error: err.message }; }
     }
+    settings.syncLast = Date.now();
+    settings.syncError = '';
+    try { saveJSON(LS.settings, settings); } catch { /* ignore */ }
     if (!quiet) {
       toast('同步完成：合并 ' + files + ' 台设备，复习更新 ' + pulled + ' 条'
         + (rec && !rec.error ? '，书 ' + rec.books + ' 本（墓碑 ' + rec.tombstones + '）' : '')
@@ -2366,6 +2405,8 @@ async function syncNow(opts) {
     }
     return pulled;
   } catch (err) {
+    settings.syncError = err.message || '同步失败';
+    try { saveJSON(LS.settings, settings); } catch { /* ignore */ }
     if (!quiet) toast('同步失败：' + err.message);
     return null;
   }
@@ -3713,7 +3754,9 @@ async function renderHiResPageCanvas(pageNo) {
 async function ocrCanvasNative(canvas) {
   if (!nativePort()) return null;
   try {
-    const b64 = String(canvas.toDataURL('image/png')).replace(/^data:image\/png;base64,/, '');
+    // JPEG 而不是 PNG：1800×2500 的文字页 PNG 常有几 MB，过桥还要 base64 (+33%)；
+    // JPEG 0.92 对 OCR 没有可测差别，传输体积小一个量级（2026-11-16 改）。
+    const b64 = String(canvas.toDataURL('image/jpeg', 0.92)).replace(/^data:image\/jpeg;base64,/, '');
     const t0 = Date.now();
     const r = await coreCall('ocr.image', { base64: b64, lang: settings.readerLang || 'zh' }, 90000);
     if (!r || typeof r.text !== 'string' || !r.text.trim()) return null;
@@ -3748,6 +3791,10 @@ async function ocrAllPages() {
   const from = RDR.page;
   const last = Math.min(RDR.total, from + 9);
   if (last > from && !confirm('从第 ' + from + ' 页开始，连转 ' + (last - from + 1) + ' 页？\n每页几秒；抽不完整会如实标红。')) return;
+  // 全转是 WebView 里的长任务：息屏/切后台会被冻结，转一半就停。先申请屏幕常亮，
+  // 并在结束时释放。浏览器不支持就照常转，只是别锁屏。
+  let wake = null;
+  try { if (navigator.wakeLock) wake = await navigator.wakeLock.request('screen'); } catch { /* ignore */ }
   ocrBusy = true;
   let done = 0;
   let failed = 0;
@@ -3771,6 +3818,7 @@ async function ocrAllPages() {
     }
   } finally {
     ocrBusy = false;
+    try { if (wake) await wake.release(); } catch { /* ignore */ }
     const st = document.getElementById('ocrStatus');
     if (st) st.remove();
     RDR.textMode = false;
