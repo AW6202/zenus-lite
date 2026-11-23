@@ -1,7 +1,7 @@
 // 学习机 Lite — 静态 PWA：内容来自 pack.json，进度存本地，AI 直连 OpenAI 兼容接口
 'use strict';
 
-const BUILD = '2026-11-23.1';
+const BUILD = '2026-11-23.2';
 
 const LS = {
   progress: 'zenus.progress.v1',
@@ -256,6 +256,16 @@ function inboxDoneMark(it) {
   if (w) inboxDone['w:' + w] = now;
   const cutoff = now - 14 * 24 * 3600 * 1000;      // 原生留 7 天，这边留 14 天
   Object.keys(inboxDone).forEach((k) => { if (!(inboxDone[k] > cutoff)) delete inboxDone[k]; });
+  saveJSON(LS.inboxDone, inboxDone);
+}
+
+// 撤销跳过（2026-11-23）：把 mark 写的两个键都抹掉，否则 pullCoreInbox 里
+// inboxDoneHas() 还会按 id / 归一化词把它挡在待确认箱外 —— 反悔了却一刷新又不见。
+function inboxDoneUnmark(it) {
+  if (!it) return;
+  if (it.id) delete inboxDone['id:' + it.id];
+  const w = normWord(it.front || '');
+  if (w) delete inboxDone['w:' + w];
   saveJSON(LS.inboxDone, inboxDone);
 }
 
@@ -1421,25 +1431,47 @@ function showInboxSheet() {
       const i = Number(b.dataset.skip);
       const it = items[i];
       const row = o.querySelector('[data-row="' + i + '"]');
+      if (!it) return;
+      const head = o.querySelector('.kpHead span');
+
+      // 再点一次「已掌握」= 撤销跳过（2026-11-23）：回到未处理。
+      if (b.dataset.done === '1') {
+        // a. 本地 known：只撤 skip 写的那条；用户手动标的 / 复习晋级的不能误删。
+        const kv = known[normWord(it.front || '')];
+        if (kv && typeof kv === 'object' && kv.why === 'skip') unmarkKnown(it.front);
+        // b. 墓碑：id: 和 w: 两个键都要删，少一个再拉取还是会被挡回来。
+        inboxDoneUnmark(it);
+        // c. 原位插回 state.inbox（i 是打开面板时的原始下标），清 _resolved 让 close() 不再滤掉它。
+        // 用「第一个原始下标比 i 大的现存条目」定位，别直接 splice(i)：前面也跳过几条时 i 会错位。
+        delete it._resolved;
+        const pos = state.inbox.findIndex((x) => items.indexOf(x) > i);
+        state.inbox.splice(pos < 0 ? state.inbox.length : pos, 0, it);
+        saveInbox();
+        if (row) row.style.opacity = '1';
+        b.textContent = '跳过';
+        delete b.dataset.done;
+        if (head) head.textContent = '待确认（' + state.inbox.length + '）';
+        return;
+      }
+
+      // 首次点 = 跳过。语义是「我认识这个词」，不是「现在不想学」。
+      // 本地 known 记一笔（isKnown / isKnownCard / 生词过滤都读它），
+      // 同时同步给原生学习内核（learner 的 known:<word>，zenus_vocab_get 带出来）。
       if (row) row.style.opacity = '.35';
-      b.disabled = true;
-      // 跳过的语义是「我认识这个词」，不是「现在不想学」。
-      // 所以要在本地 known 里记一笔（isKnown / isKnownCard / 生词过滤都读它），
-      // 同时同步给原生学习内核，否则 DSH Go 挑词时看不到这批词，会重复推荐。
-      // 原生侧写 learner 的 known:<word>，zenus_vocab_get 会把它带出来。
-      if (it && it.front) {
+      if (it.front) {
         markKnown(it.front, 'skip');
         b.textContent = '已掌握';
+        b.dataset.done = '1';                 // 再点一次进入撤销分支
         coreCall('learner.markKnown', { word: it.front, why: 'skip' }, 3000).catch(() => {});
       }
-      if (it) it._resolved = true;
-      if (it) inboxDoneMark(it);              // 跳过 = 我认识：本地 known + 原生 known + 这里记一笔
+      it._resolved = true;
+      inboxDoneMark(it);                      // 本地 known + 原生 known + 这里记一笔
       state.inbox = state.inbox.filter((x) => !x._resolved);
       saveInbox();
       const left = state.inbox.length;
-      const head = o.querySelector('.kpHead span');
       if (head) head.textContent = '待确认（' + left + '）';
-      if (!left) setTimeout(() => { o.remove(); renderReview(); }, 250);
+      // 不再自动关面板：跳过后要能再点一次「已掌握」撤销，最后一条尤其如此。
+      // 用户自己点关闭即可（close 会 renderReview）。
     };
   });
 }

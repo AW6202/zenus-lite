@@ -207,6 +207,130 @@ const STUB = `
     check('跳过/加入过的待确认，再拉不会重复出现',
       handled.before.join(',') === 'w-alpha,w-beta,w-gamma' && handled.left.join(',') === 'w-gamma', handled);
 
+    // ── 6. 跳过可以反悔（2026-11-23）：再点「已掌握」= 撤销，三处一起清 ──
+    const undo = await cdp.eval(`
+      // 干净起点：换一组新 id/词，避开前面测试留下的墓碑和 known
+      window.__inbox.supportsList = true;
+      window.__inbox.items = [
+        { id: 'u-one', front: 'undo-one', back: '一' },
+        { id: 'u-two', front: 'undo-two', back: '二' },
+        { id: 'u-three', front: 'undo-three', back: '三' }
+      ];
+      state.inbox = [];
+      for (const w of ['undo-one','undo-two','undo-three']) { delete known[w]; delete inboxDone['w:' + w]; }
+      delete inboxDone['id:u-one']; delete inboxDone['id:u-two']; delete inboxDone['id:u-three'];
+      saveJSON(LS.known, known); saveJSON(LS.inboxDone, inboxDone);
+      await pullCoreInbox();
+      const seeded = state.inbox.map((x) => x.id);
+
+      showInboxSheet();
+      const o = document.getElementById('inboxOverlay');
+      const row0 = o.querySelector('[data-row="0"]');
+      const b0 = row0.querySelector('[data-skip]');
+
+      // ① 跳过 u-one
+      b0.click();
+      const afterSkip = {
+        label: b0.textContent,
+        doneFlag: b0.dataset.done,
+        opacity: row0.style.opacity,
+        count: state.inbox.length,
+        ids: state.inbox.map((x) => x.id),
+        head: o.querySelector('.kpHead span').textContent,
+        knownWhy: (known['undo-one'] || {}).why,
+        tombId: !!inboxDone['id:u-one'],
+        tombW: !!inboxDone['w:undo-one'],
+      };
+
+      // ② 再点一次「已掌握」= 撤销
+      b0.click();
+      const afterUndo = {
+        label: b0.textContent,
+        doneFlag: b0.dataset.done || null,
+        disabled: b0.disabled,
+        opacity: row0.style.opacity,
+        count: state.inbox.length,
+        ids: state.inbox.map((x) => x.id),
+        resolved: !!state.inbox.find((x) => x.id === 'u-one')._resolved,
+        knownGone: !known['undo-one'],
+        tombId: !!inboxDone['id:u-one'],
+        tombW: !!inboxDone['w:undo-one'],
+        head: o.querySelector('.kpHead span').textContent,
+      };
+
+      // ③ 再拉取一次：墓碑已清，u-one 不会被挡住；seen 去重，也不会重复
+      await pullCoreInbox();
+      const afterPull = state.inbox.map((x) => x.id);
+
+      // ④ 关闭面板：撤销后没有 _resolved，不该被 close() 滤掉
+      o.querySelector('#inboxClose').click();
+      const afterClose = state.inbox.map((x) => x.id);
+
+      // ⑤ 撤销之后，加入生词 / 跳过 仍然生效
+      showInboxSheet();
+      const o2 = document.getElementById('inboxOverlay');
+      const r0 = o2.querySelector('[data-row="0"]');
+      const r1 = o2.querySelector('[data-row="1"]');
+      r0.querySelector('[data-add]').click();           // u-one 加入
+      await new Promise((r) => setTimeout(r, 500));
+      const addLabel = r0.querySelector('[data-add]').textContent;
+      r1.querySelector('[data-skip]').click();          // u-two 跳过
+      const skipLabel = r1.querySelector('[data-skip]').textContent;
+      const afterActions = {
+        addLabel, skipLabel,
+        left: state.inbox.map((x) => x.id),
+        twoWhy: (known['undo-two'] || {}).why,
+      };
+      o2.querySelector('#inboxClose').click();
+
+      // ⑥ 最后一条也不能因为面板自动关闭而无法反悔
+      showInboxSheet();
+      const o3 = document.getElementById('inboxOverlay');
+      o3.querySelector('[data-row="0"] [data-skip]').click();   // u-three 是最后一条
+      await new Promise((r) => setTimeout(r, 400));             // 等过旧的 250ms 自动关闭定时
+      const lastSkipped = {
+        alive: !!document.getElementById('inboxOverlay'),
+        label: o3.querySelector('[data-row="0"] [data-skip]').textContent,
+      };
+      if (lastSkipped.alive) o3.querySelector('[data-row="0"] [data-skip]').click();
+      const lastUndone = {
+        count: state.inbox.length,
+        ids: state.inbox.map((x) => x.id),
+        head: document.querySelector('#inboxOverlay .kpHead span').textContent,
+      };
+      o3.querySelector('#inboxClose').click();
+      return { seeded, afterSkip, afterUndo, afterPull, afterClose, afterActions, lastSkipped, lastUndone };
+    `);
+
+    check('跳过→撤销：按钮/行恢复、原位插回、计数 +1',
+      undo.seeded.join(',') === 'u-one,u-two,u-three'
+      && undo.afterSkip.label === '已掌握' && undo.afterSkip.doneFlag === '1'
+      && (undo.afterSkip.opacity === '.35' || undo.afterSkip.opacity === '0.35')
+      && undo.afterSkip.count === 2
+      && undo.afterSkip.head === '待确认（2）' && undo.afterSkip.knownWhy === 'skip'
+      && undo.afterSkip.tombId === true && undo.afterSkip.tombW === true
+      && undo.afterUndo.label === '跳过' && !undo.afterUndo.doneFlag
+      && undo.afterUndo.disabled === false && undo.afterUndo.opacity === '1'
+      && undo.afterUndo.count === 3 && undo.afterUndo.head === '待确认（3）'
+      && undo.afterUndo.ids.join(',') === 'u-one,u-two,u-three'
+      && undo.afterUndo.resolved === false
+      && undo.afterUndo.knownGone === true
+      && undo.afterUndo.tombId === false && undo.afterUndo.tombW === false, undo);
+
+    check('撤销后再拉取、再关闭都不被墓碑挡住，也不重复',
+      undo.afterPull.join(',') === 'u-one,u-two,u-three'
+      && undo.afterClose.join(',') === 'u-one,u-two,u-three', undo);
+
+    check('撤销之后「加入生词」和「跳过」仍然生效',
+      undo.afterActions.addLabel === '已加入' && undo.afterActions.skipLabel === '已掌握'
+      && undo.afterActions.left.join(',') === 'u-three'
+      && undo.afterActions.twoWhy === 'skip', undo.afterActions);
+
+    check('最后一条跳过后仍可反悔（面板不自动关）',
+      undo.lastSkipped.alive === true && undo.lastSkipped.label === '已掌握'
+      && undo.lastUndone.count === 1 && undo.lastUndone.ids.join(',') === 'u-three'
+      && undo.lastUndone.head === '待确认（1）', undo);
+
     console.log('');
   } catch (err) {
     check('跑完整个流程', false, { err: err.message, stack: String(err.stack || '').slice(0, 500) });
