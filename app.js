@@ -1,7 +1,7 @@
 // 学习机 Lite — 静态 PWA：内容来自 pack.json，进度存本地，AI 直连 OpenAI 兼容接口
 'use strict';
 
-const BUILD = '2026-11-16.1';
+const BUILD = '2026-11-23.1';
 
 const LS = {
   progress: 'zenus.progress.v1',
@@ -280,6 +280,550 @@ function loadJSON(key, fallback) {
 }
 function saveJSON(key, val) { localStorage.setItem(key, JSON.stringify(val)); }
 
+// P1b：复习流水不再 5000 截断。localStorage 写满时不能把内存/IDB 里的全量流水
+// 丢掉，也不能假装成功：留一条可见告警，导出与同步改从 IndexedDB 取全量。
+function saveReviewLog() {
+  try { saveJSON(LS.log, reviewLog); return true; }
+  catch (err) {
+    if (state && state.learner) {
+      state.learner.warn = '复习流水写 localStorage 失败：'
+        + String(err && err.message || err) + '；本次全量仍在内存与 IndexedDB，导出/同步不受影响';
+    }
+    return false;
+  }
+}
+
+// ── P1 · 学习者数据层（IndexedDB + 导出导入 + FSRS）─────────────
+// 设计口径：localStorage 是旧库/迁移源，IndexedDB zenus_learner 是真源。
+// 迁移只做一次（meta.migration.migratedAt），旧键留 7 天只读快照，不删除。
+const LEARN_DB = 'zenus_learner';
+const LEARN_DB_VER = 1;
+const LEARN_SCHEMA = 'zenus.learner.v1';
+const FSRS_PIN = 'ts-fsrs@5.1.0 / FSRS-6';
+const LEARN_BACKUP_PREFIX = 'zenus.backup.';
+const LEARN_KEEP_DAYS = 7;
+const LEARN_STORES = ['cards', 'srs', 'revlog', 'quiz_log', 'drafts', 'meta'];
+
+state.learner = {
+  ready: false, migratedAt: 0, counts: {}, warn: '',
+  overrides: {}, deleted: new Set(),
+};
+
+function fsrsLib() { return (typeof window !== 'undefined' && window.FSRS) ? window.FSRS : null; }
+
+function cardType(card) {
+  if (!card) return 'vocab';
+  const t = String(card.type || '').toLowerCase();
+  if (['vocab', 'sentence', 'cloze', 'audio', 'qa'].includes(t)) return t;
+  if (card.audio && (card.audio.key || card.audioKey)) return 'audio';
+  if (card.cloze !== undefined || /\{\{c\d+::/.test(String(card.front || ''))) return 'cloze';
+  if (card.source && card.source.refId) return 'sentence';
+  const f = String(card.front || '').trim();
+  return (/\s/.test(f) && f.length > 12) ? 'sentence' : 'vocab';
+}
+
+// §5.3 去重键按卡型分开：同一词的两张不同句子卡必须能共存
+function cardKey(card) {
+  const t = cardType(card);
+  const n = normFront(card && card.front);
+  if (t === 'sentence') return 'sentence:' + n + '|' + ((card.source && card.source.refId) || '');
+  if (t === 'cloze') return 'cloze:' + n + '|' + String(card.clozeIndex === undefined ? 0 : card.clozeIndex);
+  if (t === 'audio') return 'audio:' + ((card.audio && card.audio.key) || card.audioKey || n);
+  if (t === 'qa') return 'qa:' + n;
+  return 'vocab:' + n;
+}
+
+function learnerDb() {
+  return new Promise((resolve, reject) => {
+    if (typeof indexedDB === 'undefined') return reject(new Error('没有 IndexedDB'));
+    const req = indexedDB.open(LEARN_DB, LEARN_DB_VER);
+    let settled = false;
+    const timer = setTimeout(() => {
+      if (settled) return;
+      settled = true; reject(new Error('学习者库打开超时'));
+    }, 8000);
+    req.onupgradeneeded = () => {
+      const db = req.result;
+      for (const name of LEARN_STORES) {
+        if (db.objectStoreNames.contains(name)) continue;
+        const key = (name === 'cards') ? 'id' : (name === 'srs') ? 'cardId' : (name === 'meta') ? 'key' : 'id';
+        db.createObjectStore(name, { keyPath: key });
+      }
+    };
+    req.onsuccess = () => {
+      clearTimeout(timer);
+      if (settled) { try { req.result.close(); } catch (e) { /* ignore */ } return; }
+      settled = true; resolve(req.result);
+    };
+    req.onerror = () => { clearTimeout(timer); if (!settled) { settled = true; reject(req.error); } };
+  });
+}
+
+async function idbAll(store) {
+  const db = await learnerDb();
+  try {
+    return await new Promise((res, rej) => {
+      const q = db.transaction(store, 'readonly').objectStore(store).getAll();
+      q.onsuccess = () => res(q.result || []);
+      q.onerror = () => rej(q.error);
+    });
+  } finally { db.close(); }
+}
+
+async function idbGet(store, key) {
+  const db = await learnerDb();
+  try {
+    return await new Promise((res, rej) => {
+      const q = db.transaction(store, 'readonly').objectStore(store).get(key);
+      q.onsuccess = () => res(q.result || null);
+      q.onerror = () => rej(q.error);
+    });
+  } finally { db.close(); }
+}
+
+async function idbPut(store, value) {
+  const db = await learnerDb();
+  try {
+    return await new Promise((res, rej) => {
+      const tx = db.transaction(store, 'readwrite');
+      tx.objectStore(store).put(value);
+      tx.oncomplete = () => res(true);
+      tx.onerror = () => rej(tx.error);
+    });
+  } finally { db.close(); }
+}
+
+async function idbPutMany(writes) {
+  const db = await learnerDb();
+  try {
+    return await new Promise((res, rej) => {
+      const groups = {};
+      for (const [store, value] of writes) (groups[store] = groups[store] || []).push(value);
+      const tx = db.transaction(Object.keys(groups), 'readwrite');
+      for (const store of Object.keys(groups)) {
+        const os = tx.objectStore(store);
+        for (const v of groups[store]) os.put(v);
+      }
+      tx.oncomplete = () => res(true);
+      tx.onerror = () => rej(tx.error);
+    });
+  } finally { db.close(); }
+}
+
+async function idbDelete(store, key) {
+  const db = await learnerDb();
+  try {
+    return await new Promise((res, rej) => {
+      const tx = db.transaction(store, 'readwrite');
+      tx.objectStore(store).delete(key);
+      tx.oncomplete = () => res(true);
+      tx.onerror = () => rej(tx.error);
+    });
+  } finally { db.close(); }
+}
+
+function srsFromEntry(id, e) {
+  const f = e && e.fsrs;
+  return {
+    cardId: id, due: Number(e && e.due) || 0,
+    last_review: Number(e && e.last) || 0,
+    state: Number(f && f.state) || 0,
+    stability: Number(f && f.stability) || 0,
+    difficulty: Number(f && f.difficulty) || 0,
+    elapsed_days: Number(f && f.elapsed_days) || 0,
+    scheduled_days: Number(f && f.scheduled_days) || Math.max(0, Math.round(Number(e && e.interval) || 0)),
+    reps: Number(e && e.reps) || 0, lapses: Number(e && e.lapses) || 0,
+    learning_steps: Number(f && f.learning_steps) || 0,
+    version: 'FSRS-6', lib: FSRS_PIN, migrator: (f && f.migrated) ? 'log' : '',
+    updatedAt: Date.now(),
+  };
+}
+
+// FSRS-6 评分；坏 srs（缺 stability / 坏日期）回退 New，绝不把页面打崩
+function fsrsReview(id, e, rating, now) {
+  const F = fsrsLib();
+  if (!F || !F.FSRS || !F.createEmptyCard) return null;
+  const grade = {
+    again: F.Rating.Again, hard: F.Rating.Hard, good: F.Rating.Good, easy: F.Rating.Easy,
+  }[rating];
+  if (grade === undefined) return null;
+  let fresh = false, approx = false;
+  try {
+    const f = (e && e.fsrs) || {};
+    const s = Number(f.stability);
+    const st = Number(f.state);
+    // P1b：Learning / Relearning 也是合法状态。旧代码只认 Review，导致新卡第一次
+    // 评分后每次到期都被当 New 重算，永远卡在 10 分钟学习步且 reps 倒退。
+    const valid = Number.isFinite(s) && s > 0 && (Number(e.reps) || 0) > 0
+      && [F.State.Learning, F.State.Review, F.State.Relearning].includes(st);
+    let card;
+    if (valid) {
+      // schedule() 已先把 e.reps +1；ts-fsrs 的 card.reps 是「本次评分前」的次数，
+      // 这里减回去，否则每次复习会重复 +1。
+      const priorReps = Math.max(0, (Number(e.reps) || 0) - 1);
+      card = {
+        due: new Date(Number(e.due) || now), stability: s,
+        difficulty: Number(f.difficulty) || 5,
+        elapsed_days: Number(f.elapsed_days) || 0,
+        scheduled_days: Number(f.scheduled_days) || 0,
+        reps: priorReps, lapses: Number(e.lapses) || 0,
+        learning_steps: Number(f.learning_steps) || 0,
+        state: st, last_review: new Date(Number(e.last) || now),
+      };
+      if (isNaN(card.due.getTime())) throw new Error('bad due');
+    } else {
+      card = F.createEmptyCard(new Date(Number(e.due) || now));
+      fresh = true; approx = (Number(e && e.reps) || 0) > 0;
+    }
+    const out = new F.FSRS().next(card, new Date(now), grade);
+    if (!out || !out.card || !out.log) return null;
+    return { card: out.card, log: out.log, algo: 'FSRS-6', lib: FSRS_PIN, approx, recovered: false };
+  } catch (err) {
+    try {
+      const out = new F.FSRS().next(F.createEmptyCard(new Date(now)), new Date(now), grade);
+      return { card: out.card, log: out.log, algo: 'FSRS-6', lib: FSRS_PIN,
+               approx: true, recovered: true, reason: String(err && err.message || err) };
+    } catch { return null; }
+  }
+}
+
+async function persistLearnerReview(id, e, rating, now, fr) {
+  if (!state.learner.ready) return;
+  try {
+    const row = {
+      id: id + '@' + now + '@' + rating, cardId: id, rating: rating, reviewedAt: now,
+      reviewKind: 'learn', prev: (e && e.fsrs) || null,
+      next: fr ? { due: new Date(fr.card.due).getTime(), stability: fr.card.stability } : null,
+      algo: fr ? fr.algo : 'sm2', lib: fr ? fr.lib : 'legacy', durationMs: 0,
+    };
+    await idbPut('revlog', row);
+    await idbPut('srs', srsFromEntry(id, e));
+  } catch (err) {
+    state.learner.warn = '复习流水写不进 IndexedDB：' + String(err && err.message || err);
+  }
+}
+
+function logQuizEntry(cardId, detail) {
+  if (!state.learner.ready) return Promise.resolve(false);
+  return idbPut('quiz_log', {
+    id: 'quiz-' + Date.now() + '-' + Math.random().toString(36).slice(2, 7),
+    cardId, at: Date.now(), detail: detail || null,
+  }).catch(() => false);
+}
+
+function learnerCounts() {
+  const now = Date.now();
+  const entries = Object.entries(progress);
+  return {
+    due: entries.filter(([, e]) => (e.reps || 0) > 0 && (e.due || 0) <= now).length,
+    unlearned: entries.filter(([, e]) => !(e.reps > 0)).length,
+    known: Object.keys(known).length,
+  };
+}
+
+async function loadLearnerMeta() {
+  const meta = await idbGet('meta', 'migration');
+  if (!meta) return false;
+  state.learner.migratedAt = Number(meta.migratedAt) || 0;
+  state.learner.counts = meta.counts || {};
+  state.learner.warn = meta.warn || '';
+  const rows = await idbAll('cards');
+  const overrides = {};
+  const deleted = new Set();
+  for (const c of rows) {
+    if (c.deletedAt) deleted.add(c.id);
+    else if (c.__override) overrides[c.id] = c;
+  }
+  state.learner.overrides = overrides;
+  state.learner.deleted = deleted;
+  return true;
+}
+
+async function migrateLearner() {
+  if (state.learner.ready) return state.learner.counts;
+  const before = learnerCounts();
+  const db = await learnerDb();
+  try {
+    if (await loadLearnerMeta()) {
+      state.learner.ready = true;
+      rebuildCardIndex();
+      return state.learner.counts;
+    }
+    const writes = [];
+    const seen = new Map();
+    const all = [];
+    let staticCardCount = 0;
+    for (const c of (state.pack && state.pack.courses) || []) {
+      for (const card of c.cards || []) { all.push({ card, deckId: c.id }); staticCardCount++; }
+    }
+    for (const card of userCards) all.push({ card, deckId: MINE_ID });
+    for (const { card, deckId } of all) {
+      if (!card || !card.id) continue;
+      writes.push(['cards', {
+        id: card.id, type: cardType(card), front: card.front || '', back: card.back || '',
+        extra: card.extra || card.explain || '', hint: card.hint || '',
+        example: card.example || '', exampleCN: card.exampleCN || '',
+        cloze: card.cloze, clozeIndex: card.clozeIndex, audio: card.audio || null,
+        source: card.source || null, tags: card.tags || [], deckId: deckId,
+        status: 'active', createdAt: card.createdAt || Date.now(), updatedAt: card.updatedAt || Date.now(),
+        deletedAt: null,
+      }]);
+      if (card.front) seen.set(cardKey(card), card.id);
+    }
+    for (const [id, e] of Object.entries(progress)) writes.push(['srs', srsFromEntry(id, e)]);
+    const quiz = [];
+    for (const row of reviewLog) {
+      if (!row || !row.id) continue;
+      if (String(row.id).indexOf('quiz-') === 0) {
+        quiz.push(['quiz_log', { id: row.id, cardId: row.id, at: row.ts || Date.now(), detail: row }]);
+      } else {
+        writes.push(['revlog', {
+          id: row.id + '@' + (row.ts || 0) + '@' + (row.r || ''), cardId: row.id,
+          rating: row.r || '', reviewedAt: row.ts || 0, reviewKind: 'migrated',
+          prev: null, next: null, algo: 'legacy-log', lib: FSRS_PIN, durationMs: 0,
+        }]);
+      }
+    }
+    writes.push(...quiz);
+    await idbPutMany(writes);
+    const stored = await idbAll('cards');
+    const expected = all.filter((x) => x && x.card && x.card.id).length;
+    if (stored.length !== expected) {
+      throw new Error('迁移数量对不上：源 ' + expected + ' / 库 ' + stored.length);
+    }
+    const after = learnerCounts();
+    const drift = ['due', 'unlearned', 'known'].filter((k) =>
+      before[k] && Math.abs(after[k] - before[k]) / before[k] > 0.05);
+    const counts = { cards: stored.length, staticCards: staticCardCount,
+                     userCards: userCards.length, progress: Object.keys(progress).length,
+                     log: reviewLog.length, deckIndex: seen.size, before, after };
+    const stamp = Date.now();
+    const backupKey = LEARN_BACKUP_PREFIX + 'migration-' + stamp;
+    // 旧键 7 天内保留一份整体快照：meta 只记指针，不删原键，随时可人工回滚
+    try {
+      localStorage.setItem(backupKey, JSON.stringify({
+        at: stamp, progress, log: reviewLog, userCards, known, cardIndex,
+      }));
+    } catch (e) { /* 存储满也不阻断迁移，旧键本身还在 */ }
+    await idbPut('meta', {
+      key: 'migration', schema: LEARN_SCHEMA, migratedAt: stamp, fsrs: FSRS_PIN,
+      keepUntil: stamp + LEARN_KEEP_DAYS * 86400000,
+      counts, warn: drift.length ? '迁移前后偏差 >5%：' + drift.join('/') : '',
+      backupPointer: backupKey,
+    });
+    await loadLearnerMeta();
+    rebuildCardIndex();
+    state.learner.ready = true;
+    return counts;
+  } finally {
+    db.close();
+  }
+}
+
+async function persistCardOverride(card, extra) {
+  if (!state.learner.ready) return false;
+  const row = {
+    id: card.id, __override: true, type: cardType(card), front: card.front,
+    back: card.back || '', hint: card.hint || '', explain: card.explain || '',
+    topic: card.topic || '', extra: card.extra || '', tags: card.tags || [],
+    options: card.options || [], source: card.source || null,
+    updatedAt: Date.now(), ...(extra || {}),
+  };
+  await idbPut('cards', row);
+  state.learner.overrides[card.id] = row;
+  return true;
+}
+
+async function softDeleteCard(id) {
+  if (!id) return false;
+  const prev = (await idbGet('cards', id)) || { id, updatedAt: Date.now() };
+  await idbPut('cards', { ...prev, deletedAt: Date.now(), updatedAt: Date.now() });
+  state.learner.deleted.add(id);
+  delete state.learner.overrides[id];
+  if (state.tab === 'browse' || state.tab === 'review') render();
+  return true;
+}
+
+function duplicateIdsOf(id) {
+  const all = [];
+  for (const c of (state.pack && state.pack.courses) || []) all.push(...(c.cards || []));
+  all.push(...userCards);
+  const card = all.find((c) => c && c.id === id);
+  if (!card) return [];
+  const key = cardKey(card);
+  return all.filter((c) => c && c.id !== id && !state.learner.deleted.has(c.id) && cardKey(c) === key)
+    .map((c) => c.id);
+}
+
+// P1c：把 IDB revlog 里 fromId 的行批量改到 toId（真源跟内存一起走）。
+async function remapRevlog(fromId, toId) {
+  if (!fromId || !toId || fromId === toId || !(state.learner && state.learner.ready)) return 0;
+  const rows = (await idbAll('revlog')).filter((r) => r && r.cardId === fromId);
+  if (!rows.length) return 0;
+  await idbPutMany(rows.map((r) => ['revlog', { ...r, cardId: toId, mergedFrom: fromId }]));
+  return rows.length;
+}
+
+async function mergeDuplicateCards(keepId, dropId) {
+  if (!keepId || !dropId || keepId === dropId) return { merged: false };
+  const a = progress[keepId];
+  const b = progress[dropId];
+  if (b && (!a || (b.reps || 0) > (a.reps || 0) || (b.due || 0) > (a.due || 0))) {
+    progress[keepId] = b;
+  }
+  delete progress[dropId];
+  for (const row of reviewLog) {
+    if (row.id === dropId) { row.id = keepId; row.mergedFrom = dropId; }
+  }
+  saveJSON(LS.progress, progress);
+  saveReviewLog();
+  // P1b：IDB revlog 是真源。只改内存数组会留下 cardId=dropId 的孤儿流水，
+  // 合并后历史就断了。P1c：这段抽成 remapRevlog，absorbProgress 也走同一条路。
+  let idbRemapped = 0, idbSrsDeleted = false;
+  if (state.learner && state.learner.ready) {
+    idbRemapped = await remapRevlog(dropId, keepId);
+    // 被删卡的 srs 不留：进度已并进 keepId，孤儿 srs 只会让统计和迁移计数漂移
+    if (await idbGet('srs', dropId)) {
+      await idbDelete('srs', dropId);
+      idbSrsDeleted = true;
+    }
+  }
+  await softDeleteCard(dropId);
+  return { merged: true, keepId, dropId, idbRemapped, idbSrsDeleted };
+}
+
+// 导出：五项一个不少（schema/exportedAt 是包元信息，不算五项）
+function exportBundle() {
+  return {
+    schema: LEARN_SCHEMA, exportedAt: new Date().toISOString(),
+    progress: JSON.parse(JSON.stringify(progress)),
+    log: JSON.parse(JSON.stringify(reviewLog)),
+    userCards: JSON.parse(JSON.stringify(userCards)),
+    known: JSON.parse(JSON.stringify(known)),
+    cardIndex: JSON.parse(JSON.stringify(cardIndex)),
+  };
+}
+
+// P1b：IndexedDB revlog 是真源、不设上限；导出/同步把它的行折回 legacy {id,r,ts}
+// 形状，和内存数组按 (id,ts) 求并集。localStorage 写失败也不会少带一条流水。
+async function idbLegacyLog() {
+  const out = [];
+  const seen = new Set();
+  const add = (row) => {
+    if (!row || !row.id || row.ts === undefined) return;
+    const k = row.id + '@' + row.ts;
+    if (seen.has(k)) return;
+    seen.add(k); out.push(row);
+  };
+  for (const r of reviewLog) add(r);
+  if (state.learner && state.learner.ready) {
+    try {
+      for (const row of await idbAll('revlog')) {
+        add({ id: row.cardId, r: row.rating, ts: row.reviewedAt,
+              algo: row.algo, lib: row.lib,
+              ...(row.mergedFrom ? { mergedFrom: row.mergedFrom } : {}) });
+      }
+      for (const row of await idbAll('quiz_log')) {
+        add({ id: row.id, r: (row.detail && row.detail.r) || 'good', ts: row.at });
+      }
+    } catch (err) {
+      if (state.learner) state.learner.warn = '读 IndexedDB 全量流水失败：' + String(err && err.message || err);
+    }
+  }
+  out.sort((a, b) => (a.ts || 0) - (b.ts || 0));
+  return out;
+}
+
+async function exportBundleFull() {
+  const b = exportBundle();
+  b.log = await idbLegacyLog();
+  return b;
+}
+
+function validateBundle(data) {
+  if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error('文件不是一个对象');
+  for (const k of ['progress', 'log', 'userCards', 'known', 'cardIndex']) {
+    if (!(k in data)) throw new Error('缺字段：' + k);
+  }
+  if (!data.progress || typeof data.progress !== 'object' || Array.isArray(data.progress)) throw new Error('progress 格式不对');
+  if (!Array.isArray(data.log)) throw new Error('log 不是数组');
+  if (!Array.isArray(data.userCards)) throw new Error('userCards 不是数组');
+  if (!data.known || typeof data.known !== 'object' || Array.isArray(data.known)) throw new Error('known 格式不对');
+  if (!data.cardIndex || typeof data.cardIndex !== 'object' || Array.isArray(data.cardIndex)) throw new Error('cardIndex 格式不对');
+  const ids = new Set([...Object.keys(data.progress), ...data.userCards.map((c) => c && c.id)]);
+  for (const c of (state.pack && state.pack.courses) || []) for (const x of c.cards || []) ids.add(x.id);
+  for (const row of data.log) {
+    if (!row || !row.id || row.ts === undefined) throw new Error('log 条目缺 id/ts');
+    if (!ids.has(row.id)) throw new Error('log 引用了包外卡片：' + row.id);
+  }
+  return true;
+}
+
+function dryRunBundle(data) {
+  validateBundle(data);
+  const pAdded = Object.keys(data.progress).filter((id) => !progress[id]).length;
+  const pMerged = Object.keys(data.progress).filter((id) => !!progress[id]).length;
+  const seen = new Set(reviewLog.map((x) => x.id + '@' + x.ts));
+  const lAdded = data.log.filter((x) => !seen.has(x.id + '@' + x.ts)).length;
+  const kAdded = Object.keys(data.known).filter((k) => !known[k]).length;
+  const cIds = new Set(userCards.map((c) => c.id));
+  const cAdded = data.userCards.filter((c) => c && c.front && !cIds.has(c.id)).length;
+  return {
+    valid: true, added: pAdded + lAdded + kAdded + cAdded,
+    merged: pMerged, skipped: data.log.length - lAdded,
+    detail: { progressAdded: pAdded, progressMerged: pMerged, logAdded: lAdded,
+              knownAdded: kAdded, cardsAdded: cAdded },
+  };
+}
+
+async function applyBundle(data, plan) {
+  if (!plan || !plan.valid) throw new Error('必须先 dry-run 通过');
+  validateBundle(data);
+  const stamp = Date.now();
+  localStorage.setItem(LEARN_BACKUP_PREFIX + stamp, JSON.stringify({
+    schema: LEARN_SCHEMA, at: stamp, progress, log: reviewLog, userCards, known, cardIndex,
+  }));
+  for (const [id, v] of Object.entries(data.progress)) {
+    const cur = progress[id];
+    if (!cur || (v.reps || 0) > (cur.reps || 0) || (v.due || 0) > (cur.due || 0)) progress[id] = v;
+  }
+  const seen = new Set(reviewLog.map((x) => x.id + '@' + x.ts));
+  for (const row of data.log) {
+    const k = row.id + '@' + row.ts;
+    if (!seen.has(k)) { reviewLog.push(row); seen.add(k); }
+  }
+  reviewLog.sort((a, b) => (a.ts || 0) - (b.ts || 0));
+  for (const [k, v] of Object.entries(data.known)) {
+    if (!known[k] || (v.at || 0) > (known[k].at || 0)) known[k] = v;
+  }
+  for (const c of data.userCards) if (c && c.front) upsertCard(c);
+  saveJSON(LS.progress, progress);
+  saveReviewLog();
+  saveJSON(LS.known, known);
+  saveJSON(LS.userCards, userCards);
+  rebuildCardIndex();
+  if (state.learner.ready) {
+    await persistLearnerSnapshot();
+  }
+  return { ...plan, backupKey: LEARN_BACKUP_PREFIX + stamp };
+}
+
+async function persistLearnerSnapshot() {
+  if (!state.learner.ready) return false;
+  const writes = [];
+  for (const [id, e] of Object.entries(progress)) writes.push(['srs', srsFromEntry(id, e)]);
+  for (const row of reviewLog) {
+    if (String(row.id).indexOf('quiz-') === 0) continue;
+    writes.push(['revlog', {
+      id: row.id + '@' + (row.ts || 0) + '@' + (row.r || ''), cardId: row.id,
+      rating: row.r || '', reviewedAt: row.ts || 0, reviewKind: 'imported',
+      prev: null, next: null, algo: 'legacy-log', lib: FSRS_PIN, durationMs: 0,
+    }]);
+  }
+  await idbPutMany(writes);
+  return true;
+}
+
 let progress = loadJSON(LS.progress, {});
 let known = loadJSON(LS.known, {});   // 已掌握词表：下次抓生词时跳过
 let userCards = loadJSON(LS.userCards, []);  // 阅读时自己存的卡
@@ -548,28 +1092,45 @@ function schedule(id, rating, word) {
   const now = Date.now();
   e.last = now;
   e.reps += 1;
-  if (rating === 'again') {
-    e.lapses += 1; e.interval = 0; e.ease = Math.max(1.3, e.ease - 0.2);
-    e.due = now + 10 * 60000;
-  } else if (rating === 'hard') {
-    e.interval = e.interval < 1 ? 1 : Math.max(1, Math.round(e.interval * 1.2));
-    e.ease = Math.max(1.3, e.ease - 0.05);
-    e.due = now + e.interval * DAY;
-  } else if (rating === 'good') {
-    e.interval = e.interval < 1 ? 1 : Math.round(e.interval * e.ease);
-    e.due = now + e.interval * DAY;
+  const fr = fsrsReview(id, e, rating, now);
+  if (fr) {
+    // P1：ts-fsrs 5.1.0（FSRS-6）算 due，同时落 srs + revlog；legacy 字段继续给旧视图用
+    const days = Math.max(0, Math.round(Number(fr.card.scheduled_days) || 0));
+    e.due = new Date(fr.card.due).getTime();
+    e.interval = days || (Number(e.interval) || 0);
+    e.reps = Number(fr.card.reps) || e.reps;
+    e.lapses = Number(fr.card.lapses) || 0;
+    e.fsrs = {
+      stability: fr.card.stability, difficulty: fr.card.difficulty,
+      elapsed_days: fr.card.elapsed_days, scheduled_days: fr.card.scheduled_days,
+      learning_steps: fr.card.learning_steps, state: fr.card.state,
+      version: 'FSRS-6', approx: !!fr.approx, recovered: !!fr.recovered,
+    };
   } else {
-    e.interval = e.interval < 1 ? 2 : Math.round(e.interval * e.ease * 1.3);
-    e.ease = Math.min(3.2, e.ease + 0.15);
-    e.due = now + e.interval * DAY;
+    // 库没加载/算法出错时退回原 SM-2，不让复习卡死
+    if (rating === 'again') {
+      e.lapses += 1; e.interval = 0; e.ease = Math.max(1.3, e.ease - 0.2);
+      e.due = now + 10 * 60000;
+    } else if (rating === 'hard') {
+      e.interval = e.interval < 1 ? 1 : Math.max(1, Math.round(e.interval * 1.2));
+      e.ease = Math.max(1.3, e.ease - 0.05);
+      e.due = now + e.interval * DAY;
+    } else if (rating === 'good') {
+      e.interval = e.interval < 1 ? 1 : Math.round(e.interval * e.ease);
+      e.due = now + e.interval * DAY;
+    } else {
+      e.interval = e.interval < 1 ? 2 : Math.round(e.interval * e.ease * 1.3);
+      e.ease = Math.min(3.2, e.ease + 0.15);
+      e.due = now + e.interval * DAY;
+    }
   }
   progress[id] = e;
   saveJSON(LS.progress, progress);
 
-  // 只追加的复习流水：换调度算法（SM-2 → FSRS）或换 App 都不丢历史
-  reviewLog.push({ id, r: rating, ts: now });
-  if (reviewLog.length > 5000) reviewLog = reviewLog.slice(-5000);
-  saveJSON(LS.log, reviewLog);
+  // 只追加的复习流水：换调度算法或换 App 都不丢历史；P1b 去掉 5000 截断
+  reviewLog.push({ id, r: rating, ts: now, algo: fr ? fr.algo : 'sm2', lib: fr ? fr.lib : 'legacy' });
+  saveReviewLog();
+  persistLearnerReview(id, e, rating, now, fr);
 
   scheduleSync();
 
@@ -672,7 +1233,13 @@ function course() {
   }
   return state.pack?.courses.find((c) => c.id === state.courseId) || null;
 }
-function allCards() { return course()?.cards || []; }
+function allCards() {
+  let arr = course()?.cards || [];
+  const L = state.learner;
+  if (!L || !L.ready) return arr;
+  arr = arr.filter((c) => !L.deleted.has(c.id));
+  return arr.map((c) => (L.overrides[c.id] ? { ...c, ...L.overrides[c.id] } : c));
+}
 
 function dueQueue() {
   const now = Date.now();
@@ -1025,7 +1592,12 @@ function renderBrowse() {
     const e = entry(c.id);
     const tag = isKnown(c.front) ? '✓ 已掌握'
       : e.reps === 0 ? '未学' : e.due <= now ? '到期' : `${Math.ceil((e.due - now) / DAY)} 天后`;
-    return `<div class="it"><span>${esc(c.front)}</span><small>${tag}</small></div>`;
+    const dup = duplicateIdsOf(c.id).length;
+    return `<div class="it" data-card="${esc(c.id)}"><span>${esc(c.front)}</span><small>${tag}</small>`
+      + `<span class="cardTools"><button class="btn ghost ceEdit" data-card="${esc(c.id)}">编辑</button>`
+      + `<button class="btn ghost ceDel" data-card="${esc(c.id)}">删除</button>`
+      + (dup ? `<button class="btn ghost ceMerge" data-card="${esc(c.id)}">合并 ${dup}</button>` : '')
+      + '</span></div>';
   }).join('');
   view.innerHTML = `<div class="row" style="margin:6px 0 4px">
       <button class="btn primary" id="aiQuizBtn2">做测验</button>
@@ -1033,6 +1605,82 @@ function renderBrowse() {
     <h2>${esc(course()?.title || '')} · ${allCards().length} 张</h2>
     <div class="list">${items || '<div class="empty">这门课还没有卡片</div>'}</div>`;
   $('#aiQuizBtn2').onclick = () => { state.tab = 'quiz'; state.quiz = null; render(); };
+  view.querySelectorAll('.ceEdit').forEach((b) => {
+    b.onclick = () => openCardEditor(b.dataset.card);
+  });
+  view.querySelectorAll('.ceDel').forEach((b) => {
+    b.onclick = async () => { await softDeleteCard(b.dataset.card); toast('已删除（刷新也不会复活）'); };
+  });
+  view.querySelectorAll('.ceMerge').forEach((b) => {
+    b.onclick = async () => {
+      const drop = duplicateIdsOf(b.dataset.card)[0];
+      const r = await mergeDuplicateCards(b.dataset.card, drop);
+      toast(r.merged ? '已合并重复卡，复习记录保留' : '没有可合并的卡');
+      render();
+    };
+  });
+}
+
+// 卡片详情：编辑 front/back/extra/tags/来源，保存写 updatedAt；删除走软删除墓碑
+function findCardById(id) {
+  return allCards().find((c) => c.id === id) || userCards.find((c) => c.id === id) || null;
+}
+
+function openCardEditor(id) {
+  const c = findCardById(id);
+  if (!c) return null;
+  const old = document.getElementById('cardEditOverlay');
+  if (old) old.remove();
+  const box = document.createElement('div');
+  box.id = 'cardEditOverlay';
+  box.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.45);display:flex;'
+    + 'align-items:center;justify-content:center;padding:16px';
+  box.innerHTML = `<div style="background:var(--bg,#fff);color:var(--text,#222);padding:16px;border-radius:12px;`
+    + `width:min(440px,100%);max-height:90vh;overflow:auto">
+      <h3>编辑卡片</h3>
+      <label class="f">正面</label><input class="t" id="ceFront" value="${esc(c.front || '')}">
+      <label class="f">背面</label><input class="t" id="ceBack" value="${esc(c.back || '')}">
+      <label class="f">补充</label><input class="t" id="ceExtra" value="${esc(c.extra || '')}">
+      <label class="f">标签（逗号分隔）</label><input class="t" id="ceTags" value="${esc((c.tags || []).join(','))}">
+      <label class="f">来源</label><input class="t" id="ceSource" value="${esc((c.source && (c.source.title || c.source.kind)) || '')}">
+      <div class="row" style="margin-top:12px;flex-wrap:wrap">
+        <button class="btn primary" id="ceSave">保存</button>
+        <button class="btn ghost" id="ceDel2">删除</button>
+        <button class="btn ghost" id="ceClose">取消</button>
+      </div></div>`;
+  document.body.appendChild(box);
+  box.querySelector('#ceClose').onclick = () => box.remove();
+  box.querySelector('#ceDel2').onclick = async () => {
+    await softDeleteCard(id); box.remove(); render(); toast('已删除');
+  };
+  box.querySelector('#ceSave').onclick = async () => {
+    const fields = {
+      front: box.querySelector('#ceFront').value.trim(),
+      back: box.querySelector('#ceBack').value.trim(),
+      extra: box.querySelector('#ceExtra').value.trim(),
+      tags: box.querySelector('#ceTags').value.split(/[,，]/).map((s) => s.trim()).filter(Boolean),
+      source: { ...(c.source || {}), title: box.querySelector('#ceSource').value.trim() },
+      updatedAt: Date.now(),
+    };
+    if (!fields.front) { toast('正面不能为空'); return; }
+    Object.assign(c, fields);
+    if (userCards.some((x) => x.id === id)) saveJSON(LS.userCards, userCards);
+    await persistCardOverride(c);
+    rebuildCardIndex();
+    box.remove(); render(); toast('已保存');
+  };
+  return box;
+}
+
+async function saveCardEdit(id, fields) {
+  const c = findCardById(id);
+  if (!c) return false;
+  Object.assign(c, fields || {}, { updatedAt: Date.now() });
+  if (userCards.some((x) => x.id === id)) saveJSON(LS.userCards, userCards);
+  await persistCardOverride(c);
+  rebuildCardIndex();
+  if (state.tab === 'browse' || state.tab === 'review') render();
+  return true;
 }
 
 // ── 书架（B5）：NG 书目 + 网页档案混排 ──────────────────────────
@@ -1722,6 +2370,23 @@ function renderChat() {
   };
 }
 
+function showLearnerStatus() {
+  const el = $('#learnerStatus');
+  if (!el) return;
+  const L = state.learner || {};
+  if (!L.ready) {
+    el.textContent = '学习库迁移失败或未完成：' + (L.warn || 'IndexedDB 不可用，暂时沿用旧存储');
+    el.style.color = '#b00020';
+    return;
+  }
+  const n = (L.counts && L.counts.cards) || 0;
+  const keep = L.migratedAt ? new Date(L.migratedAt + LEARN_KEEP_DAYS * 86400000).toLocaleDateString() : '-';
+  el.style.color = L.warn ? '#b00020' : '';
+  el.textContent = `已迁移 ${n} 张 / 旧键保留至 ${keep}（只读快照）`
+    + ` · 算法 ${FSRS_PIN}`
+    + (L.warn ? ' · 警告：' + L.warn : '');
+}
+
 function renderSettings() {
   view.innerHTML = `
     <h2>AI 接口</h2>
@@ -1778,8 +2443,9 @@ function renderSettings() {
     <div class="hint">共 ${Object.keys(known).length} 条。复习稳（间隔≥21天且连续答对）会自动加入，答错自动移出；抓生词时会跳过这些。</div>
     <div class="row" style="margin-top:8px"><button class="btn" id="clearKnown">清空词表</button></div>
 
-    <h2>进度</h2>
-    <div class="hint">进度只保存在这台手机上。导出后放进 git 或网盘，换手机时导入。</div>
+    <h2>进度与卡片库</h2>
+    <div class="hint" id="learnerStatus">学习库迁移状态：检查中…</div>
+    <div class="hint">导出含 progress / log / userCards / known / cardIndex 五项；导入先 dry-run 报新增/合并/跳过，执行前自动备份旧数据。</div>
     <div class="row" style="margin-top:8px">
       <button class="btn" id="exportProg">导出进度</button>
       <button class="btn" id="importProg">导入进度</button>
@@ -1836,6 +2502,7 @@ function renderSettings() {
       + (settings.syncError ? '；上次失败：' + settings.syncError : '');
   })();
   showBundleInfo();
+  showLearnerStatus();
   const bi = $('#btnInstall');
   const ih = $('#installHint');
   if (bi && ih) {
@@ -1912,12 +2579,14 @@ function renderSettings() {
   };
   const dg = $('#diagBtn');
   if (dg) dg.onclick = showDiag;
-  $('#exportProg').onclick = () => {
-    const blob = new Blob([JSON.stringify({ version: 1, progress, log: reviewLog }, null, 2)],
-      { type: 'application/json' });
+  $('#exportProg').onclick = async () => {
+    let bundle;
+    try { bundle = await exportBundleFull(); }
+    catch (e) { bundle = exportBundle(); }   // 库打不开也至少导出内存全量
+    const blob = new Blob([JSON.stringify(bundle, null, 2)], { type: 'application/json' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = `zenus-progress-${new Date().toISOString().slice(0, 10)}.json`;
+    a.download = `zenus-learner-${new Date().toISOString().slice(0, 10)}.json`;
     a.click();
     URL.revokeObjectURL(a.href);
   };
@@ -1927,19 +2596,14 @@ function renderSettings() {
     if (!f) return;
     try {
       const data = JSON.parse(await f.text());
-      const incoming = data.progress || data;
-      let n = 0;
-      for (const [id, v] of Object.entries(incoming)) {
-        // 同一条记录取「复习次数更多 / 更晚到期」的那份，避免旧版覆盖新版
-        const cur = progress[id];
-        if (!cur || (v.reps || 0) > (cur.reps || 0) || (v.due || 0) > (cur.due || 0)) {
-          progress[id] = v; n++;
-        }
-      }
-      saveJSON(LS.progress, progress);
-      toast(`已合并 ${n} 条进度`);
+      const plan = dryRunBundle(data);   // 先 dry-run；任何校验失败都停在导入前
+      const ok = (typeof confirm !== 'function') || confirm(
+        `导入预览：新增 ${plan.added} / 合并 ${plan.merged} / 跳过 ${plan.skipped}。执行前会备份旧数据，继续？`);
+      if (!ok) return;
+      const r = await applyBundle(data, plan);
+      toast(`导入完成：新增 ${r.added} / 合并 ${r.merged}；备份 ${r.backupKey}`);
       render();
-    } catch (err) { toast('文件读不出来：' + err.message); }
+    } catch (err) { toast('导入已拒绝，未改动数据：' + err.message); }
   };
 }
 
@@ -2179,7 +2843,7 @@ function renderQuiz() {
     if (!z.done) {
       z.done = true;
       reviewLog.push({ id: 'quiz-' + Date.now(), r: pct >= 80 ? 'good' : 'again', ts: Date.now() });
-      saveJSON(LS.log, reviewLog.slice(-5000));
+      saveReviewLog();
     }
     return;
   }
@@ -2308,11 +2972,15 @@ async function ghPut(path, obj, sha) {
   return r.json();
 }
 
-function localState() {
-  return { device: deviceId(), updatedAt: Date.now(), progress, log: reviewLog, known, userCards };
+async function localState() {
+  return {
+    device: deviceId(), updatedAt: Date.now(), progress, log: await idbLegacyLog(),
+    known, userCards,
+    deleted: state.learner && state.learner.ready ? [...state.learner.deleted] : [],
+  };
 }
 
-function mergeState(remote) {
+async function mergeState(remote) {
   let changed = 0;
   // 进度：取「复习次数更多 / 到期更晚」
   for (const [id, v] of Object.entries(remote.progress || {})) {
@@ -2327,7 +2995,7 @@ function mergeState(remote) {
     if (!seen.has(e.id + '@' + e.ts)) { reviewLog.push(e); seen.add(e.id + '@' + e.ts); changed++; }
   }
   reviewLog.sort((a, b) => a.ts - b.ts);
-  if (reviewLog.length > 5000) reviewLog = reviewLog.slice(-5000);
+  // P1b：不再截断；全量流水同步落到 IDB，导出时才不会漏
   // 已掌握：并集，取更新的时间戳
   for (const [k, v] of Object.entries(remote.known || {})) {
     if (!known[k] || (v.ts || 0) > (known[k].ts || 0)) { known[k] = v; changed++; }
@@ -2338,14 +3006,27 @@ function mergeState(remote) {
     const r = upsertCard(c);
     if (r.added) changed++;
     else if (r.reason === 'merged' && c.id && r.card) {
-      if (absorbProgress(c.id, r.card.id)) changed++;
+      if (await absorbProgress(c.id, r.card.id)) changed++;
+    }
+  }
+  // 软删除墓碑：删过的卡在别的设备也不能复活
+  // P1c：墓碑必须落 IDB cards.deletedAt，否则 loadLearnerMeta() 重建时卡会复活。
+  if (state.learner && state.learner.ready && Array.isArray(remote.deleted)) {
+    for (const id of remote.deleted) {
+      if (!id) continue;
+      if (!state.learner.deleted.has(id)) { state.learner.deleted.add(id); changed++; }
+      const prev = await idbGet('cards', id);
+      await idbPut('cards', { ...(prev || {}), id,
+                              deletedAt: prev && prev.deletedAt || Date.now(), updatedAt: Date.now() });
+      delete state.learner.overrides[id];
     }
   }
   if (changed) {
     saveJSON(LS.progress, progress);
-    saveJSON(LS.log, reviewLog);
+    saveReviewLog();
     saveJSON(LS.known, known);
     saveJSON(LS.userCards, userCards);
+    if (state.learner && state.learner.ready) persistLearnerSnapshot().catch(() => {});
     renderHeader();
   }
   return changed;
@@ -2383,12 +3064,12 @@ async function syncNow(opts) {
       if (!f.name.endsWith('.json') || f.name === deviceId() + '.json') continue;
       const one = await ghGet('devices/' + f.name);
       if (!one || !one.content) continue;
-      pulled += mergeState(JSON.parse(b64decode(one.content)));
+      pulled += await mergeState(JSON.parse(b64decode(one.content)));
       files++;
     }
     // 2) 推自己的文件
     const own = await ghGet('devices/' + deviceId() + '.json');
-    await ghPut('devices/' + deviceId() + '.json', localState(), own && own.sha);
+    await ghPut('devices/' + deviceId() + '.json', await localState(), own && own.sha);
     // 3) 记录级同步（A 批）：书 + 阅读位置 + 删除墓碑，一本书一条。
     //    整包那份只管复习进度；书和位置走这里，两台设备交替用才不互相盖掉。
     let rec = null;
@@ -8255,12 +8936,14 @@ function rebuildCardIndex() {
   const idx = {};
   for (const c of (state.pack && state.pack.courses) || []) {
     for (const card of c.cards || []) {
-      const k = normFront(card.front);
+      if (state.learner && state.learner.deleted.has(card.id)) continue;
+      const k = cardKey(card);
       if (k && !idx[k]) idx[k] = '__pack__:' + card.id;
     }
   }
   for (const c of userCards) {
-    const k = normFront(c.front);
+    if (state.learner && state.learner.deleted.has(c.id)) continue;
+    const k = cardKey(c);
     if (k && !idx[k]) idx[k] = c.id;
   }
   cardIndex = idx;
@@ -8280,7 +8963,8 @@ function mergeCardFields(target, incoming, keepTargetFirst) {
 }
 
 // 合并两张卡时，把输家的复习进度/流水挪给赢家（不丢记录）
-function absorbProgress(fromId, toId) {
+// P1c：改成 async，走 saveReviewLog 的配额保护，并把 IDB revlog 一起改掉。
+async function absorbProgress(fromId, toId) {
   if (!fromId || !toId || fromId === toId) return 0;
   let moved = 0;
   const a = progress[fromId];
@@ -8289,9 +8973,12 @@ function absorbProgress(fromId, toId) {
     progress[toId] = a; moved++;
   }
   if (a) { delete progress[fromId]; moved++; }
-  for (const row of reviewLog) { if (row.id === fromId) row.id = toId; }
-  if (moved) { saveJSON(LS.progress, progress); saveJSON(LS.log, reviewLog); }
-  return moved;
+  for (const row of reviewLog) {
+    if (row.id === fromId) { row.id = toId; row.mergedFrom = fromId; }
+  }
+  if (moved) { saveJSON(LS.progress, progress); saveReviewLog(); }
+  const remapped = await remapRevlog(fromId, toId);
+  return moved + remapped;
 }
 
 /**
@@ -8303,10 +8990,11 @@ function absorbProgress(fromId, toId) {
 function upsertCard(input) {
   const front = String(input.front || '').trim().replace(/\s+/g, ' ');
   if (!front) return { added: false, reason: 'empty' };
-  const key = normFront(front);
+  const candidate = { ...input, front };
+  const key = cardKey(candidate);   // §5.3：按卡型的去重键，句子卡不再互相误杀
 
   const packHit = (state.pack && state.pack.courses || []).some(
-    (c) => (c.cards || []).some((x) => normFront(x.front) === key)
+    (c) => (c.cards || []).some((x) => cardKey(x) === key)
   );
   if (packHit) {
     cardIndex[key] = cardIndex[key] || ('__pack__:' + key);
@@ -8318,27 +9006,35 @@ function upsertCard(input) {
   const existing = ownerId ? userCards.find((c) => c.id === ownerId) : null;
   if (existing) {
     mergeCardFields(existing, input, true);
-    if (input.id && input.id !== existing.id) absorbProgress(input.id, existing.id);
+    if (input.id && input.id !== existing.id) {
+      absorbProgress(input.id, existing.id).catch(() => {});
+    }
     existing.updatedAt = Date.now();
     saveJSON(LS.userCards, userCards);
+    // P1c：同词合并是常规写入路径，合并后的字段必须回写 IDB override，
+    // 否则 loadLearnerMeta() 会用旧 override 把 localStorage 的新字段盖回去。
+    if (state.learner && state.learner.ready) {
+      persistCardOverride(existing).catch(() => {});
+    }
     coreCall('cards.upsert', { cards: [toCoreCard(existing)] });
     return { added: false, reason: 'merged', card: existing };
   }
 
   const card = {
     id: input.id || ('u-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6)),
-    front,
+    front, type: cardType(candidate), extra: '', tags: input.tags || [],
     back: '', hint: '', explain: '',
     topic: input.topic || '网页生词',
     source: input.source || { kind: 'unknown' },
-    createdAt: Date.now(),
-    updatedAt: Date.now(),
+    createdAt: input.createdAt || Date.now(),
+    updatedAt: input.updatedAt || Date.now(),
   };
   mergeCardFields(card, input, false);
   userCards.unshift(card);
   cardIndex[key] = card.id;
   saveJSON(LS.userCards, userCards);
   saveJSON(LS.cardIndex, cardIndex);
+  if (state.learner && state.learner.ready) persistCardOverride(card).catch(() => {});
   // 镜像到原生学习内核（App 里才有；浏览器里是 no-op）
   coreCall('cards.upsert', { cards: [toCoreCard(card)] });
   return { added: true, card };
@@ -8366,7 +9062,7 @@ function migrateCardsV2() {
       };
       if (prev) {
         mergeCardFields(prev, norm, true);
-        absorbProgress(norm.id, prev.id);
+        absorbProgress(norm.id, prev.id).catch(() => {});
       } else {
         seen.set(k, norm);
         kept.push(norm);
@@ -8450,6 +9146,12 @@ async function pullWebCards() {
   }
   try {
     migrateCardsV2();
+    try { await migrateLearner(); }
+    catch (err) {
+      // 迁移失败不能静默：状态页 + 日志都要能看见，且不删任何旧键
+      state.learner.warn = '迁移失败：' + String(err && err.message || err);
+      console.error('[zenus] migrateLearner failed', err);
+    }
     renderHeader();
     render();
     // APK（TWA）把「用其他应用打开 / 分享」的链接转成 ?import=xxx 传进来

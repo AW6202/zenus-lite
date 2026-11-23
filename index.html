@@ -192,6 +192,8 @@ input.t{width:100%;background:var(--card);border:1px solid var(--line);color:var
 #selTools button:active{background:#3a4150}
 #speakFab{position:fixed;z-index:98;background:#2a2f3a;color:#fff;border:1px solid var(--line);
   border-radius:999px;padding:8px 14px;font-size:14px;box-shadow:0 4px 14px rgba(0,0,0,.35)}
+.cardTools{display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end;margin-top:4px}
+.cardTools .btn{padding:3px 7px;font-size:12px;line-height:1.4}
 </style>
 </head>
 <body>
@@ -285,6 +287,8 @@ input.t{width:100%;background:var(--card);border:1px solid var(--line);color:var
 <!-- 版本号必须跟 app.js 的 BUILD 一起改：否则手机 WebView 会吃旧缓存，看不到新功能 -->
 <script src="conv.js?v=2026-11-15.22"></script>
 <script src="sync.js?v=2026-11-15.22"></script>
-<script src="app.js?v=2026-11-16.1"></script>
+<!-- ts-fsrs 5.1.0 = FSRS-6.0，pin 版本；升级必须同时改 BUILD 并重跑迁移/冒烟 -->
+<script src="vendor/ts-fsrs.umd.js?v=5.1.0"></script>
+<script src="app.js?v=2026-11-23.1"></script>
 </body>
 </html>
