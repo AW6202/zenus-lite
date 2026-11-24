@@ -3,3 +3,7 @@ node_modules/
 *.log
 _live.*
 .scratch/
+
+# Python 缓存（跑 smoke/check_pack 会重写 .pyc，跟踪它们只会让工作树永远「脏」）
+__pycache__/
+*.pyc
