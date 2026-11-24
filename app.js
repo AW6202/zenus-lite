@@ -1,7 +1,7 @@
 // 学习机 Lite — 静态 PWA：内容来自 pack.json，进度存本地，AI 直连 OpenAI 兼容接口
 'use strict';
 
-const BUILD = '2026-11-24.2';
+const BUILD = '2026-11-24.3';
 
 const LS = {
   progress: 'zenus.progress.v1',
@@ -203,12 +203,19 @@ async function pullCoreInbox() {
   const haveCard = new Set((typeof userCards !== 'undefined' && userCards ? userCards : [])
     .map((c) => normWord(c.front)));
   let added = 0;
+  const staleIds = [];   // 2026-11-24：过滤掉的行要从 Core 删掉，清掉设备上积压的历史行
   for (const it of arr) {
     const key = it.id || it.front;
     if (!key || seen.has(key)) continue;
-    if (inboxDoneHas(it)) continue;          // 已经加入/跳过的，别再塞回来
+    if (inboxDoneHas(it)) {                  // 已经加入/跳过的，别再塞回来
+      if (it.id) staleIds.push(it.id);
+      continue;
+    }
     const w = normWord(it.front || '');
-    if (w && (isKnown(it.front) || haveCard.has(w))) continue;   // 认识的/已有的，不该再问
+    if (w && (isKnown(it.front) || haveCard.has(w))) {   // 认识的/已有的，不该再问
+      if (it.id) staleIds.push(it.id);
+      continue;
+    }
     // 壳「存卡」没带例句：用 selectionchange 记下的「选区所在句」回填（离线可用）
     if (!it.example) {
       const eg = recallSelectionExample(it.front);
@@ -218,6 +225,9 @@ async function pullCoreInbox() {
     state.inbox.push(it);
     added++;
   }
+  // 一次性删：Core 的「待同步」是原始行数，不删就永远比面板的「待确认」大。
+  // best-effort：老 APK 没有 inbox.remove，coreCall 吞掉即可，不弹错。
+  if (staleIds.length) coreCall('inbox.remove', { ids: staleIds }, 8000).catch(() => {});
   if (added) {
     saveJSON(LS.inbox, state.inbox);
     if (state.tab === 'review') renderReview();
@@ -1394,6 +1404,7 @@ function showInboxSheet() {
   }
   const body = items.length ? items.map((it, i) => `<div class="card" style="margin:8px 0" data-row="${i}">
       <div class="front" style="font-size:17px">${esc(it.front || '')}</div>
+      ${(!it.back && !it.hint) ? '<div class="sub" data-missing="1" style="font-size:12px">词典未收录 · 加入后自动补释义</div>' : ''}
       ${it.hint ? `<div class="sub">${esc(it.hint)}</div>` : ''}
       ${it.back ? `<div class="back">${esc(it.back)}</div>` : ''}
       ${it.example ? `<div class="eg">${esc(it.example)}</div>` : ''}
@@ -1439,6 +1450,9 @@ function showInboxSheet() {
         b.disabled = true;
         // 立即刷新顶部课程下拉，让「我的生词（N）」当场出现（以前要重启才见）
         renderHeader();
+        // 2026-11-24：词典没收录的词背面是空的。补释义异步跑，不 await、不挡按钮，
+        // 也不因为 API 没配而把「已加入」改成红字——补不上是正常情况。
+        if (!r.card.back) fillCardMeaning(r.card);
       } else {
         b.textContent = '已存在';
         b.disabled = true;
@@ -1446,6 +1460,9 @@ function showInboxSheet() {
       // 不要按索引 splice：后面的按钮还拿着旧索引，会跳项。标记后按对象过滤。
       it._resolved = true;
       inboxDoneMark(it);                       // 记住这张卡已处理，原生那边还留着也不会再回来
+      // 处理即删（2026-11-24）：Core 那一行也删掉，「待同步」才会等于「待确认」。
+      // best-effort，老 APK 不认 inbox.remove 时 coreCall 吞掉，不影响入卡。
+      if (it.id) coreCall('inbox.remove', { ids: [it.id] }, 8000).catch(() => {});
       state.inbox = state.inbox.filter((x) => !x._resolved);
       saveInbox();
       const left = state.inbox.length;
@@ -1491,6 +1508,9 @@ function showInboxSheet() {
         b.textContent = '已掌握';
         b.dataset.done = '1';                 // 再点一次进入撤销分支
         coreCall('learner.markKnown', { word: it.front, why: 'skip' }, 3000).catch(() => {});
+        // 跳过 = 处理完：Core 行也删（best-effort）。本轮还留在 items[] 里，
+        // 所以「再点一次已掌握」仍能撤销；关面板后再撤销走已掌握那条路（app.js:1624 的 unmarkKnown）。
+        if (it.id) coreCall('inbox.remove', { ids: [it.id] }, 8000).catch(() => {});
       }
       it._resolved = true;
       inboxDoneMark(it);                      // 本地 known + 原生 known + 这里记一笔
@@ -2447,6 +2467,24 @@ function showLearnerStatus() {
     + (L.warn ? ' · 警告：' + L.warn : '');
 }
 
+// 已掌握词表逐词列表（200035 §4c）：按加入时间倒序，skip/manual/review 全列，
+// 行尾小字标来源。只渲染列表内容；移除单条时由事件处理器就地删行，不重渲染整页。
+function knownListHtml() {
+  const entries = Object.keys(known).map((w) => {
+    const v = known[w] || {};
+    return { w, at: Number(v.at) || 0, why: v.why || '' };
+  }).sort((a, b) => b.at - a.at);
+  if (!entries.length) return '<div class="hint">还没有标记过已掌握的词</div>';
+  const cap = 200;
+  const whyLabel = { skip: '跳过', manual: '手动', review: '复习晋级' };
+  const rows = entries.slice(0, cap).map((e) => `<div class="it" data-known-row="${esc(e.w)}">
+      <span>${esc(e.w)} <small>${esc(whyLabel[e.why] || e.why || '已掌握')}</small></span>
+      <button class="btn ghost" data-known-remove="${esc(e.w)}" style="width:auto;padding:4px 10px;font-size:12px">移除</button>
+    </div>`).join('');
+  return `<div class="list">${rows}</div>`
+    + (entries.length > cap ? '<div class="hint">只显示最近 200 条</div>' : '');
+}
+
 function renderSettings() {
   view.innerHTML = `
     <h2>AI 接口</h2>
@@ -2500,8 +2538,12 @@ function renderSettings() {
     </div>
 
     <h2>已掌握词表</h2>
-    <div class="hint">共 ${Object.keys(known).length} 条。复习稳（间隔≥21天且连续答对）会自动加入，答错自动移出；抓生词时会跳过这些。</div>
-    <div class="row" style="margin-top:8px"><button class="btn" id="clearKnown">清空词表</button></div>
+    <div class="hint">共 <span id="knownCount">${Object.keys(known).length}</span> 条。复习稳（间隔≥21天且连续答对）会自动加入，答错自动移出；抓生词时会跳过这些。</div>
+    <div class="row" style="margin-top:8px">
+      <button class="btn ghost" id="toggleKnownList">展开已掌握列表</button>
+      <button class="btn" id="clearKnown">清空词表</button>
+    </div>
+    <div id="knownList" style="display:none;margin-top:8px">${knownListHtml()}</div>
 
     <h2>进度与卡片库</h2>
     <div class="hint" id="learnerStatus">学习库迁移状态：检查中…</div>
@@ -2618,6 +2660,37 @@ function renderSettings() {
     saveJSON(LS.settings, settings);
     toast('已保存');
   };
+  const tkl = $('#toggleKnownList');
+  if (tkl) tkl.onclick = () => {
+    const box = $('#knownList');
+    if (!box) return;
+    const show = box.style.display === 'none';
+    box.style.display = show ? '' : 'none';
+    tkl.textContent = show ? '收起已掌握列表' : '展开已掌握列表';
+  };
+  const kl = $('#knownList');
+  if (kl) kl.querySelectorAll('[data-known-remove]').forEach((b) => {
+    b.onclick = () => {
+      const w = b.dataset.knownRemove;
+      if (!w) return;
+      // unmarkKnown 已同时清本地 known + 原生 learner.unmarkKnown；不要自己重写一套。
+      unmarkKnown(w);
+      // 只删这一行 + 更新计数，绝不 renderSettings()（会丢设置页滚动位置）。
+      const row = b.closest('[data-known-row]');
+      if (row) row.remove();
+      const countEl = $('#knownCount');
+      if (countEl) countEl.textContent = String(Object.keys(known).length);
+      const hint = $('#knownList .hint');
+      if (!kl.querySelector('[data-known-row]')) kl.innerHTML = '<div class="hint">还没有标记过已掌握的词</div>';
+      else if (hint && hint.textContent.indexOf('只显示') >= 0 && Object.keys(known).length <= 200) hint.remove();
+      // 顶部 meta 也跟着变，但不重渲染整页
+      const meta = view.querySelector('.meta span:last-child');
+      if (meta && /已掌握/.test(meta.textContent)) {
+        meta.textContent = '共 ' + allCards().length + ' 张 · 已掌握 ' + Object.keys(known).length;
+      }
+      toast('已移出「已掌握」');
+    };
+  });
   const ck = $('#clearKnown');
   if (ck) ck.onclick = () => {
     if (!Object.keys(known).length) return toast('本来就是空的');
@@ -7878,7 +7951,8 @@ async function collectDiag() {
         L.push('WebView 内核：' + (env.webViewPkg || '?') + ' ' + (env.webViewVersion || '?'));
       }
     } catch (e) { L.push('App 环境：取不到（' + e.message + '）'); }
-    for (const cmd of ['clipboard', 'inbox']) {
+    // 'inbox' 旧桥命令 200035 已删；探测改成 stats.get，别让诊断误报「桥 inbox：失败」
+    for (const cmd of ['clipboard', 'stats.get']) {
       const t0 = Date.now();
       try {
         await nativeCall(cmd, {}, 6000);
@@ -8782,8 +8856,16 @@ function addCardFromSelection(text, example) {
 
 async function fillCardMeaning(card) {
   const sys = '你是英语词典，只输出 JSON。';
-  const user = '词或短语：' + card.front
-    + '\n返回 JSON：{"back":"简体中文释义，短语给出用法","phonetic":"英式音标，短语留空","example":"一个自然例句","exampleCN":"例句中文"}';
+  // 2026-11-24：卡片已有例句（选区整句/真实语境）时，只让 AI 译这一句。
+  // 明确禁止改写/替换 example；回包中的 example 字段一律不读。
+  const hasExample = !!(card && card.example);
+  const user = hasExample
+    ? '词或短语：' + card.front
+      + '\n例句：' + card.example
+      + '\n（例句是真实语境，不要改写或替换例句；只给它的中文翻译。）'
+      + '\n返回 JSON：{"back":"简体中文释义，短语给出用法","phonetic":"英式音标，短语留空","exampleCN":"上面这句英文的中文翻译"}'
+    : '词或短语：' + card.front
+      + '\n返回 JSON：{"back":"简体中文释义，短语给出用法","phonetic":"英式音标，短语留空","example":"一个自然例句","exampleCN":"例句中文"}';
   try {
     let content = await coreAsk('card', {
       system: sys, input: user, json: true, temperature: 0.3,
@@ -8810,12 +8892,16 @@ async function fillCardMeaning(card) {
       content = j.choices[0].message.content;
     }
     const d = JSON.parse(content);
-    card.back = d.back || '';
-    card.hint = d.phonetic || '';
-    // 2026-11-24：选区所在的那一句是真实语境，AI 现编的例句不能盖掉它。
-    // exampleCN 是 AI 那句例句的译文，必须跟例句同进同退——否则会出现
-    // 「真实英文句 + 另一句的中文翻译」这种对不上的卡。
-    if (!card.example) {
+    // 空字段不写：失败/没给全就保持卡片原样，不许落半截。
+    if (d.back) card.back = String(d.back).trim();
+    if (d.phonetic) card.hint = String(d.phonetic).trim();
+    if (hasExample) {
+      // 真实例句只求译文：example 绝不写，exampleCN ≤240 字，空就不写。
+      // 否则会出现「真实英文句 + 另一句的中文翻译」这种对不上的卡。
+      const cn = String(d.exampleCN || '').trim().slice(0, 240);
+      if (cn) card.exampleCN = cn;
+    } else {
+      // 没有例句：保持原行为，AI 给例句 + 译文，一起写。
       card.example = d.example || '';
       card.exampleCN = d.exampleCN || '';
     }

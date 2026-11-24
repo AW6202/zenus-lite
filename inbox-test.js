@@ -93,6 +93,7 @@ class CDP {
 const STUB = `
   window.__inbox = {
     cmds: [],
+    removed: [],
     supportsList: true,
     items: [
       { id: 'w-alpha', front: 'alpha', back: '第一个' },
@@ -114,6 +115,13 @@ const STUB = `
         else msg = { id: req.id, ok: false, error: 'unknown cmd: inbox.list' };
       } else if (req.cmd === 'inbox.take') {
         msg.data = window.__inbox.items;
+      } else if (req.cmd === 'inbox.remove') {
+        // 200035：真删行，验「处理即删 + done 名单」双保险
+        const ids = (req.args && req.args.ids) || [];
+        const before = window.__inbox.items.length;
+        window.__inbox.items = window.__inbox.items.filter((x) => ids.indexOf(x.id) < 0);
+        window.__inbox.removed.push({ ids: ids.slice(), removed: before - window.__inbox.items.length });
+        msg.data = { ok: true, removed: before - window.__inbox.items.length };
       }
       this._emit(msg);
     }
@@ -330,6 +338,57 @@ const STUB = `
       undo.lastSkipped.alive === true && undo.lastSkipped.label === '已掌握'
       && undo.lastUndone.count === 1 && undo.lastUndone.ids.join(',') === 'u-three'
       && undo.lastUndone.head === '待确认（1）', undo);
+
+    // ── 7. 处理即删 + 首次清历史：Core 原始行数 == 面板待确认数（2026-11-24）──
+    const coreDel = await cdp.eval(`
+      window.__inbox.supportsList = true;
+      window.__inbox.items = [
+        { id: 'd-one', front: 'del-one', back: '一' },
+        { id: 'd-two', front: 'del-two', back: '二' },
+        { id: 'd-three', front: 'del-three', back: '三' }
+      ];
+      window.__inbox.removed = [];
+      state.inbox = [];
+      for (const w of ['del-one','del-two','del-three']) { delete known[w]; delete inboxDone['w:'+w]; }
+      delete inboxDone['id:d-one']; delete inboxDone['id:d-two']; delete inboxDone['id:d-three'];
+      saveJSON(LS.known, known); saveJSON(LS.inboxDone, inboxDone);
+      await pullCoreInbox();
+      const coreBefore = window.__inbox.items.length;
+      showInboxSheet();
+      const o = document.getElementById('inboxOverlay');
+      o.querySelector('[data-add="0"]').click();
+      await new Promise(r => setTimeout(r, 500));
+      o.querySelector('[data-skip="1"]').click();
+      const afterHandle = {
+        core: window.__inbox.items.map(x => x.id),
+        removed: window.__inbox.removed.slice(),
+        pending: state.inbox.map(x => x.id),
+      };
+      o.querySelector('#inboxClose').click();
+      // 历史积压：Core 里塞一条已认识的旧行，拉取时过滤 + 一次性删行
+      known['del-ghost'] = { at: Date.now(), why: 'manual' };
+      saveJSON(LS.known, known);
+      window.__inbox.items.push({ id: 'd-ghost', front: 'del-ghost', back: '旧' });
+      await pullCoreInbox();
+      const afterGhost = {
+        core: window.__inbox.items.map(x => x.id),
+        removed: window.__inbox.removed.slice(),
+        pending: state.inbox.map(x => x.id),
+      };
+      delete known['del-ghost']; saveJSON(LS.known, known);
+      return { coreBefore, afterHandle, afterGhost };
+    `);
+    check('处理即删 + 过滤项清理：Core 原始行数 == 面板待确认数',
+      coreDel.coreBefore === 3
+      && coreDel.afterHandle.core.join(',') === 'd-three'
+      && coreDel.afterHandle.pending.join(',') === 'd-three'
+      && coreDel.afterHandle.removed.length === 2
+      && coreDel.afterHandle.removed[0].removed === 1
+      && coreDel.afterHandle.removed[1].removed === 1
+      && coreDel.afterGhost.core.join(',') === 'd-three'
+      && coreDel.afterGhost.pending.join(',') === 'd-three'
+      && coreDel.afterGhost.removed.length === 3
+      && coreDel.afterGhost.removed[2].removed === 1, coreDel);
 
     console.log('');
   } catch (err) {

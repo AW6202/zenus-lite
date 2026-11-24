@@ -1536,6 +1536,58 @@ class CDP {
       && knownScope.barHasKnown === true && knownScope.added === false
       && knownScope.grew === 0 && knownScope.backInQueue === true, knownScope);
 
+    // 200035 §4c：设置页已掌握逐词列表 + 单条移除走 unmarkKnown（含原生桥）
+    const knownList = await probe('已掌握逐词列表', `
+      const calls = []; const cbs = [];
+      window.zenus = {
+        postMessage(raw) {
+          const m = JSON.parse(raw); calls.push(m);
+          cbs.forEach(cb => cb({ data: JSON.stringify({ id: m.id, ok: true, data: {} }) }));
+        },
+        addEventListener(t, cb) { if (t === 'message') cbs.push(cb); },
+      };
+      CTRL = null;
+      const backup = JSON.parse(JSON.stringify(known));
+      const baseN = Object.keys(backup).length;
+      const prevTab = state.tab;
+      known['list-one'] = { at: 3000, why: 'review' };
+      known['list-two'] = { at: 2000, why: 'skip' };
+      known['list-three'] = { at: 1000, why: 'manual' };
+      saveJSON(LS.known, known);
+      state.tab = 'settings'; renderSettings();
+      const box = document.getElementById('knownList');
+      const toggle = document.getElementById('toggleKnownList');
+      const hiddenAtFirst = box.style.display === 'none';
+      toggle.click();
+      const shownAfterToggle = box.style.display !== 'none';
+      const rows = Array.from(box.querySelectorAll('[data-known-row]')).map(r => r.dataset.knownRow);
+      const skipRow = box.querySelector('[data-known-row="list-two"]');
+      const skipLabel = skipRow ? (skipRow.querySelector('small') || {}).textContent : '';
+      const countBefore = document.getElementById('knownCount').textContent;
+      box.querySelector('[data-known-remove="list-two"]').click();
+      const out = {
+        hiddenAtFirst, shownAfterToggle, rows, skipLabel, countBefore,
+        rowsAfter: box.querySelectorAll('[data-known-row]').length,
+        gone: !known['list-two'],
+        countAfter: document.getElementById('knownCount').textContent,
+        nativeUnmark: calls.filter(c => c.cmd === 'learner.unmarkKnown').map(c => c.args.word),
+        expectedBefore: String(baseN + 3), expectedAfter: String(baseN + 2),
+      };
+      Object.keys(known).forEach(k => delete known[k]);
+      Object.assign(known, backup); saveJSON(LS.known, known);
+      state.tab = prevTab; render();
+      window.zenus = undefined; CTRL = null;
+      return out;
+    `);
+    check('已掌握列表：3 行/来源标注/单条移除走 learner.unmarkKnown',
+      knownList.hiddenAtFirst === true && knownList.shownAfterToggle === true
+      && knownList.rows.slice(0, 3).join(',') === 'list-one,list-two,list-three'
+      && knownList.skipLabel === '跳过'
+      && knownList.countBefore === knownList.expectedBefore
+      && knownList.rowsAfter === knownList.rows.length - 1
+      && knownList.gone === true && knownList.countAfter === knownList.expectedAfter
+      && knownList.nativeUnmark.includes('list-two'), knownList);
+
     // 系统内核渲染视图：按设计**不再有**右侧浮栏，动作全在壳的长按菜单里；
     // 页面只需提供「当前在读什么」给壳的存入思源用
     const npTools = await probe('内核实渲染视图', `
@@ -1772,6 +1824,195 @@ class CDP {
     check('AI 收口：App 里走 ai.ask（带 system/json）',
       aiRoute.cmd === 'ai.ask' && aiRoute.skill === 'quiz' && aiRoute.json === true
       && aiRoute.hasSystem === true && aiRoute.txt === '{"questions":[]}', aiRoute);
+
+    // ── 200035：待确认补释义 / 例句只求译文 / inbox.remove / 未收录灰字 ──
+    const fillAdd = await probe('待确认补释义', `
+      const calls = []; const cbs = [];
+      window.zenus = {
+        postMessage(raw) {
+          const m = JSON.parse(raw); calls.push(m);
+          let data = {};
+          if (m.cmd === 'inbox.list') data = [{ id: 'smoke-uncol-1', front: 'zz-uncollected', back: '', hint: '' }];
+          else if (m.cmd === 'ai.ask') data = { text: JSON.stringify({ back: '未收录释义', phonetic: '/ʌn/', example: 'AI 例句', exampleCN: 'AI 译文' }) };
+          else if (m.cmd === 'inbox.remove') data = { ok: true, removed: 1 };
+          cbs.forEach(cb => cb({ data: JSON.stringify({ id: m.id, ok: true, data }) }));
+        },
+        addEventListener(t, cb) { if (t === 'message') cbs.push(cb); },
+      };
+      CTRL = null;
+      state.inbox = [];
+      delete known['zz-uncollected'];
+      delete inboxDone['id:smoke-uncol-1']; delete inboxDone['w:zz-uncollected'];
+      saveJSON(LS.known, known); saveJSON(LS.inboxDone, inboxDone);
+      await pullCoreInbox();
+      showInboxSheet();
+      const o = document.getElementById('inboxOverlay');
+      const grey = o.querySelector('[data-missing="1"]');
+      const btn = o.querySelector('[data-add="0"]');
+      btn.click();
+      await new Promise(r => setTimeout(r, 700));
+      const card = userCards.find(c => c.front === 'zz-uncollected');
+      const out = {
+        grey: grey ? grey.textContent.trim() : '',
+        label: btn.textContent,
+        skill: (calls.find(c => c.cmd === 'ai.ask') || {}).args ? (calls.find(c => c.cmd === 'ai.ask').args.skill || '') : '',
+        back: card ? card.back : '', hint: card ? card.hint : '',
+        removed: calls.filter(c => c.cmd === 'inbox.remove').map(c => (c.args.ids || []).join(',')),
+      };
+      o.remove(); state.inbox = []; saveInbox();
+      userCards = userCards.filter(c => c.front !== 'zz-uncollected'); saveJSON(LS.userCards, userCards);
+      window.zenus = undefined; CTRL = null;
+      return out;
+    `);
+    check('待确认加入：未收录灰字 + 自动补释义 + inbox.remove',
+      fillAdd.grey === '词典未收录 · 加入后自动补释义'
+      && fillAdd.label === '已加入' && fillAdd.skill === 'card'
+      && fillAdd.back === '未收录释义' && fillAdd.hint === '/ʌn/'
+      && fillAdd.removed.includes('smoke-uncol-1'), fillAdd);
+
+    const fillEg = await probe('有例句只求译文', `
+      const calls = []; const cbs = [];
+      window.zenus = {
+        postMessage(raw) {
+          const m = JSON.parse(raw); calls.push(m);
+          const data = m.cmd === 'ai.ask'
+            ? { text: JSON.stringify({ back: '敏捷', phonetic: '/kwɪk/', example: 'AI 想换掉的例句', exampleCN: '译'.repeat(300) }) }
+            : { ok: true };
+          cbs.forEach(cb => cb({ data: JSON.stringify({ id: m.id, ok: true, data }) }));
+        },
+        addEventListener(t, cb) { if (t === 'message') cbs.push(cb); },
+      };
+      CTRL = null;
+      const card = { front: 'quick', example: 'The quick brown fox jumps.', back: '', hint: '', exampleCN: '' };
+      await fillCardMeaning(card);
+      const c = calls.find(x => x.cmd === 'ai.ask') || {};
+      const input = (c.args && c.args.input) || '';
+      const out = {
+        hasExampleText: input.includes('The quick brown fox jumps.'),
+        forbid: input.includes('不要改写或替换例句'),
+        example: card.example, cnLen: (card.exampleCN || '').length,
+        back: card.back, hint: card.hint,
+      };
+      window.zenus = undefined; CTRL = null;
+      return out;
+    `);
+    check('有例句：prompt 带例句且禁改写，不写 example，exampleCN ≤240',
+      fillEg.hasExampleText && fillEg.forbid && fillEg.example === 'The quick brown fox jumps.'
+      && fillEg.cnLen === 240 && fillEg.back === '敏捷' && fillEg.hint === '/kwɪk/', fillEg);
+
+    const skipRemove = await probe('跳过即删', `
+      const calls = []; const cbs = [];
+      window.zenus = {
+        postMessage(raw) {
+          const m = JSON.parse(raw); calls.push(m);
+          const data = m.cmd === 'inbox.list' ? [{ id: 'smoke-skip-1', front: 'zz-skipword', back: '释义' }] : { ok: true };
+          cbs.forEach(cb => cb({ data: JSON.stringify({ id: m.id, ok: true, data }) }));
+        },
+        addEventListener(t, cb) { if (t === 'message') cbs.push(cb); },
+      };
+      CTRL = null; state.inbox = [];
+      delete known['zz-skipword'];
+      delete inboxDone['id:smoke-skip-1']; delete inboxDone['w:zz-skipword'];
+      await pullCoreInbox(); showInboxSheet();
+      const o = document.getElementById('inboxOverlay');
+      o.querySelector('[data-skip="0"]').click();
+      await new Promise(r => setTimeout(r, 100));
+      const out = {
+        removed: calls.filter(c => c.cmd === 'inbox.remove').map(c => (c.args.ids || []).join(',')),
+        knownWhy: (known['zz-skipword'] || {}).why,
+        label: o.querySelector('[data-skip="0"]').textContent,
+      };
+      o.remove(); state.inbox = []; saveInbox();
+      delete known['zz-skipword']; saveJSON(LS.known, known);
+      window.zenus = undefined; CTRL = null;
+      return out;
+    `);
+    check('跳过：写 known + 调 inbox.remove',
+      skipRemove.removed.includes('smoke-skip-1') && skipRemove.knownWhy === 'skip'
+      && skipRemove.label === '已掌握', skipRemove);
+
+    const stale = await probe('过滤项清理', `
+      const calls = []; const cbs = [];
+      window.zenus = {
+        postMessage(raw) {
+          const m = JSON.parse(raw); calls.push(m);
+          const data = m.cmd === 'inbox.list' ? [
+            { id: 'stale-done', front: 'zz-stale-done', back: 'x' },
+            { id: 'stale-known', front: 'zz-stale-known', back: 'x' },
+            { id: 'stale-card', front: 'zz-stale-card', back: 'x' },
+            { id: 'fresh-one', front: 'zz-fresh-one', back: 'x' }
+          ] : { ok: true };
+          cbs.forEach(cb => cb({ data: JSON.stringify({ id: m.id, ok: true, data }) }));
+        },
+        addEventListener(t, cb) { if (t === 'message') cbs.push(cb); },
+      };
+      CTRL = null; state.inbox = [];
+      known['zz-stale-known'] = { at: Date.now(), why: 'manual' };
+      inboxDone['id:stale-done'] = Date.now();
+      saveJSON(LS.known, known); saveJSON(LS.inboxDone, inboxDone);
+      upsertCard({ front: 'zz-stale-card', back: '已有' });
+      await pullCoreInbox();
+      const rm = calls.filter(x => x.cmd === 'inbox.remove');
+      const out = {
+        rmCount: rm.length,
+        ids: rm.length ? (rm[0].args.ids || []).slice().sort().join(',') : '',
+        inbox: state.inbox.map(x => x.id).join(','),
+      };
+      userCards = userCards.filter(x => ['zz-stale-card', 'zz-fresh-one'].indexOf(x.front) < 0);
+      saveJSON(LS.userCards, userCards);
+      delete known['zz-stale-known']; saveJSON(LS.known, known);
+      delete inboxDone['id:stale-done']; saveJSON(LS.inboxDone, inboxDone);
+      state.inbox = []; saveInbox();
+      window.zenus = undefined; CTRL = null;
+      return out;
+    `);
+    check('首次拉取：被过滤的历史行一次性 inbox.remove',
+      stale.rmCount === 1 && stale.ids === 'stale-card,stale-done,stale-known'
+      && stale.inbox === 'fresh-one', stale);
+
+    const undo2 = await probe('关面板后撤销', `
+      const calls = []; const cbs = [];
+      window.zenus = {
+        postMessage(raw) {
+          const m = JSON.parse(raw); calls.push(m);
+          const data = m.cmd === 'inbox.list' ? [{ id: 'undo2-1', front: 'zz-undo2', back: '释义' }] : { ok: true };
+          cbs.forEach(cb => cb({ data: JSON.stringify({ id: m.id, ok: true, data }) }));
+        },
+        addEventListener(t, cb) { if (t === 'message') cbs.push(cb); },
+      };
+      CTRL = null; state.inbox = [];
+      delete known['zz-undo2'];
+      delete inboxDone['id:undo2-1']; delete inboxDone['w:zz-undo2'];
+      await pullCoreInbox(); showInboxSheet();
+      const o = document.getElementById('inboxOverlay');
+      o.querySelector('[data-skip="0"]').click();
+      o.querySelector('#inboxClose').click();
+      await pullCoreInbox();
+      const afterClose = { pending: state.inbox.map(x => x.id).join(','), knownWhy: (known['zz-undo2'] || {}).why };
+      // 第二条路：app.js 的「已掌握」按钮（#toggleKnown）走的就是 unmarkKnown(word)
+      unmarkKnown('zz-undo2');
+      await new Promise(r => setTimeout(r, 50));
+      const out = {
+        afterClose, gone: !known['zz-undo2'],
+        nativeUnmark: calls.filter(c => c.cmd === 'learner.unmarkKnown').map(c => c.args.word),
+      };
+      state.inbox = []; saveInbox();
+      window.zenus = undefined; CTRL = null;
+      return out;
+    `);
+    check('跳过→关面板→已掌握撤销：learner.unmarkKnown 被调用',
+      undo2.afterClose.pending === '' && undo2.afterClose.knownWhy === 'skip'
+      && undo2.gone && undo2.nativeUnmark.includes('zz-undo2'), undo2);
+
+    // Node 侧源码 Gate：负向 4 把 "inbox" -> JSONArray() 加回来必红
+    const appSrcGate = fs.readFileSync(path.join(ROOT, 'app.js'), 'utf8');
+    const bridgePath = path.join(ROOT, '..', 'aegis-wb', 'app', 'src', 'main', 'java',
+      'info', 'plateaukao', 'einkbro', 'zenus', 'ZenusBridge.kt');
+    const bridgeSrcGate = fs.existsSync(bridgePath) ? fs.readFileSync(bridgePath, 'utf8') : '';
+    check('旧命令已删：PWA 无 nativeCall(inbox)，原生无 inbox -> JSONArray()',
+      bridgeSrcGate.length > 0 && !appSrcGate.includes("nativeCall('inbox'")
+      && !bridgeSrcGate.includes('"inbox" -> JSONArray()'),
+      { pwaOld: appSrcGate.includes("nativeCall('inbox'"), nativeOld: bridgeSrcGate.includes('"inbox" -> JSONArray()') });
 
     // 配置同步：PWA 的 key 必须推到原生，否则 ai.ask 报「还没配置 AI key」
     const cfg = await probe('AI 配置同步', `
