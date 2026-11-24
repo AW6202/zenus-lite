@@ -1622,6 +1622,116 @@ class CDP {
       && core.upserted === true && core.rated === true && core.cardAdded === true
       && core.inboxLeft === 0 && core.importCards >= 0, core);
 
+    // 例句（2026-11-24）：存卡时抓「选区所在的那一句」当例句，离线可用/真实语境。
+    // 要在旧代码上全红：旧代码没有 sentenceContainingSelection / 不写 example。
+    const SENT = 'The morning light fell softly on the old wooden bridge.';
+    const exam = await probe('选区例句', `
+      // 1) 纯函数：给一个真实 DOM 选区，取出包含选区的整句（前后各一句，只取命中那句）
+      const host = document.createElement('div');
+      host.className = 'bookText';
+      host.innerHTML = '<p>Before sentence one. ${SENT} After sentence three.</p>';
+      document.body.appendChild(host);
+      const p = host.querySelector('p');
+      const t = p.childNodes[0];
+      const at = t.textContent.indexOf('wooden');
+      const rg = document.createRange();
+      rg.setStart(t, at); rg.setEnd(t, at + 6);
+      const sel = getSelection(); sel.removeAllRanges(); sel.addRange(rg);
+      const got = sentenceContainingSelection(sel);
+      sel.removeAllRanges(); host.remove();
+      return { got };
+    `);
+    check('选区→整句：只取命中那一句，含句末标点，不带前后句',
+      exam.got === SENT, exam);
+
+    // 行内 span（加粗/高亮/挖空）里的选区：块必须退到 p，不能把 span 的词本身当例句
+    const SENT2 = 'The wooden bridge held firm.';
+    const examSpan = await probe('行内span选区', `
+      const host = document.createElement('div');
+      host.className = 'bookText';
+      host.innerHTML = '<p>Before sentence one. The <span class="hl">wooden bridge</span> held firm. After.</p>';
+      document.body.appendChild(host);
+      const t = host.querySelector('span.hl').childNodes[0];
+      const at = t.textContent.indexOf('wooden');
+      const rg = document.createRange();
+      rg.setStart(t, at); rg.setEnd(t, at + 6);
+      const sel = getSelection(); sel.removeAllRanges(); sel.addRange(rg);
+      const got = sentenceContainingSelection(sel);
+      sel.removeAllRanges(); host.remove();
+      return { got };
+    `);
+    check('行内 span 里的选区：例句是整个句子，不是那个词',
+      examSpan.got === SENT2, examSpan);
+
+    const examSave = await probe('存卡带例句', `
+      state.courseId = MINE_ID;
+      const before = userCards.length;
+      const r = addCardFromSelection('quasar-example', ${JSON.stringify(SENT)});
+      const card = userCards.find(c => c.front === 'quasar-example');
+      const out = { added: r, grew: userCards.length - before,
+                    example: card ? card.example : '' };
+      // 清场
+      userCards = userCards.filter(c => c.front !== 'quasar-example');
+      delete cardIndex['quasar-example'];
+      saveJSON(LS.userCards, userCards); saveJSON(LS.cardIndex, cardIndex);
+      state.courseId = state.pack.courses[0].id;
+      return out;
+    `);
+    check('存卡把选区句写进 example（离线，不靠 AI）',
+      examSave.added === true && examSave.grew === 1 && examSave.example === SENT, examSave);
+
+    const examMerge = await probe('同词合并保例句', `
+      state.courseId = MINE_ID;
+      const a = upsertCard({ front: 'merge-example', back: '旧释义' }).card;
+      const b = upsertCard({ front: 'merge-example', example: ${JSON.stringify(SENT)} });
+      const kept = userCards.find(c => c.id === a.id);
+      const out = { reason: b.reason, example: kept ? kept.example : '' };
+      userCards = userCards.filter(c => c.front !== 'merge-example');
+      delete cardIndex['merge-example'];
+      saveJSON(LS.userCards, userCards); saveJSON(LS.cardIndex, cardIndex);
+      state.courseId = state.pack.courses[0].id;
+      return out;
+    `);
+    check('同词合并：老卡没有例句时，新例句补进去不丢',
+      examMerge.reason === 'merged' && examMerge.example === SENT, examMerge);
+
+    const examNative = await probe('壳存卡回填例句', `
+      // 模拟 APK：壳存卡只在 Core inbox 留词，例句靠 selectionchange 的词→句缓存回填
+      rememberSelectionExample('radian-drift', ${JSON.stringify(SENT)});
+      const cacheHit = recallSelectionExample('radian-drift');
+      const cacheMiss = recallSelectionExample('never-selected');
+      const calls = [], cbs = [];
+      window.zenus = {
+        postMessage(json) {
+          const m = JSON.parse(json); calls.push(m);
+          const reply = (data) => cbs.forEach(cb => cb({ data: JSON.stringify({ id: m.id, ok: true, data }) }));
+          if (m.cmd === 'inbox.list' || m.cmd === 'inbox.take') {
+            reply([{ id: 'n-eg', kind: 'card', front: 'radian-drift', back: '', sourceKind: 'web' }]);
+          } else reply({ ok: true });
+        },
+        addEventListener(type, cb) { if (type === 'message') cbs.push(cb); },
+      };
+      CTRL = null;
+      state.inbox = [];
+      await pullCoreInbox();
+      const item = state.inbox.find(x => x.front === 'radian-drift');
+      // 待确认面板要把例句画出来
+      state.tab = 'review'; state.queue = []; state.current = null; renderReview();
+      const btn = document.getElementById('inboxBtn'); if (btn) btn.click();
+      const eg = document.querySelector('#inboxOverlay .eg');
+      const egText = eg ? eg.textContent : '';
+      // 清场
+      const ov = document.getElementById('inboxOverlay'); if (ov) ov.remove();
+      inboxDoneMark(item);
+      state.inbox = []; saveInbox();
+      window.zenus = undefined; CTRL = null;
+      renderReview();
+      return { cacheHit, cacheMiss, inboxExample: item ? item.example : '', egText };
+    `);
+    check('壳存卡（离线圈选）→ 待确认卡 + 面板都带真实语境例句',
+      examNative.cacheHit === SENT && examNative.cacheMiss === ''
+      && examNative.inboxExample === SENT && examNative.egText === SENT, examNative);
+
     // AI 收口：App 里必须走原生 ai.ask，而不是网页直连
     const aiRoute = await probe('AI 收口', `
       const calls = [];

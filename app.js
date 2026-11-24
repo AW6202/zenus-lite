@@ -1,7 +1,7 @@
 // 学习机 Lite — 静态 PWA：内容来自 pack.json，进度存本地，AI 直连 OpenAI 兼容接口
 'use strict';
 
-const BUILD = '2026-11-23.2';
+const BUILD = '2026-11-24.1';
 
 const LS = {
   progress: 'zenus.progress.v1',
@@ -209,6 +209,11 @@ async function pullCoreInbox() {
     if (inboxDoneHas(it)) continue;          // 已经加入/跳过的，别再塞回来
     const w = normWord(it.front || '');
     if (w && (isKnown(it.front) || haveCard.has(w))) continue;   // 认识的/已有的，不该再问
+    // 壳「存卡」没带例句：用 selectionchange 记下的「选区所在句」回填（离线可用）
+    if (!it.example) {
+      const eg = recallSelectionExample(it.front);
+      if (eg) it.example = eg;
+    }
     seen.add(key);
     state.inbox.push(it);
     added++;
@@ -1063,6 +1068,26 @@ function normWord(w) {
   return String(w || '').toLowerCase().trim().replace(/[’']/g, "'").replace(/\s+/g, ' ');
 }
 function isKnown(w) { return !!known[normWord(w)]; }
+
+// 选区所在句按词暂存（2026-11-24）：APK 里选词走的是壳的「存卡」，例句没经网页这条线。
+// selectionchange 时把「词 → 那一句」记在这里（留最近 40 条），拉原生待确认箱时按词回填，
+// 这样飞行模式存的卡在待确认里也带真实语境例句。纯内存、不落盘，重启就没，正好避免串味。
+const selectionExamples = new Map();
+function rememberSelectionExample(word, sentence) {
+  const key = normWord(word);
+  if (!key || !sentence) return;
+  selectionExamples.set(key, { sentence, at: Date.now() });
+  if (selectionExamples.size > 40) {
+    const oldest = selectionExamples.keys().next().value;
+    if (oldest !== undefined) selectionExamples.delete(oldest);
+  }
+}
+function recallSelectionExample(word) {
+  const hit = selectionExamples.get(normWord(word));
+  // 只认 30 分钟内的：旧的选区句跟这次存的词对不上，宁可没有
+  if (!hit || Date.now() - hit.at > 30 * 60 * 1000) return '';
+  return hit.sentence || '';
+}
 
 // 「已掌握」的唯一判定口径：卡片的正面词是否在 known 里。
 // 复习队列、统计、抓词入库都必须走这一个函数，别各写一套把口径写散。
@@ -8685,8 +8710,52 @@ async function drawPage() {
   }
 }
 
+// 选区所在句：selectionchange 时就算出来缓存，存卡时直接用（点按钮会清掉选区）。
+let lastSelectionExample = '';
+
 // ── 选中文字 → 朗读 / 存卡 / 问 AI ────────────────────
-function addCardFromSelection(text) {
+// 抓「选区所在的那一句」当例句：离线可用、真实语境，不依赖 AI。
+// 2026-11-24：以前存卡只有 front，example 靠 fillCardMeaning 联网问 AI；飞行模式下
+// 永远拿不到，待确认卡就是个光秃秃的词。现在选区一落就沿 DOM 找到选区所在的句子，
+// 作为 lastSelectionExample 留给存卡用，并在存卡时写进卡片的 example。
+// 只取完整一句（句末标点 .!?。！？ 或块末），不做跨段拼接，长度封顶 240 字，免得
+// 把整页塞进例句。取不到（例如选区跨多篇）就返回空串，宁可没有也不编。
+function sentenceContainingSelection(sel) {
+  if (!sel || !sel.rangeCount || sel.isCollapsed) return '';
+  try {
+    const range = sel.getRangeAt(0);
+    let node = range.startContainer;
+    if (node.nodeType === 3) node = node.parentElement;
+    if (!node || node.nodeType !== 1) return '';
+    // 选区必须落在可读正文里（材料/网页/PDF 文本层），避免把按钮文字当例句
+    const host = node.closest('.bookText, .npWrap, article, [contenteditable="true"], #view');
+    if (!host) return '';
+    // 不认 span：正文里行内加粗/高亮/挖空都是 span，选区落在里面时 span 的 textContent
+    // 只有那个词本身——拿它当块会把「wooden」当成例句。退到 p/li/div 这一层才是句子。
+    const block = node.closest('p, li, blockquote, h1, h2, h3, h4, h5, h6, div') || host;
+    const raw = (block.textContent || '').replace(/\s+/g, ' ').trim();
+    if (!raw) return '';
+    const selected = String(sel.toString() || '').replace(/\s+/g, ' ').trim().slice(0, 80);
+    const at = selected ? raw.toLowerCase().indexOf(selected.toLowerCase()) : -1;
+    // 定位不到选区就不猜：拿块首句顶替，给出的会是跟这个词无关的例句
+    if (at < 0) return '';
+    // 取「选区所在的整句」：往前到最近的句末标点，往后到下一个句末标点。
+    const stops = [];
+    for (let i = 0; i < raw.length; i++) if (/[.!?。！？]/.test(raw[i])) stops.push(i);
+    const selEnd = at + selected.length;
+    let start = 0;
+    for (const s of stops) { if (s < at) start = s + 1; else break; }
+    let end = raw.length;
+    for (const s of stops) { if (s >= selEnd) { end = s + 1; break; } }
+    let sentence = raw.slice(start, end).trim();
+    if (sentence.length > 240) sentence = sentence.slice(0, 240).trim();
+    return sentence;
+  } catch (e) { return ''; }
+}
+
+// 存卡入口。example 优先用「选区所在的那一句」（离线、真实语境）；
+// 没抓到才退回 lastSelectionExample（selectionchange 里缓存的同一句）。
+function addCardFromSelection(text, example) {
   const front = String(text).replace(/\s+/g, ' ').trim().slice(0, 80);
   if (!front) return false;
   // 已掌握的词不再进生词本：和复习队列同一口径（都问 isKnown）
@@ -8694,8 +8763,13 @@ function addCardFromSelection(text) {
     toast('「' + front + '」已标记为已掌握；要先在「已掌握」里移除再存');
     return false;
   }
-  const r = upsertCard({ front, topic: '阅读生词', source: { kind: 'reader', at: Date.now() } });
+  const eg = String(example || lastSelectionExample || '').replace(/\s+/g, ' ').trim().slice(0, 240);
+  const input = { front, topic: '阅读生词', source: { kind: 'reader', at: Date.now() } };
+  if (eg) input.example = eg;
+  const r = upsertCard(input);
   if (r.reason === 'exists-in-pack') { toast('这个词课本里已经有了'); return false; }
+  // 同词已在库里：老卡没例句时由 upsertCard → mergeCardFields 补进去（keepTargetFirst
+  // 语义就是「老卡没有才补」），这里不用再写一遍。
   if (r.reason === 'merged') { toast('已经在「我的生词」里了'); return false; }
   renderHeader();
   toast('已加入「我的生词」');
@@ -8735,8 +8809,13 @@ async function fillCardMeaning(card) {
     const d = JSON.parse(content);
     card.back = d.back || '';
     card.hint = d.phonetic || '';
-    card.example = d.example || '';
-    card.exampleCN = d.exampleCN || '';
+    // 2026-11-24：选区所在的那一句是真实语境，AI 现编的例句不能盖掉它。
+    // exampleCN 是 AI 那句例句的译文，必须跟例句同进同退——否则会出现
+    // 「真实英文句 + 另一句的中文翻译」这种对不上的卡。
+    if (!card.example) {
+      card.example = d.example || '';
+      card.exampleCN = d.exampleCN || '';
+    }
     card.updatedAt = Date.now();
     saveJSON(LS.userCards, userCards);
     // 释义补上后同步给原生内核，否则 Core 里这张卡永远是空背面
@@ -8776,12 +8855,22 @@ function askFromSelection(t) {
   }
 
   document.addEventListener('selectionchange', () => {
+    // 例句先记，再判壳：APK 里选词走壳的「存卡」→ Core inbox，网页这条线拿不到例句，
+    // 就靠这里的词→句缓存，在 pullCoreInbox 时回填（2026-11-24）。
+    const selAll = window.getSelection();
+    const textAll = selAll && selAll.toString().trim();
+    if (textAll && textAll.length <= 300 && !selAll.isCollapsed) {
+      const sentence = sentenceContainingSelection(selAll);
+      rememberSelectionExample(textAll, sentence);
+      if (!nativePort()) lastSelectionExample = sentence;
+    }
     // 壳里（APK）不画自己的浮框：壳自带的选区菜单已经包含 查词/＋存卡/朗读/翻译/解释，
     // 两套叠在一起会互相遮挡（2026-10-30 用户截图确认）。浏览器里打开学习机时照旧。
     if (nativePort()) return remove();
-    const sel = window.getSelection();
-    const text = sel && sel.toString().trim();
+    const sel = selAll;
+    const text = textAll;
     if (!text || text.length > 300 || !sel.rangeCount) return remove();
+    lastSelectionExample = lastSelectionExample || sentenceContainingSelection(sel);   // 点按钮后选区会没
     const rect = sel.getRangeAt(0).getBoundingClientRect();
     if (!rect || (!rect.width && !rect.height)) return remove();
     if (!bar) {
@@ -8989,7 +9078,9 @@ function mergeCardFields(target, incoming, keepTargetFirst) {
     if (keepTargetFirst && target[k]) return;
     target[k] = incoming[k];
   };
-  ['back', 'hint', 'explain', 'topic', 'source', 'bookId', 'bookTitle', 'chapter'].forEach(fill);
+  // 2026-11-24：example/exampleCN 也是正文的一部分（选区所在句），同词合并时要保住，
+  // 否则待确认卡带例句，一点「加入生词」就丢了。
+  ['back', 'hint', 'explain', 'example', 'exampleCN', 'topic', 'source', 'bookId', 'bookTitle', 'chapter'].forEach(fill);
   if (Array.isArray(incoming.options) && !(target.options || []).length) target.options = incoming.options;
   target.updatedAt = Math.max(target.updatedAt || 0, incoming.updatedAt || Date.now());
 }
