@@ -1622,6 +1622,23 @@ class CDP {
       && core.upserted === true && core.rated === true && core.cardAdded === true
       && core.inboxLeft === 0 && core.importCards >= 0, core);
 
+    // P2b（2026-11-24）：pullWebCards 已从 app.js 删除——旧桥命令 "inbox" 直接入主卡牌的口子不能回来。
+    // 旧代码上这条必红（函数仍在 / 仍调 nativeCall('inbox')）；不是靠删覆盖换绿。
+    const p2bSrc = fs.readFileSync(path.join(ROOT, 'app.js'), 'utf8');
+    const p2bGone = await probe('P2b 不再自动入卡', `
+      return { fn: typeof pullWebCards };
+    `);
+    check('P2b：pullWebCards 已删，网页存词只走待确认箱',
+      p2bGone.fn === 'undefined'
+      && !p2bSrc.includes('pullWebCards')
+      && !p2bSrc.includes("nativeCall('inbox'"),
+      { fn: p2bGone.fn, hasFn: p2bSrc.includes('pullWebCards'), hasOldCall: p2bSrc.includes("nativeCall('inbox'") });
+
+    // 撤销「已掌握」要连原生 learner 表一起清，否则生词雷达继续屏蔽该词（浏览器里 nativePort 为空 → no-op）
+    check('撤销已掌握会同步清原生 known',
+      p2bSrc.includes("coreCall('learner.unmarkKnown', { word: w }"),
+      { wired: p2bSrc.includes("coreCall('learner.unmarkKnown', { word: w }") });
+
     // 例句（2026-11-24）：存卡时抓「选区所在的那一句」当例句，离线可用/真实语境。
     // 要在旧代码上全红：旧代码没有 sentenceContainingSelection / 不写 example。
     const SENT = 'The morning light fell softly on the old wooden bridge.';

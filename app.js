@@ -1,7 +1,7 @@
 // 学习机 Lite — 静态 PWA：内容来自 pack.json，进度存本地，AI 直连 OpenAI 兼容接口
 'use strict';
 
-const BUILD = '2026-11-24.1';
+const BUILD = '2026-11-24.2';
 
 const LS = {
   progress: 'zenus.progress.v1',
@@ -1108,6 +1108,9 @@ function knownIsManual(w) {
 function unmarkKnown(w) {
   const k = normWord(w);
   if (known[k]) { delete known[k]; saveJSON(LS.known, known); }
+  // 原生 learner 表里的 known:<word> 也要一起清，否则生词雷达永远不再推这个词。
+  // 浏览器里 nativePort() 为空 → coreCall 直接 no-op（见 coreCall）。
+  if (k) coreCall('learner.unmarkKnown', { word: w }, 3000).catch(() => {});
 }
 // 判定：间隔 ≥21 天、复习 ≥3 次、最近 3 次都是「记得/简单」→ 视为已掌握
 function maybePromote(id, word, e) {
@@ -9200,34 +9203,10 @@ function migrateCardsV2() {
   }
 }
 
-// 网页上「＋存卡」的生词：App 打开时从原生收件箱取回来（取走即清空，不会重复计数）
-async function pullWebCards() {
-  if (!nativePort()) return;
-  let list = [];
-  try {
-    list = JSON.parse(await nativeCall('inbox', {}, 6000) || '[]');
-  } catch { return; }
-  if (!Array.isArray(list) || !list.length) return;
-  const fresh = [];
-  for (const c of list) {
-    const front = String(c.front || '').trim();
-    if (!front) continue;
-    const r = upsertCard({
-      front,
-      back: c.back || '',
-      hint: c.hint || '',
-      topic: c.topic || '网页生词',
-      source: { kind: 'web', url: c.source || '', title: c.sourceTitle || '', at: c.at || Date.now() },
-    });
-    if (r.added && r.card) fresh.push(r.card);
-    else if (r.reason === 'merged') Object.assign(r.card || {}, { hint: c.hint || '' });
-  }
-  if (!fresh.length) return;
-  saveJSON(LS.userCards, userCards);
-  renderHeader();
-  toast('网页上存的 ' + fresh.length + ' 个生词已入库');
-  if (settings.key) fresh.filter((c) => !c.back).slice(0, 5).forEach((c) => fillCardMeaning(c));
-}
+// P2b（2026-11-24）：旧的「网页存词自动入库」函数已删。
+// 它读旧桥 inbox 命令直接 upsertCard 自动入卡，绕开「待确认」；
+// 网页存的词统一由 Core inbox → pullCoreInbox → 待确认面板，由用户决定加入/跳过。
+// 负向 Gate：smoke.js 断言源码里不再有旧函数名 / 旧调用。
 
 (async function init() {
   // —— 诊断条 + APK 拉起处理 ——
@@ -9284,10 +9263,6 @@ async function pullWebCards() {
       render();
       setTimeout(() => importFromText(apkImport), 300);
     }
-    // 桥对象可能比首屏晚到，重试两次；取走即清空，多调不会重复入库
-    pullWebCards();
-    setTimeout(pullWebCards, 1500);
-    setTimeout(pullWebCards, 6000);
     // 桌面快捷方式「学习机」：切到「今天」页。桥同样可能晚到，按同一节奏重试（取走即清，多调无副作用）
     takeShortcut();
     setTimeout(takeShortcut, 1200);
