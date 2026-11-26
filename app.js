@@ -1,7 +1,7 @@
 // 学习机 Lite — 静态 PWA：内容来自 pack.json，进度存本地，AI 直连 OpenAI 兼容接口
 'use strict';
 
-const BUILD = '2026-11-26.1';
+const BUILD = '2026-11-26.2';
 
 const LS = {
   progress: 'zenus.progress.v1',
@@ -1107,8 +1107,7 @@ async function openStoredMaterial(id, chIndex) {
       const pick = document.getElementById('tooBigPick');
       if (pick) pick.onclick = () => {
         state.tab = 'reader'; render();
-        const inp = document.getElementById('pdfFile');
-        if (inp) inp.click();
+        openFilePicker();
       };
       return;
     }
@@ -3491,9 +3490,37 @@ async function ensurePdfJs() {
   window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'vendor/pdf.worker.min.js';
 }
 
+// 文件选择器：**每次点都换一个全新的 input 节点**再 click()。
+// 2026-11-26 用户实测：在选择框里点过文件夹、取消之后，同一个 input 再 click() 弹不出框
+// （Edge 应用窗 / 部分 WebView 都这样）。换节点等于把「出过一次框」的状态清零；
+// value 也一起清掉，否则「上次选过的那份再选一次」不触发 change。
+function bindFileInput(inp) {
+  inp.onchange = (ev) => {
+    const el = ev.target;
+    Promise.resolve().then(() => openBookFile(ev)).finally(() => { try { el.value = ''; } catch (e) {} });
+  };
+}
+function openFilePicker() {
+  const old = document.getElementById('pdfFile');
+  if (!old || !old.parentNode) return false;
+  const inp = old.cloneNode(false);      // 只带属性（id/accept/style），不带 value 与已绑事件
+  inp.value = '';
+  bindFileInput(inp);
+  old.parentNode.replaceChild(inp, old);
+  inp.click();
+  return true;
+}
+
 async function openBookFile(ev) {
   const f = ev.target.files && ev.target.files[0];
   if (!f) return;
+  // 2026-11-26：选到的是**文件夹**（没有扩展名、大小为 0、没有 MIME）→ 明确提示，留在选择页。
+  // 以前会一路落到 openPdfFile，变成「打不开这个 PDF」且没有返回按钮，看着像「选择文件坏了」。
+  if (!f.size && !f.type && !/\.[A-Za-z0-9]{1,6}$/.test(f.name || '')) {
+    toast('这是文件夹，要选具体的文件（PDF / EPUB / TXT …）');
+    renderReader();
+    return;
+  }
   const name = f.name.toLowerCase();
   if (name.endsWith('.epub')) return openEpubBook(f);
   if (name.endsWith('.docx')) return openDocxBook(f);
@@ -4496,9 +4523,13 @@ async function openPdfFile(f) {
     schedulePdfArchive(archBytes, f.name, RDR.key);
   } catch (err) {
     if (nativePort() && await tryNativePdfRender()) return;
-    view.innerHTML = '<div class="empty">打不开这个 PDF<br><span class="sub">' + esc(err.message) + '</span>'
-      + (nativePort() ? '<div class="row" style="margin-top:16px"><button class="btn primary" id="pdfSys">用其他应用打开</button></div>' : '')
+    // 出错页必须能给一条回去的路：以前非原生环境只有一个错误文案，用户只能切走 tab 再回来
+    view.innerHTML = '<div class="empty">打不开这个文件<br><span class="sub">' + esc(err.message) + '</span>'
+      + '<div class="row" style="margin-top:16px"><button class="btn primary" id="pickAgain">重新选择文件</button></div>'
+      + (nativePort() ? '<div class="row" style="margin-top:8px"><button class="btn ghost" id="pdfSys">用其他应用打开</button></div>' : '')
       + '</div>';
+    const again = document.getElementById('pickAgain');
+    if (again) again.onclick = () => { renderReader(); openFilePicker(); };
     if (nativePort()) {
       document.getElementById('pdfSys').onclick = () => openWithSystemApp();
     }
@@ -4648,9 +4679,13 @@ function renderReader() {
       + '<button class="btn" id="pasteBtn">粘贴 / 分享导入</button></div>'
       + '<div class="sub" style="margin-top:10px">支持 PDF · DOCX · TXT · Markdown · EPUB · 图片 · 漫画</div>'
       + '<div id="recentMats" style="margin-top:14px;text-align:left"></div></div>'
-      + '<input type="file" id="pdfFile" accept=".pdf,.epub,.docx,.txt,.md,.png,.jpg,.jpeg,.webp,image/*,application/pdf,application/epub+zip,'
+      // 2026-11-26：不能再用 display:none —— Windows 的 Edge 应用窗和部分 WebView 里，
+      // 隐藏得太彻底的 input 选过一次（尤其在里面点过文件夹/取消）后，再 click() 弹不出选择框。
+      // 放到屏幕外、保持可聚焦可点击，是各家都认的写法。
+      + '<input type="file" id="pdfFile" style="position:fixed;left:-9999px;top:0;width:1px;height:1px;opacity:0" accept=".pdf,.epub,.docx,.txt,.md,.png,.jpg,.jpeg,.webp,image/*,application/pdf,application/epub+zip,'
       + 'application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain" style="display:none">';
-    document.getElementById('pickPdf').onclick = () => document.getElementById('pdfFile').click();
+    bindFileInput(document.getElementById('pdfFile'));
+    document.getElementById('pickPdf').onclick = () => openFilePicker();
     // 2026-11-15 修：这里不能调 go()——go 是 renderToday() 里的局部函数（见上面 const go），
     // 拿到外面就是 ReferenceError: go is not defined（用户点「书架」直接报错）。
     document.getElementById('shelfBtn').onclick = () => { state.tab = 'shelf'; render(); };
@@ -4658,7 +4693,6 @@ function renderReader() {
     document.getElementById('findBooks').onclick = () => renderFind();
     document.getElementById('lookupBtn').onclick = () => renderLookup();
     document.getElementById('pasteBtn').onclick = () => pasteFromClipboard();
-    document.getElementById('pdfFile').onchange = openBookFile;
     fillRecentMaterials();
     return;
   }

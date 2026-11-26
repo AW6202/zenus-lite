@@ -1156,6 +1156,29 @@ class CDP {
       && p200036.blobLRU.newestKept === true && p200036.blobLRU.count === 5,
       p200036.blobLRU);
 
+    // 2026-11-26 用户实测：在文件选择框里点了文件夹再取消 → 回来点「选择文件」不起作用。
+    // 三处根因一起守：①input 不再 display:none ②选到文件夹明确拒绝、留在选择页
+    // ③打不开的错误页必须有「重新选择文件」的回头路。
+    const filePick = await probe('文件选择：文件夹不进入死胡同', `
+      resetBook(); state.tab = 'reader'; render();
+      const hasPick = !!document.getElementById('pickPdf');
+      const inp = document.getElementById('pdfFile');
+      const hiddenOffscreen = !!inp && getComputedStyle(inp).display !== 'none';
+      // 每次点都换新节点：老 input 出过一次选择框后，某些环境不再弹框
+      const before = document.getElementById('pdfFile');
+      openFilePicker();
+      const after = document.getElementById('pdfFile');
+      const freshNode = !!after && after !== before && !!after.onchange;
+      const folder = new File([], 'some-folder');
+      await openBookFile({ target: { files: [folder], value: '' } });
+      const stillHome = !!document.getElementById('pickPdf');
+      const deadEnd = document.body.textContent.includes('打不开这个文件');
+      return { hasPick, hiddenOffscreen, freshNode, stillHome, deadEnd };
+    `);
+    check('选到文件夹 → 明确拒绝并留在选择页；每次点换新 input（不进入「打不开」死胡同）',
+      filePick.hasPick === true && filePick.hiddenOffscreen === true && filePick.freshNode === true
+      && filePick.stillHome === true && filePick.deadEnd === false, filePick);
+
     // 书源规则入口：整份 JSON 要留住（规则在原生侧求值），测试/搜索入口在无桥环境下不能崩
     const srcRules = await probe('书源规则入口', `
       sources = []; saveJSON(LS.sources, sources);
