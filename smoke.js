@@ -315,8 +315,10 @@ class CDP {
   await makeFixtures(pdfArg, scanArg);
   const srv = await serve();
   const base = `http://127.0.0.1:${PORT}/.scratch/smoke/`;
-  const prof = path.join(TMP, 'prof');
-  fs.rmSync(prof, { recursive: true, force: true });
+  // 每次跑用全新的 profile 目录，不去递归删旧的：旧 profile 里有几百个文件，
+  // 删除会撞上环境的批量删除阈值（safe-delete），把整份冒烟在启动阶段就崩掉。
+  // .scratch 本来就是一次性目录，遗留的旧 profile 留着不影响任何东西。
+  const prof = path.join(TMP, 'prof-' + process.pid + '-' + Date.now());
 
   const cdp = await CDP.launch(prof);
   // 页面里抛错（element 不存在等）不能把整份冒烟崩掉：记一条 FAIL，接着跑下一项
@@ -1059,6 +1061,100 @@ class CDP {
     `);
     check('漫画：zip 解包成材料、阅读器按张渲染',
       comic.n === 2 && comic.imgs === 2 && comic.kind === 'comic' && comic.kept === 2, comic);
+
+    // ── P200036：最近覆盖所有格式 + 加入书架（数据层 5 条断言）──
+    const p200036 = await probe('P200036 材料数据层', `
+      const wipe = async () => { for (const r of await matAll()) await matDelete(r.id); };
+      await wipe();
+
+      // ① 落库记录带 lastOpenedAt / shelf 字段
+      await openTextBook(new File(['p200036 文本正文 '.repeat(80)], 'p200036-文本.txt'));
+      await new Promise(r => setTimeout(r, 350));
+      const txt = (await matAll()).find(m => m.name === 'p200036-文本.txt');
+      const fields = !!(txt && typeof txt.lastOpenedAt === 'number' && typeof txt.shelf === 'boolean');
+      const savedKept = !!(txt && txt.savedAt && txt.lastOpenedAt >= txt.savedAt);
+      resetBook();
+
+      // ② shelf:true 的才进书架数据；「加入书架」必须写库（不是只改内存）
+      await wipe();
+      await matPut({ id: 'p36:in', name: 'P36_IN_书架书', kind: 'text', shelf: true, bytes: 5, chapters: [{ title: 'x', text: 'y' }] });
+      await matPut({ id: 'p36:add', name: 'P36_ADD_刚加入', kind: 'text', bytes: 5, chapters: [{ title: 'x', text: 'y' }] });
+      await matPut({ id: 'p36:out', name: 'P36_OUT_仅最近', kind: 'text', bytes: 5, chapters: [{ title: 'x', text: 'y' }] });
+      const add = await matAddToShelf('p36:add');
+      const persisted = (await matAll()).find(m => m.id === 'p36:add');
+      const writeThrough = add.ok === true && !!persisted && persisted.shelf === true;
+      state.tab = 'shelf'; await renderShelfTab();
+      const titles = [...document.querySelectorAll('.shelfCard .st')].map(e => e.textContent);
+      const shelfShowsIn = titles.includes('P36_IN_书架书');
+      const shelfShowsAdded = titles.includes('P36_ADD_刚加入');
+      const shelfShowsOut = titles.includes('P36_OUT_仅最近');
+      state.tab = 'reader'; render();
+
+      // ③ 超限走 tooBig 而不是抛错（先看 File.size，不读进内存）
+      await wipe();
+      const fakeBig = new File(['x'], 'p200036-big.pdf');
+      Object.defineProperty(fakeBig, 'size', { value: 31 * 1024 * 1024 });
+      let bigThrew = false;
+      try { await openPdfFile(fakeBig); } catch (e) { bigThrew = true; }
+      const bigRec = (await matAll()).find(m => m.name === 'p200036-big.pdf');
+      const tooBig = { threw: bigThrew, flag: !!(bigRec && bigRec.tooBig === true), noBlob: !(bigRec && bigRec.blob) };
+
+      // ④ LRU 只淘汰 shelf:false（文本类，MAT_MAX=20）
+      await wipe();
+      const now = Date.now();
+      for (let i = 0; i < 21; i++) {
+        await matPut({ id: 'p36:t' + i, name: 'T' + i, kind: 'text', bytes: 2,
+          chapters: [{ title: 'x', text: 'y' }], lastOpenedAt: now - (100 - i) * 1000 });
+      }
+      await matPut({ id: 'p36:tpinned', name: 'PIN', kind: 'text', shelf: true, bytes: 2,
+        chapters: [{ title: 'x', text: 'y' }], lastOpenedAt: now - 999 * 1000 });
+      await matTrim();
+      const afterText = await matAll();
+      const textLRU = {
+        pinned: !!afterText.find(m => m.id === 'p36:tpinned'),
+        oldestGone: !afterText.find(m => m.id === 'p36:t0'),
+        newestKept: !!afterText.find(m => m.id === 'p36:t20'),
+        count: afterText.filter(m => String(m.id).startsWith('p36:t')).length,
+      };
+
+      // ⑤ 带 blob 的最近项超过 5 份：淘汰 lastOpenedAt 最老且 shelf:false 那份，书架里的不动
+      await wipe();
+      for (let i = 0; i < 6; i++) {
+        await matPut({ id: 'p36:b' + i, name: 'B' + i, kind: 'pdf', bytes: 4,
+          blob: new Uint8Array([i]), lastOpenedAt: now - (100 - i) * 1000 });
+      }
+      await matPut({ id: 'p36:bpinned', name: 'BPIN', kind: 'pdf', shelf: true, bytes: 4,
+        blob: new Uint8Array([9]), lastOpenedAt: now - 999 * 1000 });
+      await matTrim();
+      const afterBlob = await matAll();
+      const blobLRU = {
+        pinned: !!afterBlob.find(m => m.id === 'p36:bpinned'),
+        oldestGone: !afterBlob.find(m => m.id === 'p36:b0'),
+        newestKept: !!afterBlob.find(m => m.id === 'p36:b5'),
+        count: afterBlob.filter(m => String(m.id).startsWith('p36:b')).length,
+      };
+      await wipe();
+      return { fields, savedKept, writeThrough, shelfShowsIn, shelfShowsAdded, shelfShowsOut,
+        tooBig, textLRU, blobLRU };
+    `);
+    check('① 落库记录带 lastOpenedAt/shelf 字段（savedAt 保留首次）',
+      p200036.fields === true && p200036.savedKept === true, p200036);
+    check('② 加入书架写库 + 书架只列 shelf:true',
+      p200036.writeThrough === true && p200036.shelfShowsIn === true
+      && p200036.shelfShowsAdded === true && p200036.shelfShowsOut === false,
+      { writeThrough: p200036.writeThrough, shelfShowsIn: p200036.shelfShowsIn,
+        shelfShowsAdded: p200036.shelfShowsAdded, shelfShowsOut: p200036.shelfShowsOut });
+    check('③ 超 30MB 走 tooBig 不抛错、不存 blob',
+      p200036.tooBig.threw === false && p200036.tooBig.flag === true && p200036.tooBig.noBlob === true,
+      p200036.tooBig);
+    check('④ 文本 LRU 只淘汰 shelf:false 的老记录',
+      p200036.textLRU.pinned === true && p200036.textLRU.oldestGone === true
+      && p200036.textLRU.newestKept === true && p200036.textLRU.count === 20,
+      p200036.textLRU);
+    check('⑤ 带 blob 最近项 >5 淘汰最老 shelf:false，书架里的不动',
+      p200036.blobLRU.pinned === true && p200036.blobLRU.oldestGone === true
+      && p200036.blobLRU.newestKept === true && p200036.blobLRU.count === 5,
+      p200036.blobLRU);
 
     // 书源规则入口：整份 JSON 要留住（规则在原生侧求值），测试/搜索入口在无桥环境下不能崩
     const srcRules = await probe('书源规则入口', `

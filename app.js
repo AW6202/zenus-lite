@@ -1,7 +1,7 @@
 // 学习机 Lite — 静态 PWA：内容来自 pack.json，进度存本地，AI 直连 OpenAI 兼容接口
 'use strict';
 
-const BUILD = '2026-11-24.3';
+const BUILD = '2026-11-26.1';
 
 const LS = {
   progress: 'zenus.progress.v1',
@@ -863,8 +863,11 @@ state.chat = loadJSON(LS.chat, []);
 // 注意：EPUB 的图片是 blob URL，存不下来（只存文字）；PDF 字节太大也不存。
 const MAT_DB = 'zenus_materials';
 const MAT_STORE = 'materials';
-const MAT_MAX = 20;              // 只留最近 20 份
-const MAT_MAX_BYTES = 3 * 1024 * 1024;   // 单份上限，超了不入库
+const MAT_MAX = 20;                            // 文本类（只存 chapters）最近上限
+const MAT_BLOB_MAX = 5;                        // 带 blob 的 PDF/图片/漫画最近上限
+const MAT_MAX_BYTES = 30 * 1024 * 1024;        // 单份内容上限 30MB（先看 File.size，超了只存 tooBig 元数据）
+const MAT_SHELF_MAX_BYTES = 500 * 1024 * 1024; // 书架总量上限，加入时超了明确拒绝
+const MAT_TOO_BIG = '太大 · 未保存内容';
 
 function idbOpen() {
   return new Promise((resolve, reject) => {
@@ -915,11 +918,34 @@ function idbOpen() {
   });
 }
 
+async function matGet(id) {
+  const db = await idbOpen();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(MAT_STORE, 'readonly');
+    const req = tx.objectStore(MAT_STORE).get(id);
+    req.onsuccess = () => resolve(req.result || null);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+// 所有落库都走这里统一盖章：savedAt 只写首次，lastOpenedAt 每次写都刷新，
+// shelf 缺省 false 且一旦为 true 就保住（继续抓/重存不能把书架里的书踢出去）。
+// 测试里可以显式传 lastOpenedAt 来摆出「老记录」。
 async function matPut(rec) {
+  const now = Date.now();
+  let prev = null;
+  try { prev = await matGet(rec.id); } catch (e) { /* 新记录 */ }
+  const out = {
+    ...(prev || {}),
+    ...rec,
+    savedAt: (prev && prev.savedAt) || rec.savedAt || now,
+    lastOpenedAt: (rec.lastOpenedAt != null ? rec.lastOpenedAt : now),
+    shelf: rec.shelf === true || !!(prev && prev.shelf === true),
+  };
   const db = await idbOpen();
   return new Promise((resolve, reject) => {
     const tx = db.transaction(MAT_STORE, 'readwrite');
-    tx.objectStore(MAT_STORE).put(rec);
+    tx.objectStore(MAT_STORE).put(out);
     tx.oncomplete = () => resolve(true);
     tx.onerror = () => reject(tx.error);
   });
@@ -945,31 +971,102 @@ async function matDelete(id) {
   });
 }
 
-// 打开一份文字材料后调用：把章节正文存下来
+// 一条材料在IndexedDB里实际占的字节数（书架 500MB 口径；tooBig 只有元数据，算 0）
+function matBytes(r) {
+  if (!r || r.tooBig) return 0;
+  if (r.blob) return r.blob.byteLength || r.blob.length || 0;
+  if (r.images && r.images.length) {
+    return r.images.reduce((n, b) => n + (b.size || b.byteLength || 0), 0);
+  }
+  return Number(r.bytes) || 0;
+}
+function matIsBlob(r) { return !!(r && (r.blob || (r.images && r.images.length))); }
+
+// 统一 LRU：分文本/带 blob 两组，各留 MAT_MAX / MAT_BLOB_MAX 份。
+// shelf:true 的永不淘汰；超了就从 lastOpenedAt 最老的 shelf:false 开始删。
+async function matTrim() {
+  const all = await matAll();
+  const byTime = (a, b) => (a.lastOpenedAt || a.savedAt || 0) - (b.lastOpenedAt || b.savedAt || 0);
+  const groups = [all.filter((r) => !matIsBlob(r)), all.filter(matIsBlob)];
+  const caps = [MAT_MAX, MAT_BLOB_MAX];
+  let removed = 0;
+  for (let g = 0; g < groups.length; g++) {
+    let need = groups[g].length - caps[g];
+    if (need <= 0) continue;
+    const rest = groups[g].filter((r) => r.shelf !== true).sort(byTime);
+    for (const old of rest) {
+      if (need <= 0) break;
+      await matDelete(old.id);
+      removed++;
+      need--;
+    }
+  }
+  return removed;
+}
+
+// 加入书架：写库才算数（只改内存不算）；超 500MB 明确拒绝，不静默淘汰书架里的书
+async function matAddToShelf(id) {
+  let all = [];
+  try { all = await matAll(); } catch (e) { return { ok: false, msg: '书架现在读不了，请稍后再试' }; }
+  const rec = all.find((r) => r.id === id);
+  if (!rec) return { ok: false, msg: '这份材料已经不在了' };
+  if (rec.shelf === true) return { ok: true, msg: '已经在书架里了' };
+  const used = all.filter((r) => r.shelf === true).reduce((n, r) => n + matBytes(r), 0);
+  if (used + matBytes(rec) > MAT_SHELF_MAX_BYTES) {
+    return { ok: false, msg: '书架满了，先删几本' };
+  }
+  await matPut({ id: rec.id, shelf: true, lastOpenedAt: Date.now() });
+  return { ok: true, msg: '已加入书架' };
+}
+
+// 打开已落库的材料 = 最近一次打开，刷新 lastOpenedAt（savedAt 由 matPut 保住）
+async function matTouch(id, at) {
+  await matPut({ id: id, lastOpenedAt: at || Date.now() });
+}
+
+// 太大：只存元数据，绝不把整份文件读进内存再判断
+async function matStoreTooBig(f, kind) {
+  const id = docKey(f);
+  RDR.key = id;
+  await matPut({
+    id, name: f.name || '未命名材料', kind: kind || 'pdf',
+    bytes: f.size || 0, tooBig: true,
+  });
+  await matTrim();
+  return id;
+}
+
+// 网页档案（Aegis Browser 已有显式「存到书架」菜单）不弹加入书架提示
+function matIsWebMaterial(r) {
+  if (!r) return false;
+  if (r.kind === 'web') return true;
+  const o = r.origin || {};
+  return !!(o.docId || o.kind === 'doc' || o.kind === 'web');
+}
+
+// 打开一份文字材料后调用：把章节正文存下来（文本类照旧走 chapters，不存原始文件）
 async function persistMaterial(kind) {
   try {
     if (!RDR.book || !RDR.book.chapters || !RDR.book.chapters.length) return;
     // 章节上的额外字段（NG 书的 idx）也要保住，否则「继续抓」不知道抓到第几章了
     const payload = RDR.book.chapters.map((c) => ({ ...c, title: c.title || '', text: c.text || '', html: c.html || '' }));
     const json = JSON.stringify(payload);
-    if (json.length > MAT_MAX_BYTES) return;          // 太大就不存，别把配额撑爆
     const id = RDR.key || (RDR.book.name + '|' + json.length);
     RDR.key = id;
-    await matPut({
+    const base = {
       id,
       name: RDR.book.name || '未命名材料',
       kind: kind || RDR.kind || 'text',
-      savedAt: Date.now(),
-      bytes: json.length,
-      chapters: payload,
       // origin 里存着书源 JSON / 目录地址：丢了就再也抓不了后面几章（以前每次重开都会丢）
       origin: RDR.book.origin || null,
-    });
-    const all = await matAll();
-    if (all.length > MAT_MAX) {
-      all.sort((a, b) => (a.savedAt || 0) - (b.savedAt || 0));
-      for (const old of all.slice(0, all.length - MAT_MAX)) await matDelete(old.id);
+    };
+    if (json.length > MAT_MAX_BYTES) {
+      // 超限不再静默丢：只存一条 tooBig 元数据，列表里看得到名字，点开提示重新选文件
+      await matPut({ ...base, bytes: json.length, tooBig: true });
+    } else {
+      await matPut({ ...base, bytes: json.length, chapters: payload });
     }
+    await matTrim();
     // A 批：顺手建一份「文本档案」（段落 / 每段来源 / 页码映射 / 指纹 / 覆盖率），
     // 听书和 AI 后面都吃它。建不出来不影响阅读，也不弹提示。
     try {
@@ -1001,7 +1098,27 @@ async function openStoredMaterial(id, chIndex) {
     const all = await matAll();
     const rec = all.find((r) => r.id === id);
     if (!rec) { toast('这份材料已经不在了'); return; }
+    await matTouch(id);
+    if (rec.tooBig) {
+      // 超限记录只有元数据：明确提示重新选文件，不崩也不假装能读
+      view.innerHTML = '<div class="empty">太大 · 未保存内容<br><span class="sub">《'
+        + esc(rec.name || '这份材料') + '》当时超过 30MB，没存正文。请重新选择文件。</span>'
+        + '<div class="row" style="margin-top:14px"><button class="btn primary" id="tooBigPick">重新选择文件</button></div></div>';
+      const pick = document.getElementById('tooBigPick');
+      if (pick) pick.onclick = () => {
+        state.tab = 'reader'; render();
+        const inp = document.getElementById('pdfFile');
+        if (inp) inp.click();
+      };
+      return;
+    }
     if (rec.kind === 'comic') { openComicMaterial(rec); return; }
+    // PDF / 图片：用存下来的原始 bytes 走同一套渲染，不用重新选文件
+    if (rec.blob && (rec.kind === 'pdf' || rec.kind === 'image')) {
+      const f = new File([rec.blob], rec.name || '材料', { type: rec.kind === 'pdf' ? 'application/pdf' : 'image/*' });
+      if (rec.kind === 'image') return openImageFile(f);
+      return openPdfFile(f);
+    }
     resetBook();
     RDR.kind = rec.kind === 'epub' ? 'epub' : (rec.kind === 'md' ? 'md' : 'text');
     RDR.book = { id: rec.id, name: rec.name, chapters: rec.chapters, origin: rec.origin || null };
@@ -1333,7 +1450,69 @@ function reportError(where, err) {
   }
 }
 
+// ── 关阅读器：统一出口 + Legado 式「加入书架？」提示 ────────
+// 一次会话同一份材料只提示一次（内存 Set，不落盘）；网页档案（Aegis Browser）
+// 已有显式「存到书架」菜单，不弹；已在书架的不弹。
+const shelfPrompted = new Set();
+let shelfPromptTimer = null;
+
+function dismissShelfPrompt() {
+  clearTimeout(shelfPromptTimer);
+  shelfPromptTimer = null;
+  const bar = document.getElementById('shelfPrompt');
+  if (bar) bar.remove();
+}
+
+async function maybePromptShelf(key) {
+  if (shelfPrompted.has(key)) return;
+  let rec = null;
+  try {
+    const all = await matAll();
+    rec = all.find((r) => r.id === key);
+  } catch (e) { return; }
+  if (!rec || rec.shelf === true || matIsWebMaterial(rec)) return;
+  shelfPrompted.add(key);
+  dismissShelfPrompt();
+  const bar = document.createElement('div');
+  bar.id = 'shelfPrompt';
+  bar.style.cssText = 'position:fixed;left:12px;right:12px;bottom:calc(74px + env(safe-area-inset-bottom,0px));'
+    + 'z-index:98;background:#20242d;border:1px solid var(--line);border-radius:12px;padding:10px 12px;'
+    + 'display:flex;align-items:center;gap:8px;font-size:13px;box-shadow:0 6px 24px rgba(0,0,0,.4)';
+  const txt = document.createElement('span');
+  txt.style.cssText = 'flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap';
+  txt.textContent = '把《' + (rec.name || '这份材料') + '》加入书架？';
+  const yes = document.createElement('button');
+  yes.id = 'shelfPromptAdd'; yes.className = 'btn'; yes.style.cssText = 'width:auto;padding:7px 12px'; yes.textContent = '加入';
+  const no = document.createElement('button');
+  no.id = 'shelfPromptNo'; no.className = 'btn ghost'; no.style.cssText = 'width:auto;padding:7px 12px'; no.textContent = '不用';
+  yes.onclick = async () => {
+    dismissShelfPrompt();
+    const r = await matAddToShelf(key);
+    toast(r.msg);
+    fillRecentMaterials();
+    if (state.tab === 'shelf') renderShelfTab();
+  };
+  no.onclick = () => dismissShelfPrompt();
+  bar.append(txt, yes, no);
+  document.body.appendChild(bar);
+  shelfPromptTimer = setTimeout(dismissShelfPrompt, 8000);
+}
+
+// keepView=true 用于切 tab：只收尾+提示，不重绘阅读器（render() 接着画新页）
+function leaveReader(opts) {
+  const o = opts || {};
+  const key = RDR.key;
+  const kind = RDR.kind;
+  if (kind === 'comic') saveComicPos(); else saveReadPos();
+  resetBook();
+  if (!o.keepView) renderReader();
+  if (key) maybePromptShelf(key);
+}
+
+let prevTab = null;
 function render() {
+  if (prevTab === 'reader' && state.tab !== 'reader') leaveReader({ keepView: true });
+  prevTab = state.tab;
   if (!state.pack) {
     view.innerHTML = '<div class="empty">内容包还没加载好<br><span class="sub">等一下再点，或去「设置 → 检查更新」</span></div>';
     return;
@@ -1954,8 +2133,8 @@ async function renderShelfTab() {
   const matIds = new Set(mats.map((m) => m.id));
   const linkedDocs = new Set(mats.map((m) => (m.origin && m.origin.docId) || '').filter(Boolean));
 
-  // ① 材料：点开直接读（材料里的书源书还能「继续抓」）
-  const matItems = mats.map((r) => ({
+  // ① 材料：只列用户明确「加入书架」的（shelf:true）；网页档案 / NG 书目两条来源不变
+  const matItems = mats.filter((m) => m.shelf === true).map((r) => ({
     type: r.kind === 'web' ? 'web' : 'book',
     src: 'mat',
     title: String(r.name || '未命名'),
@@ -2025,8 +2204,9 @@ async function renderShelfTab() {
     banner = '<div class="banner">数据截至 ' + fmtWhen(state.shelf.at) + '　共 ' + books.length + ' 本书 · '
       + docItems.length + ' 篇网页</div>';
   }
-  const matLine = mats.length
-    ? '<div class="hint">本机材料 ' + mats.length + ' 份：点卡片直接读；读到抓完的那章，在目录里点「继续抓」。</div>'
+  const shelfMatCount = mats.filter((m) => m.shelf === true).length;
+  const matLine = shelfMatCount
+    ? '<div class="hint">书架里的本机材料 ' + shelfMatCount + ' 份：点卡片直接读；读到抓完的那章，在目录里点「继续抓」。</div>'
     : '';
 
   const cards = items.map((it, i) => {
@@ -2059,7 +2239,7 @@ async function renderShelfTab() {
     + banner + matLine
     + (cards ? '<div class="shelfGrid">' + cards + '</div>'
       : '<div class="empty">' + (f === 'book' ? '还没有书' : f === 'web' ? '还没有网页档案'
-        : '书架还是空的。<br><span class="sub">在壳里打开网页 → ≡ 菜单「存到书架」；或直接导入本地文件。</span>') + '</div>');
+        : '书架还空着 —— 在材料里读完点「加入书架」') + '</div>');
 
   const srcBtn = document.getElementById('shSources');
   if (srcBtn) srcBtn.onclick = () => renderSourceManager();
@@ -2142,6 +2322,7 @@ async function migrateLegacyNgMaterials(mats) {
       savedAt: Date.now(),
       bytes: JSON.stringify(payload).length,
       chapters: payload,
+      shelf: true,   // NG 书目是显式的书架来源，并入后仍留在书架
       origin: (target && target.origin) || { ng: true, title: book },
     });
     await matDelete(old.id);
@@ -2170,6 +2351,7 @@ async function openDocAsMaterial(docId) {
       await matPut({
         id, name, kind: 'text', savedAt: Date.now(),
         bytes: JSON.stringify(chapters).length, chapters,
+        shelf: true,   // 网页档案是显式书架来源，转成材料后仍留在书架
         origin: { docId, url: doc.url || doc.sourceUrl || '', kind: 'doc' },
       });
     }
@@ -2240,7 +2422,9 @@ async function openNgBookCore(title, workKey, mat) {
   const payload = chapters.map((c) => ({ idx: Number(c.idx) || 0, title: c.title || '', text: c.text || '' }));
   await matPut({
     id, name: title, kind: 'text', savedAt: Date.now(),
-    bytes: JSON.stringify(payload).length, chapters: payload, origin,
+    bytes: JSON.stringify(payload).length, chapters: payload,
+    shelf: true,   // 从 NG 书目点进来的，用户明确要它在书架
+    origin,
   });
 
   if (pos < 0) {
@@ -2293,6 +2477,7 @@ async function saveNgChapter(bookTitle, idx, title, text, workKey, toc) {
   await matPut({
     id, name: bookTitle || 'NG 书', kind: 'text', savedAt: Date.now(),
     bytes: JSON.stringify(payload).length, chapters: payload,
+    shelf: true,   // importNgChapter 明确说「书架里可直接打开」
     origin: {
       ...prev,
       ng: true,
@@ -4253,12 +4438,30 @@ function schedulePdfArchive(bytes, name, key) {
 async function openPdfFile(f) {
   view.innerHTML = '<div class="empty">正在打开 PDF…</div>';
   try {
+    // 先看 File.size，超 30MB 绝不读进内存；只落一条 tooBig 元数据
+    if ((f.size || 0) > MAT_MAX_BYTES) {
+      await matStoreTooBig(f, 'pdf');
+      view.innerHTML = '<div class="empty">太大 · 未保存内容<br><span class="sub">《'
+        + esc(f.name || '这份 PDF') + '》超过 30MB，没法存进材料。请重新选择小一点的文件。</span>'
+        + '<div class="row" style="margin-top:14px"><button class="btn primary" id="tooBigBack">返回</button></div></div>';
+      const back = document.getElementById('tooBigBack');
+      if (back) back.onclick = () => renderReader();
+      return;
+    }
     await ensurePdfJs();
     resetBook();
     const buf = await f.arrayBuffer();
-    // pdf.js 会把 buf 接管（detach）掉，建档案要用的那份先拷出来
+    // pdf.js 会把 buf 接管（detach）掉：建档一份、落库 blob 一份，都是独立拷贝
     let archBytes = null;
     try { archBytes = new Uint8Array(buf).slice(); } catch { archBytes = null; }
+    let matBlob = null;
+    try { matBlob = new Uint8Array(buf).slice(); } catch { matBlob = null; }
+    RDR.name = f.name;
+    RDR.key = docKey(f);
+    if (matBlob) {
+      await matPut({ id: RDR.key, name: f.name, kind: 'pdf', bytes: matBlob.byteLength, blob: matBlob });
+      await matTrim();
+    }
     RDR.fontRisk = pdfFontRisk(buf);
     RDR.srcUrl = URL.createObjectURL(new Blob([buf], { type: 'application/pdf' }));
     RDR.textLines = [];
@@ -4402,7 +4605,7 @@ function renderPdfText() {
     + '<div class="bookText plain" id="pdfTextBox">' + lines.map((l) => '<p>' + esc(l) + '</p>').join('') + '</div>'
     + '<div class="row" style="margin-top:4px"><button class="btn ghost" id="closePdf">关闭这份 PDF</button></div>';
   document.getElementById('showCanvas').onclick = () => { RDR.textMode = false; renderReader(); };
-  document.getElementById('closePdf').onclick = () => { saveReadPos(); resetBook(); renderReader(); };
+  document.getElementById('closePdf').onclick = () => leaveReader();
   const sys = document.getElementById('openSys');
   if (sys) sys.onclick = () => openWithSystemReader();
   view.scrollTop = 0;
@@ -4488,7 +4691,7 @@ function renderReader() {
   document.getElementById('nextPage').onclick = () => gotoPage(RDR.page + 1);
   document.getElementById('zoomIn').onclick = () => { RDR.scale = Math.min(3, RDR.scale * 1.2); drawPage(); saveReadPos(); };
   document.getElementById('zoomOut').onclick = () => { RDR.scale = Math.max(0.5, RDR.scale / 1.2); drawPage(); saveReadPos(); };
-  document.getElementById('closePdf').onclick = () => { saveReadPos(); resetBook(); renderReader(); };
+  document.getElementById('closePdf').onclick = () => leaveReader();
   const sysBtn = document.getElementById('openSys');
   if (sysBtn) sysBtn.onclick = openWithSystemReader;
   const sysBtn2 = document.getElementById('openSys2');
@@ -6883,6 +7086,7 @@ async function addBookToShelf(src, book, btn) {
       savedAt: Date.now(),
       bytes: payload.length,
       chapters,
+      shelf: true,   // 这个入口就叫「加入书架」
       origin: { source: src.name || '', bookUrl: book.bookUrl || '', tocUrl, raw: src.raw || null, tocCount: toc.length },
     });
     toast('已加入书架（抓到 ' + chapters.length + ' 章 / 共 ' + toc.length + ' 章，目录里可「继续抓」）');
@@ -7007,29 +7211,39 @@ async function fetchMoreNgChapters(btn) {
   }
 }
 
-// 阅读器首页的「最近读过」：从 IndexedDB 里列出来，点一下接着读
+// 阅读器首页的「最近读过」：所有读过的格式（PDF/图片/漫画/EPUB/TXT/MD/DOCX）都列，
+// 按最近打开时间倒序；每行可「加入书架」，行内小字标格式和状态。
 async function fillRecentMaterials() {
   const box = document.getElementById('recentMats');
   if (!box) return;
   let all = [];
   try { all = await matAll(); } catch { return; }
-  all.sort((a, b) => (b.savedAt || 0) - (a.savedAt || 0));
+  all.sort((a, b) => (b.lastOpenedAt || b.savedAt || 0) - (a.lastOpenedAt || a.savedAt || 0));
   if (!all.length) { box.innerHTML = ''; return; }
   const day = (ts) => {
     const d = new Date(ts || 0);
     return (d.getMonth() + 1) + '/' + d.getDate();
   };
+  const fmt = (k) => ({ pdf: 'PDF', image: '图片', comic: '漫画', epub: 'EPUB', md: 'MD', docx: 'DOCX', text: '文本', web: '网页' })[k] || (k || '材料');
   box.innerHTML = '<div class="sub" style="margin-bottom:6px">最近读过</div>'
-    + all.slice(0, 8).map((r) =>
-      '<div class="it" data-mat="' + esc(r.id) + '" style="display:flex;align-items:center;gap:8px">'
-      + '<div style="flex:1;min-width:0"><div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'
-      + esc(r.name || '未命名材料') + '</div>'
-      + '<div class="sub">' + day(r.savedAt) + ' · ' + Math.round((r.bytes || 0) / 1024) + 'KB</div></div>'
-      + '<button class="btn ghost" data-del="' + esc(r.id) + '" style="width:auto;padding:6px 10px;font-size:12px">删除</button>'
-      + '</div>').join('');
+    + all.slice(0, 12).map((r) => {
+      const onShelf = r.shelf === true;
+      const stateText = r.tooBig ? MAT_TOO_BIG : (onShelf ? '已在书架' : '仅最近');
+      return '<div class="it" data-mat="' + esc(r.id) + '" style="display:flex;align-items:center;gap:8px">'
+        + '<div style="flex:1;min-width:0"><div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'
+        + esc(r.name || '未命名材料') + '</div>'
+        + '<div class="sub">' + day(r.lastOpenedAt || r.savedAt) + ' · ' + fmt(r.kind) + ' · ' + stateText
+        + (r.tooBig ? '' : ' · ' + Math.round(matBytes(r) / 1024) + 'KB') + '</div></div>'
+        + (onShelf
+          ? '<button class="btn ghost" disabled style="width:auto;padding:6px 8px;font-size:12px;opacity:.5">已在书架</button>'
+          : '<button class="btn ghost" data-shelf="' + esc(r.id) + '" style="width:auto;padding:6px 8px;font-size:12px">加入书架</button>')
+        + '<button class="btn ghost" data-del="' + esc(r.id) + '" style="width:auto;padding:6px 8px;font-size:12px">删除</button>'
+        + '</div>';
+    }).join('');
   box.querySelectorAll('[data-mat]').forEach((el) => {
     el.onclick = (e) => {
-      if (e.target.dataset && e.target.dataset.del) return;
+      const ds = (e.target && e.target.dataset) || {};
+      if (ds.del || ds.shelf) return;
       openStoredMaterial(el.dataset.mat);
     };
   });
@@ -7038,6 +7252,15 @@ async function fillRecentMaterials() {
       e.stopPropagation();
       await matDelete(el.dataset.del);
       fillRecentMaterials();
+    };
+  });
+  box.querySelectorAll('[data-shelf]').forEach((el) => {
+    el.onclick = async (e) => {
+      e.stopPropagation();
+      const r = await matAddToShelf(el.dataset.shelf);
+      toast(r.msg);
+      fillRecentMaterials();
+      if (state.tab === 'shelf') renderShelfTab();
     };
   });
 }
@@ -7503,6 +7726,16 @@ async function visionFromPdfPage() {
 
 // ── 图片：直接看图 / OCR / 出题 ─────────────────────────
 async function openImageFile(f) {
+  // 先看 File.size，超 30MB 不读进内存，只留元数据
+  if ((f.size || 0) > MAT_MAX_BYTES) {
+    await matStoreTooBig(f, 'image');
+    view.innerHTML = '<div class="empty">太大 · 未保存内容<br><span class="sub">《'
+      + esc(f.name || '这张图片') + '》超过 30MB，没法存进材料。请重新选择小一点的文件。</span>'
+      + '<div class="row" style="margin-top:14px"><button class="btn primary" id="tooBigBack">返回</button></div></div>';
+    const back = document.getElementById('tooBigBack');
+    if (back) back.onclick = () => renderReader();
+    return;
+  }
   resetBook();
   RDR.kind = 'image';
   RDR.name = f.name;
@@ -7511,6 +7744,11 @@ async function openImageFile(f) {
   RDR.textLines = [];
   RDR.page = 1;
   RDR.total = 1;
+  try {
+    const bytes = new Uint8Array(await f.arrayBuffer());
+    await matPut({ id: RDR.key, name: f.name, kind: 'image', bytes: bytes.byteLength, blob: bytes });
+    await matTrim();
+  } catch (e) { /* 存不下来照旧能看图 */ }
   renderReader();
 }
 
@@ -7564,9 +7802,10 @@ function renderImage() {
 // ── 漫画（kind:'comic'）：一章一份材料，纵向往下滑着看 ──────────
 // 来源：App 里 ≡ 菜单「存为漫画」把当前章节的图打成一个 zip 交过来，
 // 解包后每张图是一个 Blob 存在 IndexedDB 里（离线可读，不用回头联网）。
-const MAT_COMIC_MAX_BYTES = 40 * 1024 * 1024;   // 单章上限，和原生侧一致
+const MAT_COMIC_MAX_BYTES = MAT_MAX_BYTES;      // 单章上限：统一 30MB（超了只存 tooBig 元数据）
 
 function openComicMaterial(rec) {
+  matTouch(rec.id).catch(() => {});            // 从库里打开也算最近一次阅读
   resetBook();
   RDR.kind = 'comic';
   RDR.name = rec.name || '漫画';
@@ -7598,7 +7837,7 @@ function renderComic() {
     + '</div>'
     + '<div class="floating pager" id="cmTools">'
     + '<button id="cmTop">▲ 开头</button><button id="cmClose" class="t-close">关闭</button></div>';
-  document.getElementById('cmClose').onclick = () => { saveComicPos(); resetBook(); renderReader(); };
+  document.getElementById('cmClose').onclick = () => leaveReader();
   document.getElementById('cmTop').onclick = () => { view.scrollTop = 0; };
   // 点图进全屏（复用已有的双指缩放查看器），左右滑动看下一张
   view.querySelectorAll('.cmImg').forEach((img) => {
@@ -8234,7 +8473,7 @@ function renderTextBook() {
   if (kpb) kpb.onclick = () => { hideTools(); showPoints(); };
   const rdb = document.getElementById('radarBtn');
   if (rdb) rdb.onclick = () => { hideTools(); radarWords(); };
-  document.getElementById('closeBook').onclick = () => { saveReadPos(); resetBook(); renderReader(); };
+  document.getElementById('closeBook').onclick = () => leaveReader();
   if (RDR.paged) {
     layoutPages(RDR.pendingRatio != null ? RDR.pendingRatio : 0);
     RDR.pendingRatio = null;
@@ -8664,7 +8903,7 @@ function renderPdfScroll() {
   if (rdb2) rdb2.onclick = () => { hideTools(); radarWords(); };
   const viz = document.getElementById('vizBtn');
   if (viz) viz.onclick = () => { hideTools(); visionFromPdfPage(); };
-  document.getElementById('closePdf').onclick = () => { saveReadPos(); resetBook(); renderReader(); };
+  document.getElementById('closePdf').onclick = () => leaveReader();
   const ocrb = document.getElementById('ocrBtn');
   if (ocrb) ocrb.onclick = () => { hideTools(); ocrCurrentPage(); };
   const ocrAllBtn = document.getElementById('ocrAll');
@@ -9088,8 +9327,14 @@ async function openPendingFileInner() {
 // ── 漫画：zip（manifest.json + img/xxxx.jpg）→ 材料库 ──────
 // 解包成 Blob 存进 IndexedDB，阅读器离线可读；任何一张解码失败都不算整份失败。
 async function importComicZip(file) {
+  // 先看 File.size：超限只留元数据，不把整包读进内存
+  if ((file.size || 0) > MAT_MAX_BYTES) {
+    await matStoreTooBig(file, 'comic');
+    throw new Error('这一章超过 30MB，只记住了名字（太大 · 未保存内容），请换小一点的文件');
+  }
   await ensureJSZip();
-  const zip = await JSZip.loadAsync(await file.arrayBuffer());
+  const zipBytes = new Uint8Array(await file.arrayBuffer()).slice();
+  const zip = await JSZip.loadAsync(zipBytes);
   const mf = zip.file('manifest.json');
   let meta = { title: String(file.name || '').replace(/\.zip$/i, ''), pageUrl: '' };
   if (mf) {
@@ -9107,7 +9352,10 @@ async function importComicZip(file) {
   for (const entry of entries) {
     const b = await entry.async('blob');
     bytes += b.size;
-    if (bytes > MAT_COMIC_MAX_BYTES) throw new Error('这一章超过 40MB，先别存');
+    if (bytes > MAT_COMIC_MAX_BYTES) {
+      await matStoreTooBig(file, 'comic');
+      throw new Error('这一章超过 30MB，只记住了名字（太大 · 未保存内容），请换小一点的文件');
+    }
     blobs.push(b);
   }
   const id = 'comic:' + (meta.pageUrl || meta.title || file.name) + '|' + bytes;
@@ -9119,14 +9367,10 @@ async function importComicZip(file) {
     bytes,
     pageUrl: meta.pageUrl || '',
     images: blobs,
+    blob: zipBytes,   // 原始数据也留一份，重开不用再选文件
   };
   await matPut(rec);
-  // 只留最近 MAT_MAX 份（和文字材料同一个上限）
-  const all = await matAll();
-  if (all.length > MAT_MAX) {
-    all.sort((a, b) => (a.savedAt || 0) - (b.savedAt || 0));
-    for (const old of all.slice(0, all.length - MAT_MAX)) await matDelete(old.id);
-  }
+  await matTrim();   // 带 blob 的最近只留 MAT_BLOB_MAX 份（书架里的不淘汰）
   state.tab = 'reader';
   render();
   openComicMaterial(rec);
