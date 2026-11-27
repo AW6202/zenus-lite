@@ -1,6 +1,6 @@
 {
-  "name": "学习机",
-  "short_name": "学习机",
+  "name": "Learner",
+  "short_name": "Learner",
   "description": "每天十分钟：刷卡片、做题、问 AI",
   "id": "./",
   "start_url": "./",
