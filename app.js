@@ -1,7 +1,7 @@
 // 学习机 Lite — 静态 PWA：内容来自 pack.json，进度存本地，AI 直连 OpenAI 兼容接口
 'use strict';
 
-const BUILD = '2026-11-27.1';
+const BUILD = '2026-11-27.2';
 
 const LS = {
   progress: 'zenus.progress.v1',
@@ -34,7 +34,6 @@ const DEFAULT_SETTINGS = {
   syncPerson: '',
   syncLast: 0,        // 上次成功同步的时间戳（0 = 从未成功）；设置页按它标「已 N 天没同步」
   syncError: '',      // 上次失败原因（成功即清空）
-  ttsVoice: '',
   searchKey: '',
   visionBase: 'https://api.siliconflow.cn/v1',
   visionModel: 'Qwen/Qwen3-VL-8B-Instruct',
@@ -42,7 +41,6 @@ const DEFAULT_SETTINGS = {
   readFont: 16,
   readLine: 1.8,
   radarLang: 'auto',   // 生词雷达目标语言：auto/en/ja/zh
-  readerLang: 'zh',    // 原生 OCR 用哪个识别模型：zh/en/ja → 中文模型；fr/de/es → 拉丁模型
 };
 
 const state = {
@@ -1145,10 +1143,7 @@ async function openStoredMaterial(id, chIndex) {
 function pickVoice(lang) {
   const vs = window.speechSynthesis?.getVoices?.() || [];
   if (!vs.length) return null;
-  if (settings.ttsVoice) {
-    const exact = vs.find((v) => v.name === settings.ttsVoice);
-    if (exact) return exact;
-  }
+  // 2026-11-27：去掉只读不写的 settings.ttsVoice（全仓没有写入方），直接按语言挑
   const base = lang.slice(0, 2).toLowerCase();
   return vs.find((v) => v.lang?.toLowerCase().startsWith(base)) || null;
 }
@@ -2760,8 +2755,7 @@ function renderSettings() {
     <div class="hint" id="syncAge" style="margin-top:8px"></div>
     <div class="hint" id="bundleInfo" style="display:none"></div>
     <div class="row" style="margin-top:10px">
-      <button class="btn primary" id="doSync">立即同步</button>
-      <button class="btn" id="saveSync">保存</button>
+      <button class="btn primary" id="doSync">保存并立即同步</button>
     </div>
 
     <h2>已掌握词表</h2>
@@ -2804,10 +2798,14 @@ function renderSettings() {
     settings.model = $('#s-model').value.trim();
     settings.key = $('#s-key').value.trim();
     settings.radarLang = ($('#s-radar-lang') || {}).value || settings.radarLang;
-    settings.searchKey = ($('#s-bocha') || {}).value ? $('#s-bocha').value.trim() : settings.searchKey;
-    if ($('#s-vbase')) settings.visionBase = $('#s-vbase').value.trim() || settings.visionBase;
-    if ($('#s-vmodel')) settings.visionModel = $('#s-vmodel').value.trim() || settings.visionModel;
+    // 2026-11-27：这几项以前写成「新值 || 旧值」，把输入框删空也删不掉已存的密钥/地址。
+    if ($('#s-bocha')) settings.searchKey = $('#s-bocha').value.trim();
+    if ($('#s-vbase')) settings.visionBase = $('#s-vbase').value.trim() || 'https://api.siliconflow.cn/v1';
+    if ($('#s-vmodel')) settings.visionModel = $('#s-vmodel').value.trim() || 'Qwen/Qwen3-VL-8B-Instruct';
     if ($('#s-vkey')) settings.visionKey = $('#s-vkey').value.trim();
+    settings.syncToken = ($('#s-gh') || {}).value != null ? $('#s-gh').value.trim() : settings.syncToken;
+    settings.syncRepo = (($('#s-repo') || {}).value || '').trim() || settings.syncRepo;
+    settings.syncPerson = ($('#s-person') || {}).value != null ? $('#s-person').value.trim() : settings.syncPerson;
     settings.dailyNew = Math.max(0, Number($('#s-new').value) || 0);
     settings.autoGen = $('#s-autogen') ? $('#s-autogen').checked : true;
     settings.ctxMsgs = Math.max(0, Math.min(40, Number($('#s-ctx').value) || 0));
@@ -2970,7 +2968,8 @@ function renderSettings() {
 
 // ── AI ────────────────────────────────────────────────
 function aiReady() {
-  if (!settings.key) { toast('先在「设置」里填 API Key'); return false; }
+  // 原生已配置也算就绪：只在 App 弹窗里填过 key 的用户不该被网页一直拦着
+  if (!settings.key && !nativeAiConfigured) { toast('先在「设置」里填 API Key'); return false; }
   return true;
 }
 
@@ -4853,7 +4852,7 @@ async function ocrCanvasNative(canvas) {
     // JPEG 0.92 对 OCR 没有可测差别，传输体积小一个量级（2026-11-16 改）。
     const b64 = String(canvas.toDataURL('image/jpeg', 0.92)).replace(/^data:image\/jpeg;base64,/, '');
     const t0 = Date.now();
-    const r = await coreCall('ocr.image', { base64: b64, lang: settings.readerLang || 'zh' }, 90000);
+    const r = await coreCall('ocr.image', { base64: b64, lang: 'zh' }, 90000);
     if (!r || typeof r.text !== 'string' || !r.text.trim()) return null;
     const lines = r.text.split('\n').map((s) => s.trim()).filter(Boolean);
     if (!lines.length) return null;
@@ -4874,7 +4873,7 @@ async function saveOcrPage(lines, ms, page, lowRes) {
       ms,
       total: RDR.total || 0,
       lowRes: !!lowRes,
-      lang: settings.readerLang || 'zh',
+      lang: 'zh',
     });
   } catch { return null; }
 }
@@ -8435,14 +8434,19 @@ async function radarWordsLocal(text, bookTitle, chapter, lang) {
   return added;
 }
 
-// 把 PWA 的 key/model/base 推给原生，S2 的 ai.ask 才有 key 可用
+// 原生侧 AI 是否已配置（网页没填 key 时，原生可能有）
+let nativeAiConfigured = false;
+
+// 把 PWA 的 key/model/base 推给原生，S2 的 ai.ask 才有 key 可用。
+// 2026-11-27：空 key 也要推（clearApiKey）——以前 !settings.key 直接 return，
+// 结果网页清空后原生还在拿旧 key 干活，两边长期漂移。
 async function pushAiConfig() {
-  if (!nativePort() || !settings.key) return;
-  await coreCall('ai.config.set', {
-    apiKey: settings.key,
-    model: settings.model,
-    baseUrl: settings.apiBase,
-  }, 15000);
+  if (!nativePort()) return;
+  const payload = { model: settings.model, baseUrl: settings.apiBase };
+  if (settings.key) payload.apiKey = settings.key;
+  else payload.clearApiKey = true;
+  const r = await coreCall('ai.config.set', payload, 15000);
+  nativeAiConfigured = !!(r && typeof r.configured === 'boolean' ? r.configured : settings.key);
 }
 
 // 设置页的诊断：一眼看出「是不是在 App 里」「原生 AI 有没有 key」
@@ -8458,6 +8462,7 @@ async function refreshNativeStatus() {
     el.textContent = '原生桥：已连接，但 App 版本过旧（缺 ai.config，装最新包）';
     return;
   }
+  nativeAiConfigured = !!cfg.configured;
   el.textContent = '原生桥：已连接 · 原生 AI ' + (cfg.configured ? '已配置' : '未配置（在上面填 Key 并保存）');
 }
 
