@@ -1,7 +1,7 @@
 // 学习机 Lite — 静态 PWA：内容来自 pack.json，进度存本地，AI 直连 OpenAI 兼容接口
 'use strict';
 
-const BUILD = '2026-11-26.2';
+const BUILD = '2026-11-27.1';
 
 const LS = {
   progress: 'zenus.progress.v1',
@@ -17,6 +17,7 @@ const LS = {
   sources: 'zenus.sources.v1',   // Legado 书源（先只存元信息，规则解析下周做）
   inbox: 'zenus.inbox.v1',       // 原生学习内核的「待确认」卡（阅读器存的）
   inboxDone: 'zenus.inbox.done.v1',   // 已处理过的待确认（id + 词）：原生不清空，这边要记住，否则会反复出现
+  gen: 'zenus.gen.v1',               // 200037：每章/每天的生成标记（本地键，不参与跨设备同步）
 };
 
 const DEFAULT_SETTINGS = {
@@ -24,6 +25,7 @@ const DEFAULT_SETTINGS = {
   model: 'deepseek-chat',
   key: '',
   dailyNew: 10,
+  autoGen: true,   // 200037：翻章后台生成卡片，默认开
   ttsRate: 0.9,
   ctxMsgs: 12,
   syncToken: '',
@@ -1760,6 +1762,12 @@ function renderReview() {
       if (c.exampleCN) body += `<div class="egcn">${esc(c.exampleCN)}</div>`;
     }
     if (c.explain) body += `<div class="explain">${esc(c.explain)}</div>`;
+    // 200037：自动生成的卡必须能一键回原文；手存卡没有 materialId 时这行不渲染。
+    if (c.source && c.source.kind === 'material' && c.source.materialId != null) {
+      body += `<div class="sub" style="margin-top:6px">来源：<button class="btn ghost" id="genSource"
+        data-gen-source="1" style="padding:2px 6px;font-size:12px">${esc(c.source.title || '原文')}
+        · 第 ${Number(c.source.chapter) + 1} 章</button></div>`;
+    }
     body += `<div class="row" style="width:100%;margin-top:4px">
       <button class="btn ghost" id="askAI">问 AI 讲讲这道</button>
     </div>
@@ -1776,6 +1784,7 @@ function renderReview() {
     <button class="btn ghost" id="toggleKnown" style="font-size:13px;padding:9px">
       ${isKnown(c.front) ? '✓ 已在「已掌握」里，点此移除' : '标记为已掌握（以后抓生词会跳过）'}
     </button>
+    ${c.auto === true ? '<button class="btn ghost" id="dropUseless" style="font-size:13px;padding:9px">这张没价值</button>' : ''}
   </div>`;
 
   view.innerHTML = `${inboxBar()}${statsBar()}
@@ -1824,6 +1833,36 @@ function renderReview() {
     ev.preventDefault(); ev.stopPropagation();
     if (isKnown(c.front)) { unmarkKnown(c.front); toast('已移出「已掌握」'); }
     else { markKnown(c.front, 'manual'); toast('已标记为掌握，下次抓词会跳过'); }
+    renderReview();
+  };
+  const gs = $('#genSource');
+  if (gs) gs.onclick = (ev) => {
+    ev.preventDefault(); ev.stopPropagation();
+    openStoredMaterial(c.source.materialId, c.source.chapter);
+  };
+  const du = $('#dropUseless');
+  if (du) du.onclick = async (ev) => {
+    ev.preventDefault(); ev.stopPropagation();
+    await softDeleteCard(c.id);
+    if (c.auto === true) {
+      const i = userCards.findIndex((x) => x.id === c.id);
+      if (i >= 0) { userCards.splice(i, 1); saveJSON(LS.userCards, userCards); }
+      const ck = cardKey(c);
+      if (cardIndex[ck] === c.id) { delete cardIndex[ck]; saveJSON(LS.cardIndex, cardIndex); }
+    }
+    // 同 key 的 pending 候选一并标 dropped，别联网后又冒出来
+    try {
+      const ds = await idbAll('drafts');
+      for (const d of ds) {
+        if (d.card && cardKey(d.card) === cardKey(c) && d.status === 'pending') {
+          d.status = 'dropped'; await idbPut('drafts', d);
+        }
+      }
+    } catch (e) { /* 墓碑已落，drafts 标不上也不阻塞删卡 */ }
+    state.queue.shift();
+    state.current = null;
+    state.revealed = false;
+    state.picked = null;
     renderReview();
   };
 
@@ -2693,6 +2732,10 @@ function renderSettings() {
     <input class="t" id="s-bocha" type="password" value="${esc(settings.searchKey || '')}" placeholder="sk-...">
     <label class="f">每天新卡上限</label>
     <input class="t" id="s-new" type="number" min="0" max="100" value="${settings.dailyNew}">
+    <label class="f" style="display:flex;align-items:center;gap:8px">
+      <input type="checkbox" id="s-autogen" ${settings.autoGen !== false ? 'checked' : ''}>
+      阅读时自动生成卡片（翻章后台跑：每章 3 张 / 每天 30 张）
+    </label>
     <label class="f">AI 对话携带上下文条数（0 = 每条独立问）</label>
     <input class="t" id="s-ctx" type="number" min="0" max="40" value="${settings.ctxMsgs}">
     ${nativePort()
@@ -2766,6 +2809,7 @@ function renderSettings() {
     if ($('#s-vmodel')) settings.visionModel = $('#s-vmodel').value.trim() || settings.visionModel;
     if ($('#s-vkey')) settings.visionKey = $('#s-vkey').value.trim();
     settings.dailyNew = Math.max(0, Number($('#s-new').value) || 0);
+    settings.autoGen = $('#s-autogen') ? $('#s-autogen').checked : true;
     settings.ctxMsgs = Math.max(0, Math.min(40, Number($('#s-ctx').value) || 0));
     if ($('#s-rate')) settings.ttsRate = Math.min(1.2, Math.max(0.5, Number($('#s-rate').value) || 0.9));
     saveJSON(LS.settings, settings);
@@ -7991,6 +8035,258 @@ async function askPoints(text) {
   return JSON.parse(content);
 }
 
+// ===== 200037 · AI 生成候选卡流水线 =====
+// 章文本切片 → 候选提取 → 模板渲染 → 机检 8 条 → 去重 → 入库（自动进复习队列）。
+// 不新增 ai.ask skill：复用 points + 自写 system（原生 ZenusAiAsk 对未知 skill 直接抛错）。
+const AUTOGEN = { perChapter: 3, perDay: 30, sliceChars: 3000, maxSlices: 2 };
+
+function genFlags() { return loadJSON(LS.gen, {}); }
+function genSaveFlags(f) { saveJSON(LS.gen, f); }
+function genKey(materialId, chapter) { return String(materialId) + '#' + Number(chapter); }
+function genDayKey() {
+  const d = new Date();
+  return 'day:' + d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0')
+    + '-' + String(d.getDate()).padStart(2, '0');
+}
+function genContext() {
+  const b = RDR.book || {};
+  return {
+    materialId: String(b.id || RDR.key || ''),
+    chapter: Number(RDR.ch) || 0,
+    title: String(b.name || RDR.name || ''),
+  };
+}
+function genSlices(text) {
+  const raw = String(text || '');
+  const paras = raw.split(/\n\s*\n/).map((s) => s.trim()).filter(Boolean);
+  const parts = paras.length ? paras : [raw.trim()].filter(Boolean);
+  const out = [];
+  let cur = '';
+  for (const p of parts) {
+    if (cur && cur.length + p.length + 1 > AUTOGEN.sliceChars) {
+      out.push(cur); cur = '';
+      if (out.length >= AUTOGEN.maxSlices) return out;
+    }
+    cur += (cur ? '\n' : '') + p;
+  }
+  if (cur && out.length < AUTOGEN.maxSlices) out.push(cur);
+  return out;
+}
+
+async function extractGenCandidates(slice, ch) {
+  const sys = '你在把学习者自己的材料变成可复习的卡片。只输出 JSON，不要解释。'
+    + '每条候选必须是原文里连续的一段（span 一字不改）；答案只能来自原文明示，不许自己补。'
+    + '宁少不滥，最多 3 条。';
+  const user = '章节：' + String((ch && ch.title) || '') + '\n原文片段：\n' + slice + '\n\n'
+    + '返回 JSON：{"candidates":[{"subject":"主体","predicate":"关系/动作","object":"答案",'
+    + '"qualifier":"限定条件，可空","span":"原文里连续的一段话","type":"vocab 或 clause 或 fact"}]}';
+  let content = null;
+  try {
+    content = await coreAsk('points', {
+      system: sys, input: user, json: true, temperature: 0.3,
+      context: {
+        scope: 'reader-gen', sourceTitle: RDR.name || '',
+        bookTitle: (RDR.book && RDR.book.name) || '', chapter: RDR.book ? (RDR.ch || 0) : 0,
+      },
+    });
+  } catch (e) { content = null; }
+  if (!content) {
+    const res = await fetch(settings.apiBase + '/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + settings.key },
+      body: JSON.stringify({
+        model: settings.model,
+        messages: [{ role: 'system', content: sys }, { role: 'user', content: user }],
+        response_format: { type: 'json_object' }, temperature: 0.3,
+      }),
+    });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const j = await res.json();
+    content = j.choices[0].message.content;
+  }
+  const data = JSON.parse(content);
+  return Array.isArray(data.candidates) ? data.candidates.slice(0, AUTOGEN.perChapter) : [];
+}
+
+function renderGenCard(c, ch, ctx) {
+  const span = String(c && c.span || '').trim();
+  const type = ['vocab', 'clause', 'fact'].includes(c && c.type) ? c.type : 'fact';
+  const s = String(c && c.subject || '').trim();
+  const p = String(c && c.predicate || '').trim();
+  const o = String(c && c.object || '').trim();
+  let front = '';
+  let back = o;
+  if (type === 'vocab') front = s;
+  else if (type === 'clause') { front = s + ' 对 ' + o + ' 做了什么？'; back = p; }
+  else front = s + p + '的结论是什么？';
+  return {
+    front, back, example: span, exampleCN: '', auto: true, tags: ['自动生成'],
+    source: {
+      kind: 'material', materialId: ctx.materialId, chapter: ctx.chapter, title: ctx.title,
+      refId: String(ctx.materialId) + '#' + Number(ctx.chapter),
+    },
+    bookId: ctx.materialId, bookTitle: ctx.title, chapter: ctx.chapter,
+  };
+}
+
+const GEN_STOP = new Set(['the', 'a', 'an', 'of', 'to', 'in', 'on', 'and', '是', '的', '了', '在', '和', '与', '有']);
+function genAnswerLeaks(front, back) {
+  const f = String(front || '').toLowerCase();
+  const en = String(back || '').toLowerCase().match(/[a-z]{2,}/g) || [];
+  if (en.some((t) => !GEN_STOP.has(t) && f.includes(t))) return true;
+  // 中文没有分词：答案里任何两字片段出现在正面就算泄漏（「苹果」出现在「苹果是一种水果」里）
+  const b = String(back || '');
+  const frontText = String(front || '');
+  for (let i = 0; i + 2 <= b.length; i++) {
+    const g = b.slice(i, i + 2);
+    if (/^[\u4e00-\u9fa5]{2}$/.test(g) && !GEN_STOP.has(g) && frontText.includes(g)) return true;
+  }
+  return false;
+}
+
+/** 机检 8 条；返回第一条命中的 {ok:false, code, reason}。 */
+function checkGeneratedCard(card, raw, materialId, chapter) {
+  const front = String(card && card.front || '').trim();
+  const back = String(card && card.back || '').trim();
+  const span = String(card && card.example || '').trim();
+  const bad = (code, reason) => ({ ok: false, code, reason });
+  // 1 答案泄漏
+  if (genAnswerLeaks(front, back)) return bad(1, '答案泄漏到正面');
+  // 2 代词开头
+  const mEn = /^[A-Za-z]+/.exec(front);
+  const first = mEn ? mEn[0].toLowerCase() : front.slice(0, 1);
+  if (['它', '这', '那', '该', '此', '其', 'it', 'this', 'that', 'they', 'he', 'she', 'these', 'those'].includes(first)) {
+    return bad(2, '代词开头');
+  }
+  // 3 是非题
+  if (/是否|是不是|对不对/.test(front) || ['是', '否', '对', '错'].includes(back)) return bad(3, '是非题');
+  // 4 挖空可猜
+  const low = back.toLowerCase();
+  if (['the', 'a', 'an', 'of', 'to', 'in', 'on', 'and', '是', '的', '了'].includes(low)
+    || /^[a-z]{1,2}$/.test(low)) return bad(4, '挖空可猜');
+  // 5 过长
+  const enWords = back.split(/\s+/).filter(Boolean).length;
+  const zhChars = (back.match(/[\u4e00-\u9fa5]/g) || []).length;
+  if (enWords > 60 || zhChars > 60) return bad(5, '答案过长');
+  // 6 重复（cardIndex 或内容包）
+  const key = cardKey(card);
+  if (cardIndex[key] || (state.pack && state.pack.courses || []).some(
+    (c) => (c.cards || []).some((x) => cardKey(x) === key))) return bad(6, '重复候选');
+  // 7 一卡多事
+  const clauses = back.split(/[，。；、,;]/).map((x) => x.trim()).filter(Boolean);
+  const joins = (back.match(/\band\b|\bor\b/gi) || []).length;
+  if (clauses.length > 2 || joins >= 2) return bad(7, '一卡多事');
+  // 8 来源缺失
+  if (!span || String(raw || '').indexOf(span) < 0 || materialId == null || chapter == null) {
+    return bad(8, '来源缺失');
+  }
+  return { ok: true, code: 0, reason: '' };
+}
+
+async function putGenDraft(rec) {
+  const draft = {
+    ...rec,
+    id: 'gd-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6),
+    createdAt: rec.createdAt || Date.now(),
+    status: rec.status || 'rejected',
+  };
+  try { await idbPut('drafts', draft); } catch (e) { /* 写不进 drafts 不打断阅读 */ }
+  return draft;
+}
+
+/** 候选 → 机检 → 去重 → upsertCard；不过的落 drafts status:'rejected'。 */
+async function acceptGeneratedCandidates(candidates, ch, ctx) {
+  const added = [];
+  const rejected = [];
+  // 上限由 generateCardsForChapter 在调用前切好；这里不截断，便于机检逐条测试。
+  for (const cand of (candidates || [])) {
+    const card = renderGenCard(cand, ch, ctx);
+    const v = checkGeneratedCard(card, ch && ch.text, ctx.materialId, ctx.chapter);
+    if (!v.ok) {
+      await putGenDraft({ reason: v.reason, code: v.code, card, materialId: ctx.materialId,
+        chapter: ctx.chapter, span: card.example, status: 'rejected' });
+      rejected.push({ card, code: v.code, reason: v.reason });
+      continue;
+    }
+    const res = upsertCard(card);
+    if (!res.added) {
+      const reason = '重复候选（' + res.reason + '）';
+      await putGenDraft({ reason, code: 6, card, materialId: ctx.materialId,
+        chapter: ctx.chapter, span: card.example, status: 'rejected' });
+      rejected.push({ card, code: 6, reason });
+      continue;
+    }
+    if (res.card) res.card.auto = true;
+    if (res.card && state.learner && state.learner.ready) persistCardOverride(res.card).catch(() => {});
+    if (res.card) coreCall('cards.upsert', { cards: [toCoreCard(res.card)] });
+    added.push(res.card);
+  }
+  return { added, rejected };
+}
+
+/** 两档触发共用的入口。ctxOverride 供断网补跑用。 */
+async function generateCardsForChapter(ch, force, ctxOverride) {
+  const ctx = ctxOverride || genContext();
+  if (!ctx.materialId || !ch || !ch.text) return { skipped: 'no-source' };
+  const key = genKey(ctx.materialId, ctx.chapter);
+  const flags = genFlags();
+  const day = genDayKey();
+  if (!force && flags[key]) return { skipped: 'chapter-done' };
+  if ((flags[day] || 0) >= AUTOGEN.perDay) return { skipped: 'daily-limit' };
+
+  let candidates = [];
+  try {
+    for (const slice of genSlices(ch.text)) {
+      const got = await extractGenCandidates(slice, ch);
+      candidates = candidates.concat(got || []);
+      if (candidates.length >= AUTOGEN.perChapter) break;
+    }
+  } catch (e) {
+    await putGenDraft({ reason: '网络失败：' + (e && e.message || e), code: 0, card: null,
+      materialId: ctx.materialId, chapter: ctx.chapter, span: '', status: 'pending',
+      title: ctx.title });
+    return { skipped: 'offline', pending: true };
+  }
+  const result = await acceptGeneratedCandidates(candidates.slice(0, AUTOGEN.perChapter), ch, ctx);
+  flags[key] = Date.now();
+  flags[day] = (flags[day] || 0) + result.added.length;
+  genSaveFlags(flags);
+  return result;
+}
+
+/** 联网后补跑：pending 的章重新取文、清掉该章标记再跑一轮。 */
+async function flushGenPending() {
+  let pending = [];
+  try { pending = (await idbAll('drafts')).filter((d) => d.status === 'pending' && d.materialId != null); }
+  catch (e) { return; }
+  for (const d of pending) {
+    try {
+      const rec = await matGet(d.materialId);
+      const ch = rec && rec.chapters && rec.chapters[d.chapter];
+      if (!ch || !ch.text) continue;
+      const flags = genFlags();
+      delete flags[genKey(d.materialId, d.chapter)];
+      genSaveFlags(flags);
+      const res = await generateCardsForChapter({ title: ch.title, text: ch.text }, true,
+        { materialId: d.materialId, chapter: d.chapter, title: rec.name || d.title || '' });
+      d.status = res.skipped === 'offline' ? 'pending' : 'retried';
+      await idbPut('drafts', d);
+    } catch (e) { /* 还离线，留 pending 等下次 */ }
+  }
+}
+
+/** 翻章后台生成：不 await、不挡阅读、不弹进度条；自动关了就不跑。 */
+function maybeAutoGenerate() {
+  if (settings.autoGen === false) return;
+  flushGenPending().catch(() => {});
+  setTimeout(async () => {
+    try {
+      const ch = await chapterText();
+      if (ch) await generateCardsForChapter(ch);
+    } catch (e) { /* 自动生成失败不打扰阅读 */ }
+  }, 1200);
+}
+
 function kpKey() {
   const where = RDR.book ? 'c' + RDR.ch : 'p' + RDR.page;
   return (RDR.key || '') + '#' + where;
@@ -8311,6 +8607,7 @@ function renderPoints(kp, ch) {
       + (points ? '<h2>要点</h2><ul class="kplist">' + points + '</ul>' : '')
       + (words ? '<h2>生词 / 搭配</h2><div class="list">' + words + '</div>' : '')
       + (quiz ? '<h2>自测</h2>' + quiz : '')
+      + '<div class="row" style="margin-top:10px"><button class="btn ghost" id="kpGen">生成 3 张卡</button></div>'
       + '<div class="hint" style="margin-top:14px">内容按「文件 + 这一章/这一页」缓存，再点开不再花钱。</div>';
   }
 
@@ -8341,6 +8638,16 @@ function renderPoints(kp, ch) {
       if (addCardFromSelection(w.w)) { b.textContent = '已加入'; b.disabled = true; }
     };
   });
+  const genBtn = document.getElementById('kpGen');
+  if (genBtn) genBtn.onclick = async () => {
+    genBtn.disabled = true; genBtn.textContent = '生成中…';
+    try {
+      const res = await generateCardsForChapter(ch, true);
+      toast(res.skipped ? ('没生成：' + res.skipped)
+        : ('生成 ' + res.added.length + ' 张，拒 ' + res.rejected.length + ' 张'));
+    } catch (e) { toast('生成失败：' + (e && e.message || e)); }
+    genBtn.disabled = false; genBtn.textContent = '生成 3 张卡';
+  };
   o.querySelectorAll('.kpq').forEach((box) => {
     const q = kp.quiz[Number(box.dataset.q)];
     box.querySelectorAll('button[data-o]').forEach((btn) => {
@@ -8535,6 +8842,7 @@ function gotoChapter(n, at) {
   RDR.restoring = true;
   setTimeout(() => { RDR.restoring = false; }, 400);
   saveReadPos();
+  maybeAutoGenerate();   // 200037：进新章后台生成卡片，不挡阅读
 }
 
 function gotoPage(n) {
@@ -9447,7 +9755,7 @@ function mergeCardFields(target, incoming, keepTargetFirst) {
   };
   // 2026-11-24：example/exampleCN 也是正文的一部分（选区所在句），同词合并时要保住，
   // 否则待确认卡带例句，一点「加入生词」就丢了。
-  ['back', 'hint', 'explain', 'example', 'exampleCN', 'topic', 'source', 'bookId', 'bookTitle', 'chapter'].forEach(fill);
+  ['back', 'hint', 'explain', 'example', 'exampleCN', 'topic', 'source', 'bookId', 'bookTitle', 'chapter', 'auto'].forEach(fill);
   if (Array.isArray(incoming.options) && !(target.options || []).length) target.options = incoming.options;
   target.updatedAt = Math.max(target.updatedAt || 0, incoming.updatedAt || Date.now());
 }
@@ -9640,6 +9948,8 @@ function migrateCardsV2() {
     pullCoreInbox();
     setTimeout(pullCoreInbox, 2500);
     bindInboxPull();
+    // 200037：上次断网留的 pending 候选，联网后自动补跑一轮
+    setTimeout(() => { flushGenPending().catch(() => {}); }, 3000);
     // yuedu:// 一键导入：App 收到链接后放进了收件箱，这里取走并入库
     pullSourceImports();
     setTimeout(pullSourceImports, 2500);

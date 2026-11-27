@@ -2306,6 +2306,124 @@ class CDP {
     } else {
       console.log('SKIP  PDF 回归（要验就加 --pdf <某个真实PDF>）');
     }
+
+    // 200037 · AI 生成候选卡流水线
+    const genSetup = await probe('200037 自动建卡前置', `
+      const id = 'gmat-' + Date.now();
+      const chapters = [
+        { title:'第一章', text:'水在标准大气压下的沸点是一百摄氏度。 苹果是一种水果。 它是一项发现。 是否要参加。 这个的。 长句原文。 太阳原文。 月亮原文。' },
+        { title:'第二章', text:'第二段原文，用于回链测试。光合作用把光能转成化学能。' },
+      ];
+      await matPut({ id, name:'生成测试材料', kind:'text', chapters, bytes:100, origin:'smoke' });
+      RDR.book = { id, name:'生成测试材料', chapters };
+      RDR.key = id; RDR.ch = 0;
+      settings.autoGen = true;
+      localStorage.removeItem(LS.gen);
+      for (const d of await idbAll('drafts')) await idbDelete('drafts', d.id);
+      window.__gctx = { materialId:id, chapter:0, title:'生成测试材料' };
+      return { id, drafts:(await idbAll('drafts')).length };
+    `);
+    check('200037 前置：材料与干净候选池就绪', !!genSetup.id && genSetup.drafts === 0, genSetup);
+
+    const gen1 = await probe('200037 机检八条', `
+      const ctx = window.__gctx;
+      const ch = RDR.book.chapters[0];
+      const goodFront = '沸点' + Date.now();
+      const good = { type:'vocab', subject:goodFront, predicate:'', object:'一百摄氏度', qualifier:'', span:'水在标准大气压下的沸点是一百摄氏度。' };
+      const first = await acceptGeneratedCandidates([good], ch, ctx);
+      const bads = [
+        { type:'vocab', subject:'苹果', object:'苹果是一种水果', span:'苹果是一种水果。' },
+        { type:'fact', subject:'它', predicate:'是一项发现', object:'新东西', span:'它是一项发现。' },
+        { type:'fact', subject:'是否要参加', predicate:'', object:'咖啡', span:'是否要参加。' },
+        { type:'vocab', subject:'外观', object:'的', span:'这个的。' },
+        { type:'fact', subject:'长句', predicate:'', object:'很长的答案'.repeat(15), span:'长句原文。' },
+        { type:'vocab', subject:goodFront, object:'一百摄氏度', span:'水在标准大气压下的沸点是一百摄氏度。' },
+        { type:'fact', subject:'太阳', predicate:'', object:'发光，发热，照明', span:'太阳原文。' },
+        { type:'vocab', subject:'月亮', object:'卫星', span:'这句话根本不在原文里' },
+      ];
+      const res = await acceptGeneratedCandidates(bads, ch, ctx);
+      const mine = (await idbAll('drafts')).filter(d => d.materialId === ctx.materialId);
+      window.__goodId = first.added[0] && first.added[0].id;
+      return {
+        added: first.added.length,
+        rejected: res.rejected.length,
+        codes: res.rejected.map(r=>r.code).sort((a,b)=>a-b),
+        draftCount: mine.length,
+        allReason: mine.every(d => !!d.reason),
+      };
+    `);
+    check('200037 ① 8 条机检逐条造坏卡：全部被拒且落 drafts（带 reason）',
+      gen1.added === 1 && gen1.rejected === 8 && (gen1.codes || []).join(',') === '1,2,3,4,5,6,7,8'
+        && gen1.draftCount === 8 && gen1.allReason === true, gen1);
+    check('200037 ③ 重复候选（同 cardKey）被拒', (gen1.codes || []).indexOf(6) >= 0, gen1);
+
+    const gen2 = await probe('200037 好卡进复习', `
+      const srs = await idbAll('srs');
+      state.courseId = MINE_ID;
+      const card = userCards.find(c => c.id === window.__goodId);
+      const q = dueQueue();
+      return {
+        inAll: allCards().some(c => c.id === window.__goodId),
+        inFresh: q.some(c => c.id === window.__goodId),
+        auto: !!(card && card.auto),
+        srsImmediate: srs.some(s => s.cardId === window.__goodId && s.due <= Date.now()),
+      };
+    `);
+    check('200037 ② 好卡自动进复习队列（allCards / fresh，srs 无立即到期）',
+      gen2.inAll === true && gen2.inFresh === true && gen2.auto === true && gen2.srsImmediate === false, gen2);
+
+    const gen4 = await probe('200037 每章/每天上限', `
+      const ctx = { materialId:'glimit-' + Date.now(), chapter:0, title:'上限材料' };
+      await matPut({ id:ctx.materialId, name:ctx.title, kind:'text',
+        chapters:[{title:'上限章',text:'限制测试原文。'}], bytes:20, origin:'smoke' });
+      const raw = '限制测试原文。';
+      const old = extractGenCandidates;
+      try {
+        extractGenCandidates = async () => Array.from({length:5}, (_,i) => ({
+          type:'vocab', subject:'限' + Date.now() + i, object:'答案' + i, span:raw,
+        }));
+        localStorage.removeItem(LS.gen);
+        const a = await generateCardsForChapter({title:'上限章',text:raw}, true, ctx);
+        const flags = genFlags();
+        flags[genDayKey()] = 30; genSaveFlags(flags);
+        const b = await generateCardsForChapter({title:'上限章',text:raw}, true, ctx);
+        return { added:a.added.length, secondSkip:b.skipped || '' };
+      } finally { extractGenCandidates = old; }
+    `);
+    check('200037 ④ 每章最多 3、每天最多 30 生效',
+      gen4.added === 3 && gen4.secondSkip === 'daily-limit', gen4);
+
+    const gen5 = await probe('200037 来源回链', `
+      state.courseId = MINE_ID;
+      const full = allCards().find(c => c.id === window.__goodId);
+      state.tab = 'review'; state.queue = [full]; state.current = full; state.revealed = true; renderReview();
+      const btn = document.querySelector('[data-gen-source]');
+      const label = btn ? btn.textContent.replace(/\\s+/g, ' ').trim() : '';
+      if (btn) btn.click();
+      await new Promise(r => setTimeout(r, 700));
+      return { hasBtn:!!btn, label, matId:RDR.book && RDR.book.id, ch:RDR.ch };
+    `);
+    check('200037 ⑤ 卡片 source.materialId 能 openStoredMaterial 打开同一章（round-trip）',
+      gen5.hasBtn === true && gen5.matId === genSetup.id && gen5.ch === 0, gen5);
+
+    const gen6 = await probe('200037 一键删', `
+      state.courseId = MINE_ID;
+      const id = window.__goodId;
+      const beforeAll = allCards().some(c => c.id === id);
+      const beforeUC = userCards.some(c => c.id === id);
+      const full = allCards().find(c => c.id === id);
+      state.tab = 'review'; state.queue = [full]; state.current = full; state.revealed = true; renderReview();
+      const btn = document.getElementById('dropUseless');
+      if (btn) btn.click();
+      await new Promise(r => setTimeout(r, 500));
+      const row = await idbGet('cards', id);
+      return { btn:!!btn, beforeAll, beforeUC,
+        afterAll:allCards().some(c => c.id === id), afterUC:userCards.some(c => c.id === id),
+        tombstone:!!(row && row.deletedAt) };
+    `);
+    check('200037 ⑥ 「这张没价值」删后 allCards() 不再含该 id、auto 卡 userCards 也摘掉（IDB 墓碑）',
+      gen6.btn === true && gen6.beforeAll === true && gen6.afterAll === false
+        && gen6.afterUC === false && gen6.tombstone === true, gen6);
   } finally {
     cdp.close();
     srv.close();
