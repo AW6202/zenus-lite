@@ -7,3 +7,6 @@ _live.*
 # Python 缓存（跑 smoke/check_pack 会重写 .pyc，跟踪它们只会让工作树永远「脏」）
 __pycache__/
 *.pyc
+
+# 2026-11-27 体积审计：archive/ 是 920 个重复的 Edge profile 副本（18.3MB），不再入库
+archive/
