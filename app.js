@@ -1,7 +1,7 @@
 // 学习机 Lite — 静态 PWA：内容来自 pack.json，进度存本地，AI 直连 OpenAI 兼容接口
 'use strict';
 
-const BUILD = '2026-11-27.2';
+const BUILD = '2026-11-27.3';
 
 const LS = {
   progress: 'zenus.progress.v1',
@@ -2703,6 +2703,78 @@ function knownListHtml() {
     + (entries.length > cap ? '<div class="hint">只显示最近 200 条</div>' : '');
 }
 
+// ── 网盘备份（批量层，2026-11-27）──────────────────────────────
+// 大文件（书/PDF/词典）走这里；记录层仍是 sync.js 的 GitHub。
+async function cloudStatus() {
+  if (!nativePort()) return null;
+  try { return await coreCall('cloud.status', {}, 5000); } catch (e) { return null; }
+}
+
+async function cloudAuthFlow() {
+  const r = await coreCall('cloud.authUrl', {}, 5000);
+  if (!r || !r.url) throw new Error('拿不到授权链接（App 版本过旧？）');
+  window.open(r.url, '_blank');
+  const code = prompt('授权后页面会显示一串 code，粘贴到这里：');
+  if (!code) return null;
+  return await coreCall('cloud.auth', { code: code.trim() }, 20000);
+}
+
+/** 把一段字节分块喂给原生暂存区，返回落盘路径。 */
+async function cloudStageBlob(blobLike, name) {
+  const buf = blobLike instanceof ArrayBuffer ? blobLike : await blobLike.arrayBuffer();
+  const bytes = new Uint8Array(buf);
+  const begin = await coreCall('cloud.stage.begin', { name }, 15000);
+  const id = begin && begin.id;
+  if (!id) throw new Error('暂存失败：没拿到会话 id');
+  const CH = 50000;                       // 与 blob 下载钩子同粒度
+  for (let i = 0; i < bytes.length; i += CH) {
+    const part = bytes.subarray(i, Math.min(i + CH, bytes.length));
+    let bin = '';
+    for (let j = 0; j < part.length; j++) bin += String.fromCharCode(part[j]);
+    await coreCall('cloud.stage.chunk', { id, data: btoa(bin) }, 30000);
+  }
+  const end = await coreCall('cloud.stage.end', { id }, 15000);
+  if (!end || !end.file) throw new Error('暂存收尾失败');
+  return end.file;
+}
+
+/** 把「加入书架」的带 blob 材料逐个传到网盘，成功就把指针写回材料记录。 */
+async function cloudBackupAll(btn) {
+  if (!nativePort()) return toast('要在 App 里用');
+  const st = await cloudStatus();
+  if (!st || !st.configured) return toast('还没授权网盘：先填凭据并授权');
+  const mats = (await matAll()).filter((m) => m.blob || (m.images && m.images.length));
+  if (!mats.length) return toast('没有需要传的材料（纯文本材料只存章节）');
+  btn.disabled = true;
+  const msg = $('#cloudMsg');
+  let ok = 0, skipped = 0, fail = 0;
+  for (const m of mats) {
+    if (msg) msg.textContent = `备份中 ${ok + skipped + fail + 1}/${mats.length}：${m.name || ''}`;
+    try {
+      const size = matBytes(m);
+      if (m.cloud && Number(m.cloud.size) === size) { skipped++; continue; }   // 同大小认为已传过
+      const blob = m.blob || (m.images && m.images[0]);
+      if (!blob) { skipped++; continue; }
+      const file = await cloudStageBlob(blob, m.name || 'material');
+      const safe = String(m.name || 'material').replace(/[^\w.\-一-龥]+/g, '_').slice(-60);
+      const up = await coreCall('cloud.upload', {
+        file, remote: st.rootDir + '/books/' + safe,
+      }, 900000);
+      await matPut({
+        ...m,
+        cloud: { provider: 'baidu', path: up.path, size: up.size, md5: up.md5, at: Date.now() },
+      });
+      ok++;
+    } catch (e) {
+      fail++;
+      console.warn('cloud backup failed', m.name, e);
+    }
+  }
+  btn.disabled = false;
+  if (msg) msg.textContent = `备份完成：成功 ${ok} · 跳过 ${skipped} · 失败 ${fail}`;
+  if (fail) toast(`有 ${fail} 个材料没传上去，看控制台/日志`);
+}
+
 function renderSettings() {
   view.innerHTML = `
     <h2>AI 接口</h2>
@@ -2757,6 +2829,19 @@ function renderSettings() {
     <div class="row" style="margin-top:10px">
       <button class="btn primary" id="doSync">保存并立即同步</button>
     </div>
+
+    <h2>网盘备份（大文件）</h2>
+    <div class="hint" id="cloudStatus">正在检查…</div>
+    <label class="f">百度网盘 AppKey</label>
+    <input class="t" id="s-bapp" value="${esc(settings.baiduAppKey || '')}" placeholder="开放平台的应用 AppKey">
+    <label class="f">百度网盘 SecretKey（只存在本机）</label>
+    <input class="t" id="s-bsecret" type="password" value="${esc(settings.baiduSecret || '')}" placeholder="SecretKey">
+    <div class="row" style="margin-top:8px">
+      <button class="btn" id="baiduSave">保存凭据</button>
+      <button class="btn" id="baiduAuth">授权</button>
+      <button class="btn primary" id="cloudBackupAll">备份书架材料</button>
+    </div>
+    <div class="hint" id="cloudMsg"></div>
 
     <h2>已掌握词表</h2>
     <div class="hint">共 <span id="knownCount">${Object.keys(known).length}</span> 条。复习稳（间隔≥21天且连续答对）会自动加入，答错自动移出；抓生词时会跳过这些。</div>
@@ -2886,6 +2971,39 @@ function renderSettings() {
     saveJSON(LS.settings, settings);
     toast('已保存');
   };
+
+  // 网盘：状态 / 凭据 / 授权 / 批量备份（批量层）
+  const csEl = $('#cloudStatus');
+  if (csEl) {
+    if (!nativePort()) csEl.textContent = '浏览器模式：批量层要在 App 里用';
+    else cloudStatus().then((st) => {
+      csEl.textContent = !st ? 'App 版本过旧（缺 cloud.* 桥命令）'
+        : (st.configured ? '已授权 · 目录 ' + st.rootDir
+          : (st.hasCredentials ? '已填凭据，还没授权' : '还没填 AppKey / SecretKey'));
+    });
+  }
+  const bSave = $('#baiduSave');
+  if (bSave) bSave.onclick = async () => {
+    try {
+      const a = $('#s-bapp').value.trim();
+      const k = $('#s-bsecret').value.trim();
+      if (!a || !k) return toast('AppKey 和 SecretKey 都要填');
+      settings.baiduAppKey = a; settings.baiduSecret = k;
+      saveJSON(LS.settings, settings);
+      await coreCall('cloud.credentials', { appKey: a, secretKey: k }, 10000);
+      toast('凭据已保存');
+      renderSettings();
+    } catch (e) { toast('保存失败：' + e.message); }
+  };
+  const bAuth = $('#baiduAuth');
+  if (bAuth) bAuth.onclick = async () => {
+    try {
+      const r = await cloudAuthFlow();
+      if (r) { toast('授权成功'); renderSettings(); }
+    } catch (e) { toast('授权失败：' + e.message); }
+  };
+  const bBackup = $('#cloudBackupAll');
+  if (bBackup) bBackup.onclick = () => cloudBackupAll(bBackup);
   const tkl = $('#toggleKnownList');
   if (tkl) tkl.onclick = () => {
     const box = $('#knownList');
