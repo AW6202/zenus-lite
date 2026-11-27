@@ -1,7 +1,7 @@
 // 学习机 Lite — 静态 PWA：内容来自 pack.json，进度存本地，AI 直连 OpenAI 兼容接口
 'use strict';
 
-const BUILD = '2026-11-27.3';
+const BUILD = '2026-11-27.4';
 
 const LS = {
   progress: 'zenus.progress.v1',
@@ -1048,6 +1048,19 @@ function matIsWebMaterial(r) {
 async function persistMaterial(kind) {
   try {
     if (!RDR.book || !RDR.book.chapters || !RDR.book.chapters.length) return;
+    // AZW3/MOBI：章节 HTML 里的图片是 blob URL，存章节 JSON 重开就是死链。
+    // 与 PDF 同款——存原字节 blob，重开时重建 File 再解析（任务书 §2.3）。
+    if ((kind || RDR.kind) === 'kindle') {
+      if (!RDR.azw3Bytes) return;
+      const id = RDR.key || (RDR.book.name + '|' + RDR.azw3Bytes.byteLength);
+      RDR.key = id;
+      await matPut({
+        id, name: RDR.book.name || '未命名材料', kind: 'kindle',
+        bytes: RDR.azw3Bytes.byteLength, blob: RDR.azw3Bytes.slice(),
+      });
+      await matTrim();
+      return;
+    }
     // 章节上的额外字段（NG 书的 idx）也要保住，否则「继续抓」不知道抓到第几章了
     const payload = RDR.book.chapters.map((c) => ({ ...c, title: c.title || '', text: c.text || '', html: c.html || '' }));
     const json = JSON.stringify(payload);
@@ -1112,6 +1125,11 @@ async function openStoredMaterial(id, chIndex) {
       return;
     }
     if (rec.kind === 'comic') { openComicMaterial(rec); return; }
+    // AZW3/MOBI：从材料库取回原字节重建 File，直接走 Kindle 解析（不重新选文件）
+    if (rec.blob && rec.kind === 'kindle') {
+      const f = new File([rec.blob], rec.name || '材料', { type: 'application/vnd.amazon.ebook' });
+      return openKindleBook(f);
+    }
     // PDF / 图片：用存下来的原始 bytes 走同一套渲染，不用重新选文件
     if (rec.blob && (rec.kind === 'pdf' || rec.kind === 'image')) {
       const f = new File([rec.blob], rec.name || '材料', { type: rec.kind === 'pdf' ? 'application/pdf' : 'image/*' });
@@ -2160,7 +2178,7 @@ async function renderShelfTab() {
   mats.sort((a, b) => (b.savedAt || 0) - (a.savedAt || 0));
   const docs = (window.ZConv ? await ZConv.docAll() : []).filter((d) => !d.deletedAt);
 
-  const kindName = (k) => k === 'epub' ? 'EPUB' : k === 'docx' ? 'DOCX' : k === 'md' ? 'MD'
+  const kindName = (k) => k === 'epub' ? 'EPUB' : k === 'kindle' ? 'AZW3' : k === 'docx' ? 'DOCX' : k === 'md' ? 'MD'
     : k === 'web' ? '网页' : k === 'comic' ? '漫画' : '文本';
   // 文档已经落成过材料（doc.key 或材料 origin.docId）就不再重复列一张卡
   const matIds = new Set(mats.map((m) => m.id));
@@ -3683,6 +3701,8 @@ async function openBookFile(ev) {
     return;
   }
   const name = f.name.toLowerCase();
+  // 2026-11-27 AZW3/MOBI：Kindle 书不能被 pdf.js 打开（以前落到 PDF 分支 = 错误页）
+  if (/\.(azw3|azw|mobi|kf8)$/i.test(name)) return openKindleBook(f);
   if (name.endsWith('.epub')) return openEpubBook(f);
   if (name.endsWith('.docx')) return openDocxBook(f);
   if (/\.(png|jpe?g|webp|gif|bmp)$/i.test(name)) return openImageFile(f);
@@ -3860,6 +3880,98 @@ async function openEpubBook(f) {
   }
 }
 
+// AZW3/MOBI：spine → 章节数组。TOC 项（可能嵌套）用 resolveHref 对齐 spine；
+// 对不上的章用「第 N 章」兜底，绝不把目录条错位挂到别章。抽成纯函数便于 smoke 断言。
+function kindleChapters(spine, toc, resolveHref, loadChapter) {
+  const byId = new Map();
+  const walk = (items) => (items || []).forEach((it) => {
+    if (!it || !it.href) return;
+    let r = null;
+    try { r = resolveHref(it.href); } catch (e) { r = null; }
+    if (r && r.id != null && !byId.has(String(r.id))) byId.set(String(r.id), it.label || '');
+    if (it.children && it.children.length) walk(it.children);
+  });
+  walk(toc);
+  return (spine || []).map((s, i) => {
+    let c = null;
+    try { c = loadChapter(s.id); } catch (e) { c = null; }
+    return {
+      title: byId.get(String(s.id)) || ('第 ' + (i + 1) + ' 章'),
+      html: (c && c.html) || '',
+    };
+  });
+}
+
+// 目录条：只要顶层 10 条（样本书 getToc() 顶层 10 条，子项属于章内小节）。
+// 每条用 resolveHref 对齐 spine 下标，点「版权信息」就跳到对应章。
+function kindleToc(toc, resolveHref, spine) {
+  return (toc || []).filter((t) => t && t.href).map((t) => {
+    let r = null;
+    try { r = resolveHref(t.href); } catch (e) { r = null; }
+    const id = r && r.id != null ? String(r.id) : '';
+    const at = (spine || []).findIndex((s) => String(s.id) === id);
+    return { label: t.label || '', ch: at >= 0 ? at : 0 };
+  });
+}
+
+async function openKindleBook(f) {
+  view.innerHTML = '<div class="empty">正在解析 AZW3/MOBI…</div>';
+  const t0 = (window.performance && performance.now) ? performance.now() : Date.now();
+  let book = null;
+  try {
+    let mod;
+    try {
+      mod = await import('./vendor/mobi-parser.mjs');
+    } catch (e) {
+      throw new Error('读 Kindle 的组件没打进离线包：' + ((e && e.message) || e));
+    }
+    const bytes = new Uint8Array(await f.arrayBuffer());
+    try {
+      book = await mod.initKf8File(bytes);
+    } catch (e1) {
+      try {
+        book = await mod.initMobiFile(bytes);
+      } catch (e2) {
+        throw new Error('不是可识别的 AZW3/MOBI：' + ((e2 && e2.message) || e2));
+      }
+    }
+    const spine = book.getSpine() || [];
+    if (!spine.length) throw new Error('没找到可读的章节');
+    const tocRaw = book.getToc() || [];
+    const resolve = (href) => book.resolveHref(href);
+    const chapters = kindleChapters(spine, tocRaw, resolve, (id) => book.loadChapter(id));
+    const toc = kindleToc(tocRaw, resolve, spine);
+    if (!chapters.length || !chapters.some((c) => c.html)) throw new Error('章节里没有正文');
+
+    resetBook();
+    RDR.kind = 'kindle';
+    RDR.pdf = null;
+    RDR.book = { name: f.name, chapters: chapters, toc: toc };
+    RDR.key = docKey(f);
+    // 章节 HTML 里的图片是 blob URL：整本书的字节留一份，关书/换书时再 destroy，
+    // 否则 destroy() 会 revoke 当前正文正在用的图片 URL（任务书 §2.2 的时序坑）。
+    RDR.azw3Book = book;
+    RDR.azw3Bytes = bytes.slice();
+    book = null;                         // 交给 RDR 管，别在 finally 里销毁
+    chapters.forEach((c) => {
+      const urls = String(c.html || '').match(/blob:[^"'\s)]+/g) || [];
+      urls.forEach((u) => RDR.urls.push(u));
+    });
+    RDR.ch = firstReadableChapter(chapters);
+    const ms = Math.round(((window.performance && performance.now) ? performance.now() : Date.now()) - t0);
+    console.log('azw3 parse: ' + ms + ' ms');
+    RDR.azw3ParseMs = ms;
+    const ratio = applyReadPos();
+    renderReader();
+    if (ratio) requestAnimationFrame(() => scrollToRatio(ratio));
+  } catch (err) {
+    view.innerHTML = '<div class="empty">打不开这个 AZW3：<span class="sub">'
+      + esc((err && err.message) || String(err)) + '</span></div>';
+  } finally {
+    if (book) { try { book.destroy(); } catch (e) { /* 已释放 */ } }
+  }
+}
+
 // 换书 / 关书：把上一本生成的图片 blob URL 释放掉，否则内存只涨不落
 // 打开时跳到第一段有正文的章（封面/扉页只有图，停在上面像打不开）
 function firstReadableChapter(chapters) {
@@ -3870,6 +3982,13 @@ function firstReadableChapter(chapters) {
 }
 
 function resetBook() {
+  // Kindle 解析器自己会 revoke 图片 blob URL：只在关书/换书时销毁，
+  // 打开过程中提前 destroy 会让正文里的图全变死链（2026-11-27）。
+  if (RDR.azw3Book && typeof RDR.azw3Book.destroy === 'function') {
+    try { RDR.azw3Book.destroy(); } catch (e) { /* 已释放 */ }
+  }
+  RDR.azw3Book = null;
+  RDR.azw3Bytes = null;
   // 注意：PDF 也必须在这里清掉。之前只清 book/kind，导致「关闭这份 PDF」按钮点了没反应
   // （renderReader 看到 RDR.pdf 还在，又渲染回 PDF 视图）——2026-10-29 用户报的 bug G。
   if (RDR.pdf && typeof RDR.pdf.destroy === 'function') {
@@ -4825,7 +4944,7 @@ function renderReader() {
   window.__zenusMenuMode = '';
   if (RDR.kind === 'nativepdf') return renderNativePdf();
   if (RDR.kind === 'image') return renderImage();
-  if (RDR.kind === 'epub' || RDR.kind === 'text' || RDR.kind === 'md' || RDR.kind === 'docx') return renderTextBook();
+  if (RDR.kind === 'epub' || RDR.kind === 'kindle' || RDR.kind === 'text' || RDR.kind === 'md' || RDR.kind === 'docx') return renderTextBook();
   if (RDR.kind === 'comic') return renderComic();
   if (RDR.textMode && RDR.textLines && RDR.textLines.length) return renderPdfText();
   if (RDR.pdf && RDR.pdfScroll) return renderPdfScroll();
@@ -4838,13 +4957,14 @@ function renderReader() {
       + '<button class="btn" id="findBooks">找教材</button><button class="btn" id="lookupBtn">查词</button></div>'
       + '<div class="row" style="margin-top:8px"><button class="btn" id="srcBtn">书源（' + sources.length + '）</button>'
       + '<button class="btn" id="pasteBtn">粘贴 / 分享导入</button></div>'
-      + '<div class="sub" style="margin-top:10px">支持 PDF · DOCX · TXT · Markdown · EPUB · 图片 · 漫画</div>'
+      + '<div class="sub" style="margin-top:10px">支持 PDF · DOCX · TXT · Markdown · EPUB · AZW3/MOBI · 图片 · 漫画</div>'
       + '<div id="recentMats" style="margin-top:14px;text-align:left"></div></div>'
       // 2026-11-26：不能再用 display:none —— Windows 的 Edge 应用窗和部分 WebView 里，
       // 隐藏得太彻底的 input 选过一次（尤其在里面点过文件夹/取消）后，再 click() 弹不出选择框。
       // 放到屏幕外、保持可聚焦可点击，是各家都认的写法。
       + '<input type="file" id="pdfFile" style="position:fixed;left:-9999px;top:0;width:1px;height:1px;opacity:0" accept=".pdf,.epub,.docx,.txt,.md,.png,.jpg,.jpeg,.webp,image/*,application/pdf,application/epub+zip,'
-      + 'application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain" style="display:none">';
+      + 'application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain,'
+      + '.azw3,.azw,.mobi,.kf8,application/vnd.amazon.ebook" style="display:none">';
     bindFileInput(document.getElementById('pdfFile'));
     document.getElementById('pickPdf').onclick = () => openFilePicker();
     // 2026-11-15 修：这里不能调 go()——go 是 renderToday() 里的局部函数（见上面 const go），
@@ -7419,7 +7539,7 @@ async function fillRecentMaterials() {
     const d = new Date(ts || 0);
     return (d.getMonth() + 1) + '/' + d.getDate();
   };
-  const fmt = (k) => ({ pdf: 'PDF', image: '图片', comic: '漫画', epub: 'EPUB', md: 'MD', docx: 'DOCX', text: '文本', web: '网页' })[k] || (k || '材料');
+  const fmt = (k) => ({ pdf: 'PDF', image: '图片', comic: '漫画', epub: 'EPUB', kindle: 'AZW3', md: 'MD', docx: 'DOCX', text: '文本', web: '网页' })[k] || (k || '材料');
   box.innerHTML = '<div class="sub" style="margin-bottom:6px">最近读过</div>'
     + all.slice(0, 12).map((r) => {
       const onShelf = r.shelf === true;
@@ -9172,6 +9292,22 @@ function showBookToc() {
   const b = RDR.book;
   if (!b) return;
   hideTools();
+  // Kindle 书用书里自带的顶层目录（样本的 10 条），而不是 101 个 spine 章。
+  if (RDR.kind === 'kindle' && Array.isArray(b.toc) && b.toc.length) {
+    view.innerHTML =
+      '<div class="meta"><span>目录</span><span>' + b.toc.length + ' 条</span></div>'
+      + '<div class="row" style="margin:6px 0 10px"><button class="btn ghost" id="tocBack">← 回正文</button></div>'
+      + '<div class="list">' + b.toc.map((t, i) =>
+        '<button class="tocItem' + (Number(t.ch) === RDR.ch ? ' on' : '') + '" data-idx="' + Number(t.ch || 0) + '">'
+        + '<span>' + esc(t.label || ('第 ' + (i + 1) + ' 条')) + '</span>'
+        + '<small>第 ' + (Number(t.ch || 0) + 1) + ' 章</small></button>').join('') + '</div>';
+    document.getElementById('tocBack').onclick = () => renderTextBook();
+    view.querySelectorAll('.tocItem').forEach((btn) => {
+      btn.onclick = () => { RDR.pageIdx = 0; gotoChapter(Number(btn.dataset.idx) || 0, 'first'); };
+    });
+    view.scrollTop = 0;
+    return;
+  }
   const cur = RDR.ch;
   // NG 的书：目录可能比「已下载的章节」长得多（ng.toc 最多 300 章），
   // 已下载的直接跳，未下载的点了当场取（ng.text）。

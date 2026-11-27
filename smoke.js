@@ -26,14 +26,18 @@ function check(name, ok, detail) {
 }
 
 // ── 静态服务器（不起 python，少一个依赖）──────────────
-const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.json': 'application/json',
+const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.mjs': 'text/javascript', '.json': 'application/json',
   '.webmanifest': 'application/manifest+json', '.png': 'image/png', '.epub': 'application/epub+zip',
-  '.md': 'text/markdown', '.txt': 'text/plain', '.pdf': 'application/pdf' };
+  '.md': 'text/markdown', '.txt': 'text/plain', '.pdf': 'application/pdf',
+  '.azw3': 'application/vnd.amazon.ebook' };
+// 真样本只放在 .scratch，绝不复制进项目；smoke 用一个假路径把字节喂给页面。
+const AZW3_SAMPLE = 'C:/VS CC/.scratch/azw3/book.azw3';
 function serve() {
   const srv = http.createServer((req, res) => {
     const rel = decodeURIComponent(req.url.split('?')[0]).replace(/^\/+/, '') || 'index.html';
-    const file = path.join(ROOT, rel);
-    if (!file.startsWith(ROOT) || !fs.existsSync(file) || fs.statSync(file).isDirectory()) {
+    const isSample = rel === '__azw3_sample.azw3' && fs.existsSync(AZW3_SAMPLE);
+    const file = isSample ? AZW3_SAMPLE : path.join(ROOT, rel);
+    if ((!isSample && !file.startsWith(ROOT)) || !fs.existsSync(file) || fs.statSync(file).isDirectory()) {
       res.writeHead(404); return res.end('404');
     }
     res.writeHead(200, { 'Content-Type': MIME[path.extname(file)] || 'application/octet-stream' });
@@ -2424,6 +2428,111 @@ class CDP {
     check('200037 ⑥ 「这张没价值」删后 allCards() 不再含该 id、auto 卡 userCards 也摘掉（IDB 墓碑）',
       gen6.btn === true && gen6.beforeAll === true && gen6.afterAll === false
         && gen6.afterUC === false && gen6.tombstone === true, gen6);
+
+    // ── 2026-11-27 AZW3/MOBI：真样本走完整条链 ────────────────
+    const az1 = await probe('AZW3 真文件', `
+      const r = await fetch('http://127.0.0.1:${PORT}/__azw3_sample.azw3');
+      const b = await r.blob();
+      const f = new File([b], 'book.azw3', { type: 'application/vnd.amazon.ebook' });
+      window.__azSize = b.size;
+      await openBookFile({ target: { files: [f] } });
+      await new Promise(r => setTimeout(r, 300));
+      return {
+        kind: RDR.kind, chapters: RDR.book ? RDR.book.chapters.length : 0,
+        toc: RDR.book && RDR.book.toc ? RDR.book.toc.length : 0, pdf: !!RDR.pdf,
+        htmlChars: RDR.book ? RDR.book.chapters.reduce((n, c) => n + String(c.html || '').length, 0) : 0,
+        firstTitle: RDR.book ? RDR.book.chapters[0].title : '', parseMs: RDR.azw3ParseMs,
+      };
+    `);
+    check('AZW3 ① .azw3 命中 openKindleBook 分支（不是 PDF 错误页，101 章 / 10 目录 / 有正文）',
+      az1.kind === 'kindle' && az1.chapters === 101 && az1.toc === 10 && !az1.pdf
+        && az1.htmlChars > 200000 && az1.firstTitle === '版权信息', az1);
+    console.log('AZW3 parse ms: ' + az1.parseMs);
+    check('AZW3 ⑦ 首解析日志耗时 < 3 秒', Number(az1.parseMs) >= 0 && Number(az1.parseMs) < 3000, az1);
+
+    const az2 = await probe('AZW3 TOC 兜底', `
+      const chapters = kindleChapters(
+        [{id:'0'}, {id:'1'}, {id:'2'}],
+        [{label:'版权信息', href:'kindle:pos:fid:0000:off:0'}, {label:'对不上', href:'bad'}],
+        (h) => h.indexOf('0000') >= 0 ? { id: '0' } : undefined,
+        (id) => ({ html: '<p>' + id + '</p>' }),
+      );
+      return { titles: chapters.map(c => c.title), html: chapters.map(c => c.html) };
+    `);
+    check('AZW3 ② TOC 对不上 spine 时用「第 N 章」',
+      JSON.stringify(az2.titles) === JSON.stringify(['版权信息', '第 2 章', '第 3 章'])
+        && az2.html.length === 3, az2);
+
+    const az3 = await probe('AZW3 持久化', `
+      const all = await matAll();
+      const rec = all.find(r => r.id === RDR.key);
+      return { id: RDR.key, kind: rec && rec.kind, blob: !!(rec && rec.blob),
+        bytes: rec && rec.bytes, expect: window.__azSize, chaptersJson: !!(rec && rec.chapters) };
+    `);
+    check('AZW3 ③ 持久化走原字节 blob，不存章节 JSON',
+      az3.kind === 'kindle' && az3.blob === true && az3.bytes === az3.expect
+        && az3.chaptersJson === false, az3);
+
+    const az4 = await probe('AZW3 目录跳转', `
+      showBookToc();
+      const items = [...document.querySelectorAll('.tocItem')];
+      const first = items[0];
+      const label = first ? first.textContent : '';
+      if (first) first.click();
+      await new Promise(r => setTimeout(r, 250));
+      return { count: items.length, label, ch: RDR.ch };
+    `);
+    check('AZW3 ④ 目录 10 条，点「版权信息」跳到第 1 章',
+      az4.count === 10 && /版权信息/.test(az4.label || '') && az4.ch === 0, az4);
+
+    const az5 = await probe('AZW3 图片', `
+      const idx = RDR.book.chapters.findIndex(c => /<img/i.test(c.html || ''));
+      if (idx >= 0) gotoChapter(idx);
+      await new Promise(r => setTimeout(r, 700));
+      const imgs = [...document.querySelectorAll('#bookText img')];
+      return { idx, count: imgs.length, loaded: imgs.some(i => i.naturalWidth > 0) };
+    `);
+    check('AZW3 ⑤ 带图章节的 <img> 能渲染（blob URL 没被提前 destroy）',
+      az5.idx >= 0 && az5.count > 0 && az5.loaded === true, az5);
+
+    const az5b = await probe('AZW3 选中与字号', `
+      const box = document.getElementById('bookText');
+      const before = getComputedStyle(box).fontSize;
+      bumpFont(1);
+      const after = getComputedStyle(document.getElementById('bookText')).fontSize;
+      bumpFont(-1);
+      const p = document.querySelector('#bookText p');
+      let selected = '';
+      if (p && p.firstChild) {
+        const r = document.createRange(); r.selectNodeContents(p);
+        const s = window.getSelection(); s.removeAllRanges(); s.addRange(r);
+        selected = String(s).trim();
+      }
+      return { before, after, selected: selected.slice(0, 20) };
+    `);
+    check('AZW3 正文可选中、字号设置生效',
+      parseFloat(az5b.after) > parseFloat(az5b.before) && (az5b.selected || '').length > 0, az5b);
+
+    const az6 = await probe('AZW3 续读', `
+      const id = RDR.key;
+      resetBook(); renderReader();
+      await fillRecentMaterials();
+      const label = document.getElementById('recentMats') ? document.getElementById('recentMats').innerText : '';
+      await openStoredMaterial(id);
+      await new Promise(r => setTimeout(r, 300));
+      const idx = RDR.book ? RDR.book.chapters.findIndex(c => /<img/i.test(c.html || '')) : -1;
+      if (idx >= 0) gotoChapter(idx);
+      await new Promise(r => setTimeout(r, 700));
+      const imgs = [...document.querySelectorAll('#bookText img')];
+      return { fmt: /AZW3/.test(label), inRecent: label.indexOf('book.azw3') >= 0,
+        kind: RDR.kind, chapters: RDR.book ? RDR.book.chapters.length : 0,
+        hasHtml: !!(RDR.book && RDR.book.chapters.some(c => c.html)),
+        imgCount: imgs.length, imgLoaded: imgs.some(i => i.naturalWidth > 0) };
+    `);
+    check('AZW3 ⑥ 最近列表标 AZW3，点开从 blob 重建、无需重选文件，图片仍在',
+      az6.fmt === true && az6.inRecent === true && az6.kind === 'kindle'
+        && az6.chapters === 101 && az6.hasHtml === true
+        && az6.imgCount > 0 && az6.imgLoaded === true, az6);
   } finally {
     cdp.close();
     srv.close();
